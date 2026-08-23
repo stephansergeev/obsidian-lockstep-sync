@@ -1,0 +1,5 @@
+bin/
+data/
+node_modules/
+plugin/main.js
+.DS_Store

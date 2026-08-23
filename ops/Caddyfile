@@ -1,0 +1,13 @@
+# TLS, HTTP/2 и сертификаты — целиком на Caddy. Сервер про них не знает.
+sync.example.com {
+	reverse_proxy 127.0.0.1:8080 {
+		# Крупные вложения качаются долго — таймаут на чтение тела не режем.
+		transport http {
+			read_timeout 30m
+			write_timeout 30m
+		}
+	}
+	request_body {
+		max_size 512MB
+	}
+}

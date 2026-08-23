@@ -1,0 +1,30 @@
+# /etc/systemd/system/sync-server.service
+# Сервер слушает только loopback: TLS и внешний доступ — задача Caddy/nginx.
+[Unit]
+Description=Obsidian self-hosted sync
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=syncsrv
+Group=syncsrv
+ExecStart=/usr/local/bin/sync-server serve --data /var/lib/sync-server --addr 127.0.0.1:8080
+Restart=always
+RestartSec=3
+
+# Состояние живёт только на диске, поэтому перезапуск безопасен в любой момент.
+StateDirectory=sync-server
+NoNewPrivileges=yes
+PrivateTmp=yes
+ProtectSystem=strict
+ProtectHome=yes
+ReadWritePaths=/var/lib/sync-server
+ProtectKernelTunables=yes
+ProtectControlGroups=yes
+RestrictAddressFamilies=AF_INET AF_INET6
+LockPersonality=yes
+MemoryDenyWriteExecute=yes
+
+[Install]
+WantedBy=multi-user.target
