@@ -72,29 +72,50 @@ it comes back, because a note that reappears is an annoyance and a note that van
 
 ## Running the server
 
-Build it, issue a token, start it:
+You need a machine reachable from the internet and a domain name pointing at it. Any small
+VPS will do, and the domain can be a subdomain of one you already own.
 
 ```bash
-cd server
-go build -o sync-server ./cmd/sync-server
-
-./sync-server token add --data ./data --vault main --name desk-01
-./sync-server serve     --data ./data --addr 127.0.0.1:8080
+curl -fsSLO https://github.com/stephansergeev/obsidian-lockstep-sync/releases/latest/download/install.sh
+less install.sh          # it is 120 lines, and you are about to run it as root
+sudo bash install.sh sync.example.com
 ```
 
-The token is printed once. Only its sha256 is kept on disk.
+It installs the binary, creates an unprivileged user for it, writes a systemd unit,
+installs Caddy if it is missing, points it at your domain so the certificate is obtained
+and renewed on its own, and prints a token for your first device. Running it again updates
+the binary and leaves your data alone.
 
-For a first look one machine is enough. The server listens on `127.0.0.1:8080` by default
-and the plugin on the same computer points at `http://127.0.0.1:8080`.
+The server itself listens on `127.0.0.1` and never faces the internet. Caddy does.
 
-For real use between devices, put TLS in front of it. The server listens locally and does
-not deal with certificates. A systemd unit with process isolation and a Caddyfile are in
-[`ops/`](ops/). Never send a token over plain HTTP outside a network you trust.
-
-If you already have a vault, load it into the server in one command:
+Give every device its own token, so losing one phone means revoking one token:
 
 ```bash
-./sync-server import --data ./data --vault main --from ~/Vault
+sudo /usr/local/bin/lockstep-sync-server token add --data /var/lib/lockstep --vault main --name iphone
+```
+
+If you already have a vault, load it in one go:
+
+```bash
+sudo -u lockstep /usr/local/bin/lockstep-sync-server import --data /var/lib/lockstep --vault main --from ~/Vault
+```
+
+**Never expose the server over plain HTTP.** The token travels with every request, and
+anyone who catches it can read, write and delete. Content encryption does not help here:
+it hides what is in your notes, not the right to destroy them.
+
+### Without a domain
+
+If you would rather not point a name at a machine, put the server and your devices on the
+same private network with something like Tailscale or WireGuard and let the plugin use the
+private address. The traffic is encrypted by the tunnel, nothing is exposed publicly, and
+it still works away from home. It costs an app on every device, which is why it is the
+alternative rather than the path above.
+
+### Building from source
+
+```bash
+cd server && go build -o sync-server ./cmd/sync-server
 ```
 
 One vault is one directory under `data/vaults/`, with its own database and its own blob
