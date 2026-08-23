@@ -31,8 +31,10 @@ jobs:
         working-directory: server
         run: go test -race ./...
 
+      # The integration tests drive the real engine against a real server, so the
+      # native binary has to exist before they run.
       - name: build server
-        run: make cross
+        run: make server
 
       - name: plugin
         working-directory: plugin
@@ -40,6 +42,9 @@ jobs:
           npm ci
           npm test
           npm run build
+
+      - name: build server for release
+        run: make cross
 
       - name: collect artefacts
         run: |
