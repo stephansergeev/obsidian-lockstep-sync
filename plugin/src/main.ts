@@ -203,7 +203,7 @@ export default class LockstepPlugin extends Plugin {
 			if (complain) new Notice(t("notice.noConfig"));
 			return null;
 		}
-		return new SyncClient(this.settings.serverUrl, this.settings.token);
+		return new SyncClient(this.settings.serverUrl, this.settings.token, this.settings.deviceName);
 	}
 
 	// --- watching the vault ---------------------------------------------------

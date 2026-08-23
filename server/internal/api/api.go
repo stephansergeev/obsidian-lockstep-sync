@@ -131,6 +131,23 @@ func pathParam(r *http.Request) (string, error) {
 	return checkPath(r.URL.Query().Get("path"))
 }
 
+// device is the name a person gave this device in their own settings, sent with
+// every write. It is what the other side is called when a conflict asks which
+// version stands, so it has to be that name rather than the name on the token,
+// which was chosen once by whoever issued it.
+func device(r *http.Request, fallback string) string {
+	name := strings.TrimSpace(r.Header.Get("X-Device"))
+	if name == "" || len(name) > 64 {
+		return fallback
+	}
+	for _, c := range name {
+		if c < 0x20 || c == 0x7f {
+			return fallback
+		}
+	}
+	return name
+}
+
 // --- responses --------------------------------------------------------------
 
 func writeJSON(w http.ResponseWriter, code int, v any) {
@@ -292,7 +309,7 @@ func (s *Server) putFile(w http.ResponseWriter, r *http.Request, c ctx) {
 
 	f, err := c.files.Put(store.PutArgs{
 		Path: p, BaseRev: baseRev, Hash: hash, Size: size, Mtime: mtime,
-		Folder: folder, UpdatedBy: c.tok.Name,
+		Folder: folder, UpdatedBy: device(r, c.tok.Name),
 	})
 	var conflict *store.ConflictError
 	if errors.As(err, &conflict) {
@@ -317,7 +334,7 @@ func (s *Server) deleteFile(w http.ResponseWriter, r *http.Request, c ctx) {
 		writeErr(w, http.StatusBadRequest, "bad_request", "X-Base-Rev: "+err.Error())
 		return
 	}
-	f, err := c.files.Delete(p, baseRev, c.tok.Name)
+	f, err := c.files.Delete(p, baseRev, device(r, c.tok.Name))
 	var conflict *store.ConflictError
 	switch {
 	case errors.As(err, &conflict):
@@ -353,7 +370,7 @@ func (s *Server) rename(w http.ResponseWriter, r *http.Request, c ctx) {
 		writeErr(w, http.StatusBadRequest, "bad_path", "to: "+err.Error())
 		return
 	}
-	f, err := c.files.Rename(from, to, req.BaseRev, c.tok.Name)
+	f, err := c.files.Rename(from, to, req.BaseRev, device(r, c.tok.Name))
 	var conflict *store.ConflictError
 	switch {
 	case errors.As(err, &conflict):

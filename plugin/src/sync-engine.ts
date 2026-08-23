@@ -2,6 +2,8 @@
 
 import type { App } from "obsidian";
 import { ApiError, ConflictError, SyncClient, type ChangeEntry } from "./api";
+
+export { SyncClient } from "./api";
 import { merge3 } from "./diff3";
 import type { LocalIndex } from "./index-store";
 import { conflictName, sha256, toNFC } from "./paths";
@@ -226,6 +228,13 @@ export class SyncEngine {
 		}
 
 		if (!(await adapter.exists(path))) {
+			// Deleted here and not sent yet. Downloading it now would undo the deletion
+			// before push ever sees it, and on the device that created the file that
+			// meant it could never be deleted at all.
+			if (known?.dirty) {
+				report.skipped++;
+				return;
+			}
 			await this.download(client, entry, path);
 			report.downloaded++;
 			return;
@@ -255,8 +264,7 @@ export class SyncEngine {
 
 		// Both sides changed. This is the merge path.
 		await this.reconcile(
-			client, path, local, localHash, entry.rev, known?.base_rev ?? 0, report,
-			entry.updated_by ?? "",
+			client, path, local, entry.rev, known?.base_rev ?? 0, report, entry.updated_by ?? "",
 		);
 	}
 
@@ -420,7 +428,7 @@ export class SyncEngine {
 			report.uploaded++;
 		} catch (e) {
 			if (!(e instanceof ConflictError)) throw e;
-			await this.reconcile(client, path, data, hash, e.serverRev, baseRev, report, e.serverDevice);
+			await this.reconcile(client, path, data, e.serverRev, baseRev, report, e.serverDevice);
 		}
 	}
 
@@ -469,7 +477,6 @@ export class SyncEngine {
 		client: SyncClient,
 		path: string,
 		localData: ArrayBuffer,
-		localHash: string,
 		serverRev: number,
 		baseRev: number,
 		report: SyncReport,
@@ -523,7 +530,6 @@ export class SyncEngine {
 		// on disk, the server one under the real name and this device's one alongside,
 		// and the choice is left to whoever wrote them.
 		await this.keepBothWithoutMerging(path, localData, server, report, baseRev, true, serverDevice);
-		void localHash;
 	}
 
 	/**

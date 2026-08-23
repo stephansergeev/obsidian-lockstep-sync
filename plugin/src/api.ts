@@ -66,6 +66,8 @@ export class SyncClient {
 	constructor(
 		private baseUrl: string,
 		private token: string,
+		/** How this device calls itself, sent with every write so conflicts can name it. */
+		private device = "",
 	) {}
 
 	private url(path: string): string {
@@ -83,6 +85,7 @@ export class SyncClient {
 			body: opts.body,
 			headers: {
 				Authorization: `Bearer ${this.token}`,
+				...(this.device ? { "X-Device": this.device } : {}),
 				...(opts.headers ?? {}),
 			},
 			// Statuses are handled here: 409 is a normal outcome, not a failure.

@@ -45,9 +45,12 @@ jobs:
       - name: types
         working-directory: plugin
         run: npm run check
-      # The three-way merge is the one place in the plugin where text can be
-      # destroyed, so it is tested on its own before anything is bundled.
-      - name: merge tests
+      # The integration tests drive the real engine against a real server, so the
+      # binary has to exist first. Everything that has gone wrong so far went wrong
+      # between the pieces rather than inside one of them.
+      - name: build server for integration tests
+        run: make server
+      - name: tests
         working-directory: plugin
         run: npm test
       - working-directory: plugin

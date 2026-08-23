@@ -140,12 +140,20 @@ its index. A rename that only changes letter case. The same filename in two Unic
 which is what happens between macOS and everything else. A hundred megabyte attachment. A
 device whose clock is a day fast. Two devices creating the same path from nothing.
 
+Above that sits a second harness which drives the real plugin engine against a real server,
+with two vaults on disk and only Obsidian stubbed out. An edit reaching the other device, a
+deletion removing an untouched file, an edit beating a deletion, a rename arriving as a
+rename, a device catching up after being away, non-ASCII paths surviving the trip, and with
+encryption on, that the bytes sitting on the server contain none of the words in the note.
+
 ```bash
 cd server && go test ./...
+cd plugin && npm test
 ```
 
-It runs on every commit. It found two real bugs in this server on its first run, before any
-of this went near a live vault.
+Both run on every commit. The first harness found two bugs in the server before any of this
+went near a vault. The second found two more the day it was written, including one where
+deleting a file on the device that created it silently downloaded it back.
 
 ## Where it stands today
 
