@@ -3,8 +3,15 @@ data/
 node_modules/
 plugin/main.js
 .DS_Store
+
+# build artefacts copied to the root for releases
+/main.js
 /styles.css
 
-# личные заметки по проекту, наружу не идут
+# bundled test fixtures
+test/_*.mjs
+test/_*.js
+
+# local planning notes, not part of the project
 /.backlog.local.md
 /BACKLOG.md
