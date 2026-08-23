@@ -20,6 +20,7 @@ USER_NAME="lockstep"
 DATA_DIR="/var/lib/lockstep"
 BIN="/usr/local/bin/lockstep-sync-server"
 PORT="${LOCKSTEP_PORT:-8080}"
+PROXY_DONE=0
 
 die() { echo "error: $*" >&2; exit 1; }
 say() { echo "==> $*"; }
@@ -87,23 +88,32 @@ systemctl enable --now lockstep-sync
 sleep 1
 systemctl is-active --quiet lockstep-sync || die "the service did not start: journalctl -u lockstep-sync"
 
-if ! command -v caddy >/dev/null 2>&1; then
-	say "installing Caddy for TLS"
-	apt-get update -qq
-	apt-get install -y -qq debian-keyring debian-archive-keyring apt-transport-https curl gnupg >/dev/null
-	curl -fsSL https://dl.cloudsmith.io/public/caddy/stable/gpg.key \
-		| gpg --dearmor -o /usr/share/keyrings/caddy-stable-archive-keyring.gpg
-	curl -fsSL https://dl.cloudsmith.io/public/caddy/stable/debian.deb.txt \
-		> /etc/apt/sources.list.d/caddy-stable.list
-	apt-get update -qq
-	apt-get install -y -qq caddy >/dev/null
+# Whatever already answers on 443 keeps answering. A machine that is already
+# serving something is the normal case, not the exception, and an installer that
+# knocks over somebody's existing site to put up its own is not an installer.
+EXISTING=""
+if command -v ss >/dev/null 2>&1 && ss -tlnp 2>/dev/null | grep -q ':443 '; then
+	EXISTING="$(ss -tlnp 2>/dev/null | grep ':443 ' | grep -oE 'users:\(\("[^"]+' | grep -oE '"[^"]+' | tr -d '"' | head -1)"
 fi
 
-say "pointing $DOMAIN at the server"
-mkdir -p /etc/caddy/conf.d
-# A named site wins over any catch-all already in the Caddyfile, so an existing
-# service on this machine keeps working.
-cat > "/etc/caddy/conf.d/lockstep-$DOMAIN.caddy" <<CADDY
+case "$EXISTING" in
+	""|caddy)
+		if ! command -v caddy >/dev/null 2>&1; then
+			say "installing Caddy for TLS"
+			apt-get update -qq
+			apt-get install -y -qq debian-keyring debian-archive-keyring apt-transport-https curl gnupg >/dev/null
+			curl -fsSL https://dl.cloudsmith.io/public/caddy/stable/gpg.key \
+				| gpg --dearmor -o /usr/share/keyrings/caddy-stable-archive-keyring.gpg
+			curl -fsSL https://dl.cloudsmith.io/public/caddy/stable/debian.deb.txt \
+				> /etc/apt/sources.list.d/caddy-stable.list
+			apt-get update -qq
+			apt-get install -y -qq caddy >/dev/null
+		fi
+		say "pointing $DOMAIN at the server through Caddy"
+		mkdir -p /etc/caddy/conf.d
+		# A named site wins over any catch-all already in the Caddyfile, so anything
+		# else this machine serves keeps working.
+		cat > "/etc/caddy/conf.d/lockstep-$DOMAIN.caddy" <<CADDY
 $DOMAIN {
 	reverse_proxy 127.0.0.1:$PORT {
 		transport http {
@@ -116,8 +126,62 @@ $DOMAIN {
 	}
 }
 CADDY
-grep -q "conf.d/\*.caddy" /etc/caddy/Caddyfile 2>/dev/null || echo 'import /etc/caddy/conf.d/*.caddy' >> /etc/caddy/Caddyfile
-systemctl reload caddy || systemctl restart caddy
+		grep -q "conf.d/\*.caddy" /etc/caddy/Caddyfile 2>/dev/null || echo 'import /etc/caddy/conf.d/*.caddy' >> /etc/caddy/Caddyfile
+		systemctl reload caddy || systemctl restart caddy
+		PROXY_DONE=1
+		;;
+	nginx)
+		say "nginx already serves this machine, adding a site for $DOMAIN"
+		cat > "/etc/nginx/sites-available/lockstep-$DOMAIN" <<NGINX
+server {
+	listen 80;
+	server_name $DOMAIN;
+	location /.well-known/acme-challenge/ { root /var/www/html; }
+	location / { return 301 https://\$host\$request_uri; }
+}
+NGINX
+		ln -sf "/etc/nginx/sites-available/lockstep-$DOMAIN" "/etc/nginx/sites-enabled/lockstep-$DOMAIN"
+		nginx -t >/dev/null 2>&1 && systemctl reload nginx
+		if command -v certbot >/dev/null 2>&1 || apt-get install -y -qq certbot python3-certbot-nginx >/dev/null 2>&1; then
+			say "obtaining a certificate"
+			certbot --nginx -d "$DOMAIN" --non-interactive --agree-tos --register-unsafely-without-email --redirect >/dev/null 2>&1 || true
+		fi
+		# certbot rewrites the site for TLS; the proxy still has to be added.
+		if ! grep -q "proxy_pass" "/etc/nginx/sites-available/lockstep-$DOMAIN"; then
+			cat >> "/etc/nginx/sites-available/lockstep-$DOMAIN" <<NGINX
+
+server {
+	listen 443 ssl;
+	server_name $DOMAIN;
+	ssl_certificate     /etc/letsencrypt/live/$DOMAIN/fullchain.pem;
+	ssl_certificate_key /etc/letsencrypt/live/$DOMAIN/privkey.pem;
+	client_max_body_size 512M;
+	location / {
+		proxy_pass         http://127.0.0.1:$PORT;
+		proxy_http_version 1.1;
+		proxy_set_header   Host \$host;
+		proxy_set_header   X-Forwarded-Proto https;
+		proxy_read_timeout 30m;
+		proxy_send_timeout 30m;
+	}
+}
+NGINX
+		fi
+		nginx -t >/dev/null 2>&1 && systemctl reload nginx && PROXY_DONE=1 || \
+			say "nginx did not accept the config; check it by hand: nginx -t"
+		;;
+	*)
+		say "$EXISTING already holds port 443, so TLS was left alone"
+		cat <<MANUAL
+
+Point $EXISTING at http://127.0.0.1:$PORT for $DOMAIN yourself, with a generous
+body size limit and long timeouts. Large attachments take a while, and cutting one
+off mid-transfer is the failure this project exists to prevent.
+
+MANUAL
+		PROXY_DONE=0
+		;;
+esac
 
 say "issuing a token for your first device"
 TOKEN="$("$BIN" token add --data "$DATA_DIR" --vault main --name "$(hostname)-first" | grep -o 'obs_[A-Za-z0-9_-]*')"

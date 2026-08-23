@@ -81,10 +81,16 @@ less install.sh          # it is 120 lines, and you are about to run it as root
 sudo bash install.sh sync.example.com
 ```
 
-It installs the binary, creates an unprivileged user for it, writes a systemd unit,
-installs Caddy if it is missing, points it at your domain so the certificate is obtained
-and renewed on its own, and prints a token for your first device. Running it again updates
-the binary and leaves your data alone.
+It installs the binary, creates an unprivileged user for it, writes a systemd unit, arranges
+TLS, and prints a token for your first device. Running it again updates the binary and
+leaves your data alone.
+
+TLS depends on what the machine already runs. On an empty machine it installs Caddy, which
+obtains and renews the certificate on its own. If nginx is already serving something there,
+it adds a site and asks certbot for the certificate instead, leaving the existing sites
+untouched. If something else holds port 443 it changes nothing and tells you what to point
+where: an installer that knocks over somebody's running site to put up its own is not an
+installer.
 
 The server itself listens on `127.0.0.1` and never faces the internet. Caddy does.
 
