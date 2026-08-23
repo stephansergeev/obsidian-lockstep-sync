@@ -1,5 +1,21 @@
 # Changelog
 
+## 0.6.0
+
+File and folder names are encrypted along with content. A vault says a great deal through
+its names alone, and until now the server could read every one of them. Each path segment is
+sealed separately so the tree keeps its shape, deterministically so two devices agree on
+where a file lives, with keys expanded from the same passphrase by HKDF but kept separate
+from the content keys.
+
+Whether a vault hides names is fixed when encryption is first set up. The two cannot be
+mixed in one vault, and switching would leave every path unreadable to the client that
+wrote it.
+
+Docker as a second route, for machines that only run containers. There is no VOLUME line in
+the Dockerfile and the compose file uses a bind mount, because a named volume is what
+`docker compose down -v` destroys and what would be destroyed here is every note.
+
 ## 0.5.7
 
 Release artefacts are built by GitHub Actions from the tagged commit rather than on a

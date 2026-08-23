@@ -61,7 +61,7 @@ const en: Dict = {
 	"settings.section.encryption": "Encryption",
 	"settings.encryption.name": "Encrypt content",
 	"settings.encryption.desc":
-		"Notes are encrypted on this device before they are uploaded. The server keeps bytes it cannot read. File and folder names are still visible to it.",
+		"Notes and their names are encrypted on this device before they are uploaded. The server keeps bytes it cannot read and names it cannot read either. It still sees the shape of the vault: how many files there are and how deep the folders go.",
 	"settings.passphrase.name": "Passphrase",
 	"settings.passphrase.desc":
 		"The same passphrase on every device. It never leaves them. Lose it and the notes are gone, there is nobody to ask.",
@@ -69,6 +69,7 @@ const en: Dict = {
 	"encryption.off": "Encryption is off. The server can read your notes.",
 	"encryption.locked": "Enter the passphrase to unlock this vault.",
 	"encryption.ready": "Unlocked. New uploads are encrypted.",
+	"encryption.readyWithPaths": "Unlocked. Content and file names are both hidden from the server.",
 	"encryption.created": "Encryption set up for this vault. Keep the passphrase safe.",
 	"encryption.wrong": "Wrong passphrase for this vault.",
 	"encryption.failed": "Could not unlock: {message}",
@@ -169,7 +170,7 @@ const ru: Dict = {
 	"settings.section.encryption": "Шифрование",
 	"settings.encryption.name": "Шифровать содержимое",
 	"settings.encryption.desc":
-		"Заметки шифруются на этом устройстве до отправки. Сервер хранит байты, которые не может прочитать. Имена файлов и папок ему по-прежнему видны.",
+		"Заметки и их имена шифруются на этом устройстве до отправки. Сервер хранит байты, которые не может прочитать, и имена, которые тоже не может прочитать. Ему остаётся видна только форма волта: сколько файлов и насколько глубоко вложены папки.",
 	"settings.passphrase.name": "Пароль",
 	"settings.passphrase.desc":
 		"Один и тот же пароль на всех устройствах. Он никуда не уходит. Потеряешь его — заметки потеряны, спросить не у кого.",
@@ -177,6 +178,7 @@ const ru: Dict = {
 	"encryption.off": "Шифрование выключено. Сервер видит твои заметки.",
 	"encryption.locked": "Введи пароль, чтобы открыть волт.",
 	"encryption.ready": "Открыто. Новые загрузки шифруются.",
+	"encryption.readyWithPaths": "Открыто. И содержимое, и имена файлов скрыты от сервера.",
 	"encryption.created": "Шифрование настроено для этого волта. Сохрани пароль.",
 	"encryption.wrong": "Неверный пароль для этого волта.",
 	"encryption.failed": "Не удалось открыть: {message}",

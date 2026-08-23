@@ -451,3 +451,65 @@ test("a server that goes away and comes back loses nothing", async (t) => {
 	assert.equal(await b.vault.read("during.md"), "written while it was down\n");
 	void server;
 });
+
+test("with paths hidden, the server never learns a file name", async (t) => {
+	const server = await startServer();
+	const { cipher } = await VaultCipher.create("shared passphrase", {
+		iterations: 1,
+		memory_kib: 64,
+	});
+	const pathCipher = await cipher.pathCipher();
+	const opts = { cipher, pathCipher };
+	const a = await makeDevice(server, "mac", server.tokens.a, opts);
+	const b = await makeDevice(server, "iphone", server.tokens.b, opts);
+	t.after(async () => {
+		await a.cleanup();
+		await b.cleanup();
+		await server.stop();
+	});
+
+	// A vault says a great deal through its names alone, before anything is opened.
+	await a.edit("Job search/Applications.md", "sent to three places\n");
+	await a.edit("Job search/CV.md", "the current version\n");
+	await a.sync();
+
+	const log = JSON.stringify(await server.rawChanges(server.tokens.a));
+	for (const word of ["Job", "search", "Applications", "CV", ".md", "three places"]) {
+		assert.equal(log.includes(word), false, `the server can see ${JSON.stringify(word)}`);
+	}
+
+	await b.sync();
+	assert.equal(await b.vault.read("Job search/Applications.md"), "sent to three places\n");
+	assert.equal(await b.vault.read("Job search/CV.md"), "the current version\n");
+});
+
+test("hidden paths survive renames and deletions between devices", async (t) => {
+	const server = await startServer();
+	const { cipher } = await VaultCipher.create("shared passphrase", {
+		iterations: 1,
+		memory_kib: 64,
+	});
+	const opts = { cipher, pathCipher: await cipher.pathCipher() };
+	const a = await makeDevice(server, "mac", server.tokens.a, opts);
+	const b = await makeDevice(server, "iphone", server.tokens.b, opts);
+	t.after(async () => {
+		await a.cleanup();
+		await b.cleanup();
+		await server.stop();
+	});
+
+	await a.edit("notes/first.md", "body\n");
+	await a.sync();
+	await b.sync();
+
+	await a.rename("notes/first.md", "notes/second.md");
+	await a.sync();
+	await b.sync();
+	assert.equal(await b.vault.read("notes/second.md"), "body\n");
+	assert.equal(await b.vault.exists("notes/first.md"), false);
+
+	await a.delete("notes/second.md");
+	await a.sync();
+	await b.sync();
+	assert.equal(await b.vault.exists("notes/second.md"), false);
+});

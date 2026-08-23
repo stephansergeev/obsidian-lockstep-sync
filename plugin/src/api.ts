@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: MIT
 
 import { requestUrl, type RequestUrlResponse } from "obsidian";
+import type { PathCipher } from "./crypto";
 import { encodePath } from "./paths";
 
 /**
@@ -68,7 +69,23 @@ export class SyncClient {
 		private token: string,
 		/** How this device calls itself, sent with every write so conflicts can name it. */
 		private device = "",
+		/**
+		 * Translates vault paths to the names the server sees, when the vault hides
+		 * them. Every path crosses this class on its way out and on its way back, so
+		 * nothing above it has to know whether names are hidden at all.
+		 */
+		private paths: PathCipher | null = null,
 	) {}
+
+	/** The name the server knows this path by. */
+	private async remote(path: string): Promise<string> {
+		return this.paths ? this.paths.encrypt(path) : path;
+	}
+
+	/** The name the vault knows this path by. */
+	private async local(path: string): Promise<string> {
+		return this.paths ? this.paths.decrypt(path) : path;
+	}
 
 	private url(path: string): string {
 		return `${this.baseUrl.replace(/\/+$/, "")}/v1${path}`;
@@ -125,7 +142,24 @@ export class SyncClient {
 	/** The change delta. The client never walks the vault tree at all. */
 	async changes(since: number, limit = 500): Promise<ChangesPage> {
 		const resp = await this.call("GET", `/changes?since=${since}&limit=${limit}`);
-		return resp.json;
+		const page = resp.json as ChangesPage;
+		if (!this.paths) return page;
+		const entries: ChangeEntry[] = [];
+		for (const entry of page.entries) {
+			try {
+				entries.push({
+					...entry,
+					path: await this.local(entry.path),
+					...(entry.renamed_from ? { renamed_from: await this.local(entry.renamed_from) } : {}),
+				});
+			} catch {
+				// A name this key cannot open. Written by another vault sharing the
+				// server, or from before encryption. Skipping it is right: acting on a
+				// path we cannot read would put a file somewhere nobody chose.
+				continue;
+			}
+		}
+		return { ...page, entries };
 	}
 
 	/** Key derivation parameters for this vault, or null when it has none yet. */
@@ -149,7 +183,7 @@ export class SyncClient {
 
 	async getFile(path: string, rev?: number): Promise<{ data: ArrayBuffer; rev: number; hash: string }> {
 		const q = rev === undefined ? "" : `&rev=${rev}`;
-		const resp = await this.call("GET", `/file?path=${encodePath(path)}${q}`);
+		const resp = await this.call("GET", `/file?path=${encodePath(await this.remote(path))}${q}`);
 		return {
 			data: resp.arrayBuffer,
 			rev: Number(resp.headers["x-rev"] ?? rev ?? 0),
@@ -163,7 +197,7 @@ export class SyncClient {
 		data: ArrayBuffer,
 		mtime: number,
 	): Promise<WriteResult> {
-		const resp = await this.call("PUT", `/file?path=${encodePath(path)}`, {
+		const resp = await this.call("PUT", `/file?path=${encodePath(await this.remote(path))}`, {
 			body: data,
 			headers: {
 				"X-Base-Rev": String(baseRev),
@@ -175,7 +209,7 @@ export class SyncClient {
 	}
 
 	async putFolder(path: string, baseRev: number): Promise<WriteResult> {
-		const resp = await this.call("PUT", `/file?path=${encodePath(path)}`, {
+		const resp = await this.call("PUT", `/file?path=${encodePath(await this.remote(path))}`, {
 			body: new ArrayBuffer(0),
 			headers: { "X-Base-Rev": String(baseRev), "X-Folder": "1" },
 		});
@@ -183,7 +217,7 @@ export class SyncClient {
 	}
 
 	async deleteFile(path: string, baseRev: number): Promise<WriteResult> {
-		const resp = await this.call("DELETE", `/file?path=${encodePath(path)}`, {
+		const resp = await this.call("DELETE", `/file?path=${encodePath(await this.remote(path))}`, {
 			headers: { "X-Base-Rev": String(baseRev) },
 		});
 		return resp.json;
@@ -191,7 +225,11 @@ export class SyncClient {
 
 	async rename(from: string, to: string, baseRev: number): Promise<WriteResult> {
 		const resp = await this.call("POST", "/rename", {
-			body: JSON.stringify({ from, to, base_rev: baseRev }),
+			body: JSON.stringify({
+				from: await this.remote(from),
+				to: await this.remote(to),
+				base_rev: baseRev,
+			}),
 			headers: { "Content-Type": "application/json" },
 		});
 		return resp.json;

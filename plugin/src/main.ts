@@ -9,6 +9,7 @@ import {
 	WrongPassphrase,
 	plaintext,
 	type Cipher,
+	type PathCipher,
 	type VaultKeyParams,
 } from "./crypto";
 import { t } from "./i18n";
@@ -28,6 +29,7 @@ export default class LockstepPlugin extends Plugin {
 	private lastStatus = t("status.notConnected");
 	private debounce: ReturnType<typeof setTimeout> | null = null;
 	private cipher: Cipher = plaintext;
+	private pathCipher: PathCipher | null = null;
 	private cipherStatus = "";
 	/**
 	 * Encryption is switched on but the key is not available.
@@ -137,12 +139,14 @@ export default class LockstepPlugin extends Plugin {
 	async applyEncryption(): Promise<void> {
 		if (!this.settings.encryption) {
 			this.cipher = plaintext;
+			this.pathCipher = null;
 			this.locked = false;
 			this.cipherStatus = t("encryption.off");
 			return;
 		}
 		if (!this.settings.passphrase) {
 			this.cipher = plaintext;
+			this.pathCipher = null;
 			this.locked = true;
 			this.cipherStatus = t("encryption.locked");
 			return;
@@ -152,13 +156,18 @@ export default class LockstepPlugin extends Plugin {
 		try {
 			const stored = (await client.getVaultKey()) as VaultKeyParams | null;
 			if (stored) {
-				this.cipher = await VaultCipher.unlock(this.settings.passphrase, stored);
+				const cipher = await VaultCipher.unlock(this.settings.passphrase, stored);
+				this.cipher = cipher;
+				this.pathCipher = stored.paths === "encrypted" ? await cipher.pathCipher() : null;
 				this.locked = false;
-				this.cipherStatus = t("encryption.ready");
+				this.cipherStatus = t(
+					this.pathCipher ? "encryption.readyWithPaths" : "encryption.ready",
+				);
 			} else {
 				const { cipher, params } = await VaultCipher.create(this.settings.passphrase);
 				await client.putVaultKey(params);
 				this.cipher = cipher;
+				this.pathCipher = params.paths === "encrypted" ? await cipher.pathCipher() : null;
 				this.locked = false;
 				this.cipherStatus = t("encryption.created");
 				new Notice(t("encryption.created"), 10000);
@@ -167,6 +176,7 @@ export default class LockstepPlugin extends Plugin {
 			// A wrong passphrase must never fall back to writing plaintext: that would
 			// quietly publish the notes this setting exists to hide.
 			this.cipher = plaintext;
+			this.pathCipher = null;
 			this.locked = true;
 			this.cipherStatus =
 				e instanceof WrongPassphrase
@@ -203,7 +213,12 @@ export default class LockstepPlugin extends Plugin {
 			if (complain) new Notice(t("notice.noConfig"));
 			return null;
 		}
-		return new SyncClient(this.settings.serverUrl, this.settings.token, this.settings.deviceName);
+		return new SyncClient(
+			this.settings.serverUrl,
+			this.settings.token,
+			this.settings.deviceName,
+			this.pathCipher,
+		);
 	}
 
 	// --- watching the vault ---------------------------------------------------

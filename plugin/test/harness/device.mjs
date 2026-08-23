@@ -41,6 +41,13 @@ export async function startServer() {
 			proc.kill();
 			await fs.rm(data, { recursive: true, force: true });
 		},
+		/** The change log exactly as the server stores it, names and all. */
+		async rawChanges(token) {
+			const resp = await fetch(`${url}/v1/changes?since=0&limit=500`, {
+				headers: { Authorization: `Bearer ${token}` },
+			});
+			return resp.json();
+		},
 		/** What the server actually holds, to prove encryption is real. */
 		async rawBytes(token, filePath) {
 			const resp = await fetch(`${url}/v1/file?path=${encodeURIComponent(filePath)}`, {
@@ -105,7 +112,8 @@ export async function makeDevice(server, name, token, options = {}) {
 		app: { vault },
 		index,
 		settings,
-		client: () => new SyncClient(server.url, token, settings.deviceName),
+		client: () =>
+			new SyncClient(server.url, token, settings.deviceName, options.pathCipher ?? null),
 		cipher: () => cipher,
 		onConflict: (path, copy) => conflicts.push({ path, copy }),
 		log: (message, error) => logs.push(`${message}: ${error ?? ""}`),

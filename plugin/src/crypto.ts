@@ -53,6 +53,14 @@ export interface VaultKeyParams {
 	salt: string;
 	/** Base64 envelope of a known string, used to tell a wrong passphrase from corrupt data. */
 	verifier: string;
+	/**
+	 * Whether file and folder names are encrypted as well as content.
+	 *
+	 * Write-once, like everything else in this record. Switching it on an existing
+	 * vault would leave every path on the server unreadable to the client that
+	 * wrote it, so a vault is one or the other for its whole life.
+	 */
+	paths?: "plain" | "encrypted";
 }
 
 export interface Cipher {
@@ -85,7 +93,32 @@ export class VaultCipher implements Cipher {
 	private constructor(
 		private key: CryptoKey,
 		private nonceKey: CryptoKey,
+		/** The 64 bytes the passphrase was stretched into, kept to derive further keys. */
+		private root: ArrayBuffer,
 	) {}
+
+	/**
+	 * A separate key pair for paths, expanded from the same root with HKDF.
+	 *
+	 * Expanding rather than lengthening the KDF output matters: Argon2id folds the
+	 * requested length into the hash, so asking it for more bytes would change the
+	 * content key too and make an existing vault unreadable.
+	 */
+	async pathCipher(): Promise<PathCipher> {
+		const bits = await expand(this.root, "lockstep path keys v1", 64);
+		const key = await crypto.subtle.importKey("raw", bits.slice(0, 32), "AES-GCM", false, [
+			"encrypt",
+			"decrypt",
+		]);
+		const nonceKey = await crypto.subtle.importKey(
+			"raw",
+			bits.slice(32, 64),
+			{ name: "HMAC", hash: "SHA-256" },
+			false,
+			["sign"],
+		);
+		return new PathCipher(key, nonceKey);
+	}
 
 	/**
 	 * Set up encryption for a vault that has none yet. Argon2id unless told otherwise.
@@ -95,7 +128,7 @@ export class VaultCipher implements Cipher {
 	 */
 	static async create(
 		passphrase: string,
-		overrides: Partial<Pick<VaultKeyParams, "kdf" | "iterations" | "memory_kib">> = {},
+		overrides: Partial<Pick<VaultKeyParams, "kdf" | "iterations" | "memory_kib" | "paths">> = {},
 	): Promise<{ cipher: VaultCipher; params: VaultKeyParams }> {
 		const salt = crypto.getRandomValues(new Uint8Array(32));
 		const kdf = overrides.kdf ?? "Argon2id";
@@ -108,6 +141,9 @@ export class VaultCipher implements Cipher {
 			parallelism: kdf === "Argon2id" ? 1 : undefined,
 			salt: toBase64(salt.buffer as ArrayBuffer),
 			verifier: "",
+			// New vaults hide names as well as content. Existing ones keep whatever
+			// they were created with, because the two cannot be mixed.
+			paths: overrides.paths ?? "encrypted",
 		};
 		const cipher = await VaultCipher.fromParams(passphrase, salt, params);
 		params.verifier = toBase64(
@@ -155,7 +191,7 @@ export class VaultCipher implements Cipher {
 			false,
 			["sign"],
 		);
-		return new VaultCipher(key, nonceKey);
+		return new VaultCipher(key, nonceKey, bits);
 	}
 
 	async encrypt(data: ArrayBuffer): Promise<ArrayBuffer> {
@@ -230,6 +266,98 @@ async function derivePbkdf2(
 		material,
 		512,
 	);
+}
+
+/** HKDF expansion, so one stretched passphrase can produce several unrelated keys. */
+async function expand(root: ArrayBuffer, label: string, bytes: number): Promise<ArrayBuffer> {
+	const material = await crypto.subtle.importKey("raw", root, "HKDF", false, ["deriveBits"]);
+	return crypto.subtle.deriveBits(
+		{
+			name: "HKDF",
+			hash: "SHA-256",
+			salt: new Uint8Array(0) as unknown as BufferSource,
+			info: new TextEncoder().encode(label) as unknown as BufferSource,
+		},
+		material,
+		bytes * 8,
+	);
+}
+
+/**
+ * Encrypts the names of files and folders.
+ *
+ * Each segment is encrypted on its own, so the shape of the tree survives and a
+ * path stays a path. Deterministic, for the same reason content is: the same name
+ * has to produce the same ciphertext every time, or the server would see a rename
+ * on every sync and no two devices would ever agree on where a file lives.
+ *
+ * What this hides is the names. What it still shows is the shape: how many folders
+ * there are, how deep they go and how many files sit in each.
+ */
+export class PathCipher {
+	private toRemote = new Map<string, string>();
+	private toLocal = new Map<string, string>();
+
+	constructor(
+		private key: CryptoKey,
+		private nonceKey: CryptoKey,
+	) {}
+
+	async encrypt(path: string): Promise<string> {
+		const cached = this.toRemote.get(path);
+		if (cached) return cached;
+		const out: string[] = [];
+		for (const segment of path.split("/")) out.push(await this.sealSegment(segment));
+		const remote = out.join("/");
+		this.remember(path, remote);
+		return remote;
+	}
+
+	async decrypt(remote: string): Promise<string> {
+		const cached = this.toLocal.get(remote);
+		if (cached) return cached;
+		const out: string[] = [];
+		for (const segment of remote.split("/")) out.push(await this.openSegment(segment));
+		const local = out.join("/");
+		this.remember(local, remote);
+		return local;
+	}
+
+	private remember(local: string, remote: string): void {
+		this.toRemote.set(local, remote);
+		this.toLocal.set(remote, local);
+	}
+
+	private async sealSegment(segment: string): Promise<string> {
+		const data = new TextEncoder().encode(segment);
+		const mac = await crypto.subtle.sign("HMAC", this.nonceKey, data as unknown as BufferSource);
+		const nonce = new Uint8Array(mac).slice(0, 12);
+		const sealed = await crypto.subtle.encrypt(
+			{ name: "AES-GCM", iv: nonce as unknown as BufferSource },
+			this.key,
+			data as unknown as BufferSource,
+		);
+		const joined = new Uint8Array(12 + sealed.byteLength);
+		joined.set(nonce, 0);
+		joined.set(new Uint8Array(sealed), 12);
+		// base64url, because the result has to survive being a filename and a URL.
+		return toBase64(joined.buffer as ArrayBuffer)
+			.replace(/\+/g, "-")
+			.replace(/\//g, "_")
+			.replace(/=+$/, "");
+	}
+
+	private async openSegment(segment: string): Promise<string> {
+		const padded = segment.replace(/-/g, "+").replace(/_/g, "/");
+		const bytes = new Uint8Array(fromBase64(padded + "=".repeat((4 - (padded.length % 4)) % 4)));
+		if (bytes.length < 12 + 16) throw new Error("path segment is too short to be encrypted");
+		const opened = await crypto.subtle.decrypt(
+			{ name: "AES-GCM", iv: bytes.slice(0, 12) as unknown as BufferSource },
+			this.key,
+			bytes.slice(12),
+		);
+		return new TextDecoder().decode(opened);
+	}
 }
 
 /** True when these bytes were written by this plugin's encryption. */

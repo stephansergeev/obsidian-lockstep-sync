@@ -118,3 +118,42 @@ test("new vaults use Argon2id", async () => {
 	assert.equal(params.kdf, "Argon2id");
 	assert.equal(params.parallelism, 1);
 });
+
+test("a path encrypts to something that is still a path", async () => {
+	const { cipher } = await VaultCipher.create("correct horse", CHEAP);
+	const paths = await cipher.pathCipher();
+	const remote = await paths.encrypt("Заметки/Проекты/Ереван.md");
+
+	assert.equal(remote.split("/").length, 3, "the shape of the tree has to survive");
+	assert.equal(remote.includes("Ереван"), false, "and the names must not");
+	assert.equal(remote.includes(".md"), false, "including what kind of file it is");
+	assert.match(remote, /^[A-Za-z0-9_\-/]+$/, "it also has to be usable as a filename and a URL");
+	assert.equal(await paths.decrypt(remote), "Заметки/Проекты/Ереван.md");
+});
+
+test("the same folder always encrypts the same way", async () => {
+	const { cipher } = await VaultCipher.create("correct horse", CHEAP);
+	const paths = await cipher.pathCipher();
+	const a = await paths.encrypt("Notes/one.md");
+	const b = await paths.encrypt("Notes/two.md");
+	assert.equal(a.split("/")[0], b.split("/")[0], "or two devices would disagree on where a file lives");
+	// Deterministic per segment is what keeps the tree a tree.
+});
+
+test("another passphrase cannot read the names", async () => {
+	const mine = await VaultCipher.create("correct horse", CHEAP);
+	const theirs = await VaultCipher.create("different horse", CHEAP);
+	const remote = await (await mine.cipher.pathCipher()).encrypt("secret.md");
+	const theirPaths = await theirs.cipher.pathCipher();
+	await assert.rejects(() => theirPaths.decrypt(remote));
+});
+
+test("path keys are separate from content keys", async () => {
+	const { cipher } = await VaultCipher.create("correct horse", CHEAP);
+	const paths = await cipher.pathCipher();
+	const asPath = await paths.encrypt("hello");
+	const asContent = await cipher.encrypt(new TextEncoder().encode("hello").buffer);
+	assert.notEqual(asPath, Buffer.from(asContent).toString("base64"));
+	// One key per purpose. Reusing the content key for names would let a leak of one
+	// become a leak of the other.
+});

@@ -207,15 +207,25 @@ deleting a file on the device that created it silently downloaded it back.
 Sync runs both ways. Edits, deletions and renames travel in both directions, conflicts merge
 line by line, and overlapping edits produce a copy rather than a decision.
 
-Content is encrypted on the device before it is uploaded. File and folder names are not yet:
-the server can see the shape of your vault, though not what is in it. Encrypting the paths
-as well is the next piece of work.
+Content and file names are both encrypted on the device before anything is uploaded. The
+server holds bytes it cannot read under names it cannot read either. What it still sees is
+the shape: how many files there are and how deep the folders go.
 
 ## Encryption
 
 Turn it on, choose a passphrase, and use the same one on every device. Content is sealed with
-AES-256-GCM before it leaves, and the server holds bytes it cannot read. The key is derived
-from the passphrase and never goes anywhere.
+AES-256-GCM before it leaves, and the key is derived from the passphrase and never goes
+anywhere.
+
+Names are sealed too, one path segment at a time, so the tree keeps its shape while
+"Job search/Applications.md" becomes three unreadable strings. A vault says a great deal
+through its filenames alone, before a single note is opened. Path keys are expanded from the
+same passphrase with HKDF but are separate from the content keys, so a leak of one is not a
+leak of the other.
+
+Names are encrypted deterministically, for the same reason content is: two devices have to
+agree on where a file lives. Whether a vault hides names is fixed when encryption is first
+set up, because the two kinds cannot be mixed in one vault.
 
 The derivation parameters are stored on the server as an opaque record, so a second device
 joins the vault knowing only the passphrase. They are write-once: changing them without
