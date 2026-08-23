@@ -13,6 +13,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"io/fs"
 	"os"
 	"path/filepath"
 	"regexp"
@@ -105,4 +106,47 @@ func (s *Store) Has(hash string) bool {
 	}
 	_, err := os.Stat(s.path(hash))
 	return err == nil
+}
+
+// SweepResult reports what a sweep found or removed.
+type SweepResult struct {
+	Removed int64
+	Bytes   int64
+}
+
+// Sweep deletes blobs nothing points at any more.
+//
+// The set of live hashes has to come from the metadata in one piece: content is
+// shared between paths and revisions, so a blob is only garbage when the entire
+// vault has stopped referring to it. Anything the store did not name is removed,
+// which also collects the blobs left behind by uploads that ended in a conflict.
+func (s *Store) Sweep(live map[string]bool, dryRun bool) (SweepResult, error) {
+	var out SweepResult
+	err := filepath.WalkDir(s.root, func(path string, d fs.DirEntry, err error) error {
+		if err != nil {
+			return err
+		}
+		if d.IsDir() {
+			// The staging directory holds partial uploads in flight, not content.
+			if d.Name() == "tmp" && filepath.Dir(path) == s.root {
+				return filepath.SkipDir
+			}
+			return nil
+		}
+		name := d.Name()
+		if !ValidHash(name) || live[name] {
+			return nil
+		}
+		info, err := d.Info()
+		if err != nil {
+			return err
+		}
+		out.Removed++
+		out.Bytes += info.Size()
+		if dryRun {
+			return nil
+		}
+		return os.Remove(path)
+	})
+	return out, err
 }

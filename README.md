@@ -100,6 +100,18 @@ Give every device its own token, so losing one phone means revoking one token:
 sudo /usr/local/bin/lockstep-sync-server token add --data /var/lib/lockstep --vault main --name iphone
 ```
 
+History grows on its own and nothing is ever thrown away without being asked. When you want
+the space back:
+
+```bash
+sudo -u lockstep /usr/local/bin/lockstep-sync-server gc --data /var/lib/lockstep --all --dry-run
+```
+
+It keeps the current version of every file whatever else happens, keeps recent history however
+deep it goes, and only drops revisions that are both old and buried. Run it without
+`--dry-run` when you agree with what it says it would do. It is not on a timer: deleting
+history is the one thing here that cannot be undone.
+
 If you already have a vault, load it in one go:
 
 ```bash

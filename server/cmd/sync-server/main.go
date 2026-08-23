@@ -8,6 +8,7 @@
 //	sync-server token revoke     --name iphone
 //	sync-server stats            --vault main
 //	sync-server import           --from ~/Vault --vault main
+//	sync-server gc               --all --dry-run
 package main
 
 import (
@@ -42,6 +43,7 @@ func usage() error {
   token   add --vault NAME --name DEVICE | list | revoke --name DEVICE
   stats   --vault NAME
   import  --from DIR [--vault NAME] [--with-config] [--dry-run]
+  gc      [--vault NAME | --all] [--keep-days N] [--keep-revisions N] [--dry-run]
 
 Data directory defaults to ./data (override with LOCKSTEP_DATA).
 `)
@@ -69,6 +71,8 @@ func run(args []string) error {
 		return stats(args[1:])
 	case "import":
 		return importVault(args[1:])
+	case "gc":
+		return collect(args[1:])
 	case "-h", "--help", "help":
 		return usage()
 	default:
