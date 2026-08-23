@@ -166,13 +166,15 @@ The derivation parameters are stored on the server as an opaque record, so a sec
 joins the vault knowing only the passphrase. They are write-once: changing them without
 re-encrypting every file would turn the whole vault into noise, so the server refuses.
 
-Two choices here trade something away and are worth knowing about.
+The key is derived with Argon2id at 64 MiB over three passes. Argon2id is memory-hard: every
+guess has to allocate and walk tens of megabytes, which is what stops a graphics card from
+trying millions of passphrases at once. That costs a WebAssembly build inside the plugin,
+which is why it was measured before being accepted. On an iPhone it takes 172 ms, against
+227 ms for PBKDF2 at 600,000 iterations. Cheaper for the person waiting, and orders of
+magnitude more expensive for anyone attacking the passphrase. PBKDF2 records are still read,
+so a vault created before the change keeps opening.
 
-The key is derived with PBKDF2-SHA256 rather than Argon2id. Web Crypto has no Argon2, and
-the alternative is shipping a WebAssembly build inside a plugin that has to run on a phone.
-PBKDF2 is weaker against dedicated cracking hardware but needs no dependency and no native
-code. Because the parameters live in that record, moving to Argon2id later is a migration
-rather than a break.
+One choice here trades something away and is worth knowing about.
 
 The nonce is derived from the content rather than drawn at random. A random one would make
 every upload of an unchanged file produce different bytes, which defeats deduplication,
@@ -191,8 +193,9 @@ The server uses `modernc.org/sqlite`, which is pure Go and needs no cgo, and
 `golang.org/x/text` for Unicode normalisation. Nothing else. The binary is static and
 cross compiles anywhere.
 
-The plugin depends on the Obsidian typings and esbuild at build time, and on nothing at
-runtime.
+The plugin depends on the Obsidian typings and esbuild at build time, and on `hash-wasm` at
+runtime for Argon2id. That WebAssembly build is most of the bundle, and it is loaded only
+when a vault actually uses encryption.
 
 ## Author and licence
 

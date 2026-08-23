@@ -3,6 +3,7 @@
 import { Notice, Plugin, TAbstractFile, normalizePath } from "obsidian";
 import { ApiError, SyncClient, type ChangeEntry } from "./api";
 import { ConflictModal } from "./conflict-modal";
+import { showConflictNotice } from "./conflict-notice";
 import {
 	VaultCipher,
 	WrongPassphrase,
@@ -51,7 +52,17 @@ export default class LockstepPlugin extends Plugin {
 			settings: this.settings,
 			client: () => this.client(false),
 			cipher: () => this.cipher,
-			onConflict: (path) => new Notice(t("notice.conflictQueued", { path }), 12000),
+			onConflict: (path) => {
+				// Ask right here rather than sending anybody to a settings screen. The
+				// same conflict also stays in the list, so ignoring the notice costs
+				// nothing.
+				const pending = this.index.conflicts.find((c) => c.path === path);
+				if (pending) {
+					showConflictNotice(pending, (choice) => this.resolveConflict(path, choice));
+				} else {
+					new Notice(t("notice.conflictQueued", { path }), 12000);
+				}
+			},
 			log: (message, error) => console.warn(`[lockstep-sync] ${message}`, error ?? ""),
 		});
 
@@ -66,11 +77,6 @@ export default class LockstepPlugin extends Plugin {
 			callback: () => void this.testConnection(),
 		});
 		this.addCommand({ id: "pull-all", name: t("cmd.pull"), callback: () => void this.pullAll() });
-		this.addCommand({
-			id: "benchmark-kdf",
-			name: t("cmd.benchmark"),
-			callback: () => void this.runBenchmark(),
-		});
 		this.addCommand({
 			id: "resolve-conflicts",
 			name: t("cmd.conflicts"),
@@ -171,14 +177,17 @@ export default class LockstepPlugin extends Plugin {
 		}
 	}
 
+	/** Apply a decision about a conflict and refresh what the status bar shows. */
+	async resolveConflict(path: string, choice: "mine" | "server" | "merged"): Promise<void> {
+		await this.engine.resolveConflict(path, choice);
+		this.setStatus(this.lastStatus);
+	}
+
 	openConflicts(): void {
 		new ConflictModal(
 			this.app,
 			() => this.index.conflicts,
-			async (path, choice) => {
-				await this.engine.resolveConflict(path, choice);
-				this.setStatus(this.lastStatus);
-			},
+			(path, choice) => this.resolveConflict(path, choice),
 		).open();
 	}
 
@@ -320,17 +329,6 @@ export default class LockstepPlugin extends Plugin {
 		this.setStatus(this.cipherStatus);
 		if (!quiet) new Notice(`Lockstep: ${this.cipherStatus}`, 8000);
 		return true;
-	}
-
-	/** Measure key derivation here, on this device, instead of guessing. */
-	async runBenchmark(): Promise<void> {
-		new Notice(t("notice.benchmarking"), 5000);
-		const { benchmarkKdf, reportBenchmark } = await import("./kdf-benchmark");
-		try {
-			reportBenchmark(await benchmarkKdf());
-		} catch (e) {
-			this.reportError(t("cmd.benchmark"), e);
-		}
 	}
 
 	async testConnection(): Promise<void> {

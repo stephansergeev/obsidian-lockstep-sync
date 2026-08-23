@@ -57,10 +57,6 @@ const en: Dict = {
 	"notice.conflictQueued":
 		"Lockstep: {path} was changed on both sides. Both versions are kept, open the plugin to choose.",
 
-	"settings.benchmark.name": "Measure key derivation",
-	"settings.benchmark.desc":
-		"Times the passphrase-to-key step on this device. Takes a few seconds and changes nothing.",
-	"settings.benchmark.button": "Measure",
 	"settings.section.encryption": "Encryption",
 	"settings.encryption.name": "Encrypt content",
 	"settings.encryption.desc":
@@ -97,8 +93,6 @@ const en: Dict = {
 
 	"error.sync": "Sync",
 
-	"cmd.benchmark": "Measure key derivation on this device",
-	"notice.benchmarking": "Lockstep: measuring, this takes a few seconds…",
 	"cmd.test": "Test connection to the server",
 	"cmd.pull": "Download everything from the server",
 
@@ -170,10 +164,6 @@ const ru: Dict = {
 	"notice.conflictQueued":
 		"Lockstep: {path} правили с двух сторон. Обе версии сохранены, открой плагин и выбери.",
 
-	"settings.benchmark.name": "Замерить выведение ключа",
-	"settings.benchmark.desc":
-		"Меряет, сколько на этом устройстве занимает превращение пароля в ключ. Несколько секунд, ничего не меняет.",
-	"settings.benchmark.button": "Замерить",
 	"settings.section.encryption": "Шифрование",
 	"settings.encryption.name": "Шифровать содержимое",
 	"settings.encryption.desc":
@@ -210,8 +200,6 @@ const ru: Dict = {
 
 	"error.sync": "Синхронизация",
 
-	"cmd.benchmark": "Замерить выведение ключа на этом устройстве",
-	"notice.benchmarking": "Lockstep: меряю, это займёт несколько секунд…",
 	"cmd.test": "Проверить соединение с сервером",
 	"cmd.pull": "Скачать всё с сервера",
 

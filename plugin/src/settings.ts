@@ -49,6 +49,10 @@ export class SyncSettingsTab extends PluginSettingTab {
 		const { containerEl } = this;
 		containerEl.empty();
 
+		// Anything waiting on a decision goes at the very top. This is the screen
+		// people open when they were told something needs deciding.
+		this.renderConflicts(containerEl);
+
 		new Setting(containerEl)
 			.setName(t("settings.serverUrl.name"))
 			.setDesc(t("settings.serverUrl.desc"))
@@ -168,17 +172,6 @@ export class SyncSettingsTab extends PluginSettingTab {
 			});
 		}
 
-		// Reachable without the command palette, which on a phone is several taps away
-		// and hard to find if you did not already know it was there.
-		new Setting(containerEl)
-			.setName(t("settings.benchmark.name"))
-			.setDesc(t("settings.benchmark.desc"))
-			.addButton((b) =>
-				b.setButtonText(t("settings.benchmark.button")).onClick(async () => {
-					await this.plugin.runBenchmark();
-				}),
-			);
-
 		new Setting(containerEl).setName(t("settings.section.maintenance")).setHeading();
 
 		new Setting(containerEl)
@@ -225,5 +218,55 @@ export class SyncSettingsTab extends PluginSettingTab {
 			cls: "setting-item-description",
 			text: this.plugin.statusLine(),
 		});
+	}
+
+	private renderConflicts(containerEl: HTMLElement): void {
+		const conflicts = this.plugin.index?.conflicts ?? [];
+		if (conflicts.length === 0) return;
+
+		new Setting(containerEl).setName(t("conflict.title")).setHeading();
+		containerEl.createEl("p", { cls: "setting-item-description", text: t("conflict.intro") });
+
+		for (const c of conflicts) {
+			const setting = new Setting(containerEl)
+				.setName(c.path)
+				.setDesc(
+					t("conflict.detail", { device: c.device, when: new Date(c.at).toLocaleString() }),
+				);
+
+			const decide = async (choice: "mine" | "server" | "merged") => {
+				try {
+					await this.plugin.resolveConflict(c.path, choice);
+					new Notice(t("conflict.resolved", { path: c.path }));
+				} catch (e) {
+					new Notice(
+						t("notice.error", {
+							what: t("conflict.title"),
+							message: e instanceof Error ? e.message : String(e),
+						}),
+						8000,
+					);
+				}
+				this.display();
+			};
+
+			if (c.mergeable) {
+				setting.addButton((b) =>
+					b
+						.setCta()
+						.setButtonText(t("conflict.keepBoth"))
+						.setTooltip(t("conflict.keepBoth.tooltip"))
+						.onClick(() => void decide("merged")),
+				);
+			}
+			setting.addButton((b) =>
+				b
+					.setButtonText(t("conflict.keepMine", { device: c.device }))
+					.onClick(() => void decide("mine")),
+			);
+			setting.addButton((b) =>
+				b.setButtonText(t("conflict.keepServer")).onClick(() => void decide("server")),
+			);
+		}
 	}
 }

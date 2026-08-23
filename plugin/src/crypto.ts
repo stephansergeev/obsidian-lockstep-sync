@@ -6,15 +6,17 @@
  * Content is encrypted on the device with AES-256-GCM before it is uploaded. The
  * key never leaves the device and the server holds bytes it cannot read.
  *
- * Two design choices here are worth stating plainly, because both trade something
- * away.
+ * The key is derived with Argon2id, which is memory-hard: each guess has to allocate
+ * and walk tens of megabytes, and that is what stops a graphics card from trying
+ * millions of passphrases in parallel. It costs a WebAssembly build inside the
+ * plugin, which was worth measuring before accepting. On an iPhone, Argon2id at
+ * 64 MiB over three passes takes 172 ms against 227 ms for PBKDF2 at 600,000
+ * iterations: cheaper for the person waiting, and orders of magnitude more expensive
+ * for anyone attacking the passphrase.
  *
- * The key is derived with PBKDF2-SHA256 rather than the Argon2id the specification
- * asked for. Web Crypto has no Argon2, and the alternative is shipping a WebAssembly
- * build inside a plugin that has to run on a phone. PBKDF2 with a high iteration
- * count is weaker against dedicated hardware but needs no dependency and no native
- * code. The parameters live on the server as an opaque record, so moving to Argon2id
- * later is a migration rather than a break.
+ * PBKDF2 is still read, so a vault set up before this change keeps opening. The
+ * parameters live on the server as an opaque record, which is what makes changing
+ * the derivation a migration rather than a break.
  *
  * The nonce is derived from the plaintext rather than drawn at random. A random
  * nonce would make every upload of an unchanged file produce different bytes, which
@@ -28,13 +30,25 @@ const MAGIC = new Uint8Array([0x4c, 0x53, 0x45, 0x01]); // "LSE" and a format ve
 const NONCE_BYTES = 12;
 const VERIFY_TEXT = "lockstep-verify";
 
-/** OWASP's recommendation for PBKDF2-SHA256 at the time of writing. */
+/** OWASP's recommendation for PBKDF2-SHA256, kept for vaults created before the switch. */
 export const DEFAULT_ITERATIONS = 600_000;
+
+/**
+ * Argon2id settings. 64 MiB over three passes is the point measured on a phone:
+ * fast enough that nobody notices, heavy enough that parallel cracking collapses.
+ */
+export const ARGON2_MEMORY_KIB = 64 * 1024;
+export const ARGON2_PASSES = 3;
 
 export interface VaultKeyParams {
 	v: 1;
-	kdf: "PBKDF2-SHA256";
+	kdf: "PBKDF2-SHA256" | "Argon2id";
+	/** PBKDF2 iterations, or Argon2 passes. */
 	iterations: number;
+	/** Argon2id only. */
+	memory_kib?: number;
+	/** Argon2id only. */
+	parallelism?: number;
 	/** Base64. */
 	salt: string;
 	/** Base64 envelope of a known string, used to tell a wrong passphrase from corrupt data. */
@@ -73,35 +87,41 @@ export class VaultCipher implements Cipher {
 		private nonceKey: CryptoKey,
 	) {}
 
-	/** Set up encryption for a vault that has none yet. */
+	/**
+	 * Set up encryption for a vault that has none yet. Argon2id unless told otherwise.
+	 *
+	 * The override exists so a migration can build a record under the older scheme,
+	 * and so the tests can prove such a record still opens.
+	 */
 	static async create(
 		passphrase: string,
-		iterations = DEFAULT_ITERATIONS,
+		overrides: Partial<Pick<VaultKeyParams, "kdf" | "iterations" | "memory_kib">> = {},
 	): Promise<{ cipher: VaultCipher; params: VaultKeyParams }> {
 		const salt = crypto.getRandomValues(new Uint8Array(32));
-		const cipher = await VaultCipher.fromSalt(passphrase, salt, iterations);
-		const verifier = await cipher.encrypt(new TextEncoder().encode(VERIFY_TEXT).buffer as ArrayBuffer);
-		return {
-			cipher,
-			params: {
-				v: 1,
-				kdf: "PBKDF2-SHA256",
-				iterations,
-				salt: toBase64(salt.buffer as ArrayBuffer),
-				verifier: toBase64(verifier),
-			},
+		const kdf = overrides.kdf ?? "Argon2id";
+		const params: VaultKeyParams = {
+			v: 1,
+			kdf,
+			iterations:
+				overrides.iterations ?? (kdf === "Argon2id" ? ARGON2_PASSES : DEFAULT_ITERATIONS),
+			memory_kib: kdf === "Argon2id" ? (overrides.memory_kib ?? ARGON2_MEMORY_KIB) : undefined,
+			parallelism: kdf === "Argon2id" ? 1 : undefined,
+			salt: toBase64(salt.buffer as ArrayBuffer),
+			verifier: "",
 		};
+		const cipher = await VaultCipher.fromParams(passphrase, salt, params);
+		params.verifier = toBase64(
+			await cipher.encrypt(new TextEncoder().encode(VERIFY_TEXT).buffer as ArrayBuffer),
+		);
+		return { cipher, params };
 	}
 
 	/** Join a vault that already has parameters, checking the passphrase against them. */
 	static async unlock(passphrase: string, params: VaultKeyParams): Promise<VaultCipher> {
-		if (params.kdf !== "PBKDF2-SHA256") {
-			throw new Error(`unsupported key derivation: ${params.kdf}`);
-		}
-		const cipher = await VaultCipher.fromSalt(
+		const cipher = await VaultCipher.fromParams(
 			passphrase,
 			new Uint8Array(fromBase64(params.salt)),
-			params.iterations,
+			params,
 		);
 		let opened: ArrayBuffer;
 		try {
@@ -113,25 +133,17 @@ export class VaultCipher implements Cipher {
 		return cipher;
 	}
 
-	private static async fromSalt(
+	private static async fromParams(
 		passphrase: string,
 		salt: Uint8Array,
-		iterations: number,
+		params: VaultKeyParams,
 	): Promise<VaultCipher> {
-		const material = await crypto.subtle.importKey(
-			"raw",
-			new TextEncoder().encode(passphrase),
-			"PBKDF2",
-			false,
-			["deriveBits"],
-		);
 		// 64 bytes: the first half encrypts, the second half derives nonces. Splitting
 		// them keeps the nonce derivation from being an oracle on the encryption key.
-		const bits = await crypto.subtle.deriveBits(
-			{ name: "PBKDF2", salt: salt as unknown as BufferSource, iterations, hash: "SHA-256" },
-			material,
-			512,
-		);
+		const bits =
+			params.kdf === "Argon2id"
+				? await deriveArgon2id(passphrase, salt, params)
+				: await derivePbkdf2(passphrase, salt, params.iterations);
 		const key = await crypto.subtle.importKey("raw", bits.slice(0, 32), "AES-GCM", false, [
 			"encrypt",
 			"decrypt",
@@ -180,6 +192,44 @@ export class VaultCipher implements Cipher {
 		const mac = await crypto.subtle.sign("HMAC", this.nonceKey, data);
 		return new Uint8Array(mac).slice(0, NONCE_BYTES);
 	}
+}
+
+async function deriveArgon2id(
+	passphrase: string,
+	salt: Uint8Array,
+	params: VaultKeyParams,
+): Promise<ArrayBuffer> {
+	// Loaded on demand so the WebAssembly is only paid for by vaults that encrypt.
+	const { argon2id } = await import("hash-wasm");
+	const out = await argon2id({
+		password: passphrase,
+		salt,
+		parallelism: params.parallelism ?? 1,
+		memorySize: params.memory_kib ?? ARGON2_MEMORY_KIB,
+		iterations: params.iterations,
+		hashLength: 64,
+		outputType: "binary",
+	});
+	return out.buffer.slice(out.byteOffset, out.byteOffset + out.byteLength) as ArrayBuffer;
+}
+
+async function derivePbkdf2(
+	passphrase: string,
+	salt: Uint8Array,
+	iterations: number,
+): Promise<ArrayBuffer> {
+	const material = await crypto.subtle.importKey(
+		"raw",
+		new TextEncoder().encode(passphrase),
+		"PBKDF2",
+		false,
+		["deriveBits"],
+	);
+	return crypto.subtle.deriveBits(
+		{ name: "PBKDF2", salt: salt as unknown as BufferSource, iterations, hash: "SHA-256" },
+		material,
+		512,
+	);
 }
 
 /** True when these bytes were written by this plugin's encryption. */
