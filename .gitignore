@@ -4,3 +4,7 @@ node_modules/
 plugin/main.js
 .DS_Store
 /styles.css
+
+# личные заметки по проекту, наружу не идут
+/.backlog.local.md
+/BACKLOG.md
