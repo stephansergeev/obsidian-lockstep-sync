@@ -14,11 +14,11 @@ cross:
 # so the build artefacts are copied up after the bundle is made.
 plugin:
 	cd plugin && npm run build
-	cp plugin/main.js plugin/manifest.json plugin/versions.json .
+	cp plugin/main.js plugin/manifest.json plugin/versions.json plugin/styles.css .
 
 # Release assets: these three files are what BRAT and the catalogue expect.
 release: plugin
-	@echo "ready to release: main.js manifest.json versions.json"
+	@echo "ready to release: main.js manifest.json styles.css versions.json"
 
 test:
 	cd server && go test ./...
@@ -28,4 +28,4 @@ fmt:
 	cd server && gofmt -w .
 
 clean:
-	rm -rf bin plugin/main.js main.js
+	rm -rf bin plugin/main.js main.js styles.css

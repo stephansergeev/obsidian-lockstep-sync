@@ -1,0 +1,17 @@
+/* SPDX-License-Identifier: MIT */
+
+/*
+ * Obsidian's plugin guidelines ask that styling live in CSS rather than being
+ * assigned from JavaScript, so a theme can override it and a user can restyle it.
+ */
+
+.lockstep-conflict-notice .lockstep-conflict-buttons {
+	display: flex;
+	flex-wrap: wrap;
+	gap: var(--size-4-2);
+	margin-top: var(--size-4-3);
+}
+
+.lockstep-conflict-notice .lockstep-conflict-buttons button {
+	flex: 1 1 auto;
+}

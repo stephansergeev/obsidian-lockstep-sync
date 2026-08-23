@@ -31,7 +31,7 @@ export class ConflictModal extends Modal {
 		contentEl.empty();
 		const list = this.conflicts();
 
-		contentEl.createEl("h2", { text: t("conflict.title") });
+		new Setting(contentEl).setName(t("conflict.title")).setHeading();
 
 		if (list.length === 0) {
 			contentEl.createEl("p", { text: t("conflict.none") });

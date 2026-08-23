@@ -27,15 +27,11 @@ export function showConflictNotice(
 
 	el.createDiv({ text: t("notice.conflictQueued", { path: conflict.path }) });
 
-	const row = el.createDiv();
-	row.style.display = "flex";
-	row.style.flexWrap = "wrap";
-	row.style.gap = "6px";
-	row.style.marginTop = "10px";
+	// Styling lives in styles.css so themes can override it.
+	const row = el.createDiv({ cls: "lockstep-conflict-buttons" });
 
 	const button = (label: string, choice: ConflictChoice, primary = false) => {
 		const b = row.createEl("button", { text: label });
-		b.style.flex = "1 1 auto";
 		if (primary) b.addClass("mod-cta");
 		b.addEventListener("click", (e) => {
 			// Clicking anywhere on a notice dismisses it, so the button has to keep the
