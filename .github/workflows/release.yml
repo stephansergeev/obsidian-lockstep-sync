@@ -1,0 +1,71 @@
+name: Release
+
+# Builds every release artefact on a clean machine from a tagged commit, so what
+# people download is traceable to source rather than to somebody's laptop.
+on:
+  push:
+    tags: ["[0-9]+.[0-9]+.[0-9]+"]
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version: "1.24"
+          cache-dependency-path: server/go.sum
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: npm
+          cache-dependency-path: plugin/package-lock.json
+
+      # Nothing ships that has not passed the same checks as an ordinary commit.
+      - name: server tests
+        working-directory: server
+        run: go test -race ./...
+
+      - name: build server
+        run: make cross
+
+      - name: plugin
+        working-directory: plugin
+        run: |
+          npm ci
+          npm test
+          npm run build
+
+      - name: collect artefacts
+        run: |
+          cp plugin/main.js plugin/manifest.json plugin/styles.css plugin/versions.json .
+          cp ops/install.sh .
+          mkdir -p dist
+          mv bin/sync-server-linux-amd64 bin/sync-server-linux-arm64 dist/
+          cp main.js manifest.json styles.css versions.json install.sh dist/
+
+      # A checksum file is the difference between "download and hope" and "verify".
+      - name: checksums
+        working-directory: dist
+        run: sha256sum * > SHA256SUMS
+
+      - name: verify the manifest matches the tag
+        run: |
+          MANIFEST=$(python3 -c "import json;print(json.load(open('manifest.json'))['version'])")
+          if [ "$MANIFEST" != "${GITHUB_REF_NAME}" ]; then
+            echo "manifest.json says $MANIFEST but the tag is ${GITHUB_REF_NAME}" >&2
+            exit 1
+          fi
+
+      - name: publish
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release create "${GITHUB_REF_NAME}" dist/* \
+            --title "${GITHUB_REF_NAME}" \
+            --generate-notes

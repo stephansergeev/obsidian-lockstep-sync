@@ -232,6 +232,17 @@ The plugin depends on the Obsidian typings and esbuild at build time, and on `ha
 runtime for Argon2id. That WebAssembly build is most of the bundle, and it is loaded only
 when a vault actually uses encryption.
 
+## Verifying what you downloaded
+
+Every release is built by GitHub Actions from the tagged commit and carries `SHA256SUMS`:
+
+```bash
+sha256sum -c SHA256SUMS --ignore-missing
+```
+
+Release tags are signed. Security reports go through a private advisory, see
+[SECURITY.md](SECURITY.md).
+
 ## Author and licence
 
 Written by Stephan Sergeev. https://github.com/stephansergeev
