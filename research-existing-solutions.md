@@ -1,103 +1,143 @@
-# Obsidian sync — что уже есть на рынке (ресёрч 2026-08-23)
+# What already exists (research, 23 August 2026)
 
-Контекст: [ТЗ на собственный self-hosted синк](spec/spec-v0.1.md).
-Задача ресёрча: понять, свободна ли ниша и в чём реальная дельта этого решения.
+Context: [the specification](spec/spec-v0.1.md).
+The question this research had to answer: is the niche free, and where is the real
+difference.
 
-## Вывод одной строкой
+## In one line
 
-Ниша **не пустая**. Пункты «чем отличаемся от Remotely Save» из §1 спеки описывают не дырку
-в рынке, а два уже существующих продукта: **Self-hosted LiveSync** (2021, зрелый) и
-**Synch** (2026, MIT, бета). Второй закрывает спеку почти пункт в пункт, включая шифрование путей
-и 3-way merge markdown. Строить надо не «то же самое, но на Go», а осознанную дельту.
+The niche is **not** free. The "how this differs from Remotely Save" table in the spec does
+not describe a gap in the market, it describes two products that already exist:
+**Self-hosted LiveSync** (2021, mature) and **Synch** (2026, MIT, beta). The second covers
+the specification almost point for point, including encrypted paths and a 3-way markdown
+merge. So the thing to build is not the same product in Go, it is a deliberate difference.
 
-## Игроки
+## Who is here
 
-### 1. Obsidian Sync (официальный)
-- Standard $4/мес (год) или $5/мес: 1 ГБ, 1 месяц истории, 1 волт, безлимит устройств.
-- Plus $8/мес (год): 10 ГБ (до 100 ГБ за $16), 12 мес истории, до 10 волтов.
-- E2EE, мобильные обе платформы, ноль настройки. Эталон надёжности, с которым сравнивают.
-- Минус для нас: подписка, чужой сервер, закрытый код.
+### Obsidian Sync, the official one
+Standard is four dollars a month billed annually, or five monthly: 1 GB, one month of
+history, one vault, unlimited devices. Plus is eight dollars a month annually: 10 GB, up to
+100 GB for sixteen, twelve months of history, up to ten vaults. End-to-end encrypted, both
+mobile platforms, zero configuration. This is the reliability benchmark everything else is
+measured against. Against us: a subscription, somebody else's server, closed source.
 
-### 2. Remotely Save
-- BYO-storage: своё хранилище, плагин — просто клиент.
-- **Free forever:** S3-совместимое (R2/B2/MinIO), WebDAV, Dropbox, OneDrive (App Folder), Webdis.
-- **PRO:** OneDrive (full), Google Drive, Box, pCloud, Yandex Disk, Koofr, Azure Blob.
-  Бесплатно на бете до 2027-01-01, дальше подписка.
-- Разрез PRO проходит **и по конфликтам**: базовый — «оставить новее», PRO — smart merge / дубликат.
-- Слабое место (то, за что его и критикует спека): обнаружение изменений — обход дерева
-  на клиенте, синк по таймеру/кнопке, фонового синка нет.
-- ~6,6k звёзд, живой.
+### Remotely Save
+Bring your own storage. The plugin is only a client.
+Free forever: S3-compatible (R2, B2, MinIO), WebDAV, Dropbox, OneDrive app folder, Webdis.
+PRO: OneDrive full access, Google Drive, Box, pCloud, Yandex Disk, Koofr, Azure Blob. Free
+during the beta until 1 January 2027, a subscription afterwards.
+**The PRO line also runs through conflict handling:** the free tier keeps whichever is newer,
+PRO does a smart merge or a duplicate.
+Its weak spot, the one the spec attacks: changes are found by walking the tree on the client,
+sync runs on a timer or a button, and there is no background sync.
+About 6,600 stars, actively maintained. **2,168,947 downloads.**
 
-### 3. Self-hosted LiveSync (vrtmrz)
-Главный конкурент по классу. Требует Obsidian ≥ 1.7.2, работает на всех платформах, включая мобильные.
-- **Три бэкенда:** CouchDB (рекомендуемый), Object Storage (S3/R2/MinIO), P2P через WebRTC
-  (без сервера данных, но нужен signalling-релей).
-- Real-time репликация, chunk-level, автослияние простых конфликтов, E2EE.
-- 2026: P2P-режим активно допиливается — Room ID, «Watch peer», репликация в один клик.
-  Там же известные болячки: обязательное шифрование удалённой БД в 0.25.6x конфликтует
-  с P2P-репликатором; ложные уведомления «P2P not enabled» у тех, кто на CouchDB.
-- Минус ровно тот, что назван в спеке: чтобы завести, надо на полдня стать сисадмином —
-  Docker, CouchDB, CORS, реверс-прокси, TLS. Плюс предупреждение «сделай бэкап перед установкой»
-  и «не закрывай Obsidian во время синка, иначе повреждение».
+### Self-hosted LiveSync (vrtmrz)
+The main competitor in this class. Requires Obsidian 1.7.2 or newer, runs everywhere
+including mobile.
+**Three backends:** CouchDB (recommended), object storage (S3, R2, MinIO), and peer to peer
+over WebRTC, which needs no data server but does need a signalling relay.
+Real-time replication, chunk-level, automatic merging of simple conflicts, end-to-end
+encryption.
+In 2026 the P2P mode is being actively developed: room IDs, watching a peer, one-click
+replication. The same place lists the known problems: mandatory remote database encryption
+in 0.25.6x conflicts with the P2P replicator, and CouchDB users get spurious "P2P not
+enabled" notifications.
+The downside is exactly what the spec says: getting it running means being a sysadmin for an
+afternoon, with Docker, CouchDB, CORS, a reverse proxy and TLS. Plus a warning to back up
+before installing, and another not to close Obsidian mid-sync or risk corruption.
+**882,799 downloads.**
 
-### 4. Synch (hjinco/synch, synch.run) — новичок 2026, самый неудобный для нас
-- Open source, **MIT**, статус beta.
-- **Device-side E2EE: сервис не видит ни текст, ни пути файлов, ни ключи.** Это ровно v2 из §6 спеки.
-- **Автослияние markdown при непересекающихся правках, conflict-copy при пересечении.**
-  Это ровно §5 спеки.
-- Near-instant sync, версионная история (тоже зашифрованная), восстановление удалённого.
-- Десктоп + мобильный.
-- **Самохостится:** Docker/systemd или деплой в Cloudflare. Хостед-версия живёт на Cloudflare
-  (storage, queues, D1).
-- Хостед-тарифы: free 1 волт / 50 МБ / 1 день истории; Starter $1/мес ($12/год) 1 ГБ / 1 мес;
-  Plus $5/мес 5 волтов / 50 ГБ / 1 год.
+### Synch (hjinco/synch, synch.run), the 2026 newcomer and the most awkward for us
+Open source, MIT, in beta.
+**Device-side end-to-end encryption: the service sees neither the text, nor the file paths,
+nor the keys.** That is exactly v2 of section 6 of the spec.
+**Automatic markdown merging for non-overlapping edits, conflict copies when edits overlap.**
+That is exactly section 5 of the spec.
+Near-instant sync, encrypted version history, recovery of deleted files. Desktop and mobile.
+**Self-hostable** through Docker or systemd, or deployed into Cloudflare. The hosted service
+runs on Cloudflare storage, queues and D1.
+Hosted plans: free with one vault, 50 MB and one day of history; Starter at one dollar a
+month with 1 GB and one month; Plus at five dollars with five vaults, 50 GB total and a year.
+**3,351 downloads.**
 
-### 5. Не-плагинные пути (для полноты)
-- **iCloud** — только Apple, конфликты при параллельной правке.
-- **Syncthing** — P2P без облака. Официальное Android-приложение прекращено (последний релиз
-  привязан к Syncthing 12.2024), живой преемник — Syncthing-Fork, сменивший мейнтейнера в 2026.
-  На iOS из-за песочницы нужны обёртки: SyncTrain (бесплатно, open source, iOS 17+) или
-  Möbius Sync (бесплатно до 20 МБ, снятие лимита — разовые $4.99).
-- **obsidian-git** — версионирование бонусом, но merge-конфликты на телефоне и риск утечки:
-  всё, что лежит в волте, уезжает в удалённый репозиторий целиком.
-- **Google Drive / Dropbox папкой** — на Android условно работает, на iOS Obsidian нормально
-  дружит только с iCloud и локальной папкой.
+### Osync (Self-Hosted)
+"Self-hosted, end-to-end encrypted vault sync. Run your own server (Docker)."
+**499 downloads.** Like Synch, marked in the catalogue as not manually reviewed by the
+Obsidian team.
 
-## Что из спеки уже реализовано у других
+### AnySocket Sync
+"Self-Hosted synchronization for your Vault using AnySocket." **1,048 downloads.**
 
-| Пункт спеки | Кто уже сделал |
+### Non-plugin routes, for completeness
+**iCloud** is Apple only and conflicts when both sides edit.
+**Syncthing** is peer to peer with no cloud. The official Android app was discontinued, its
+last release tied to Syncthing from December 2024, and the maintained successor is
+Syncthing-Fork, which changed hands in 2026. On iOS the sandbox means a wrapper: SyncTrain,
+free and open source on iOS 17 or newer, or Möbius Sync, free up to 20 MB with a one-off
+$4.99 to lift the cap.
+**obsidian-git** gives versioning as a bonus but brings merge conflicts on a phone and the
+risk that everything in the vault ends up in a remote repository.
+**A Google Drive or Dropbox folder** works after a fashion on Android. On iOS, Obsidian only
+gets on well with iCloud and local folders.
+
+## What the specification asked for that others already have
+
+| Point from the spec | Who already did it |
 |---|---|
-| Серверный лог ревизий вместо обхода дерева | LiveSync (CouchDB `_changes`), Synch |
-| Push вместо таймера | LiveSync (continuous replication), Synch (near-instant) |
-| 3-way merge markdown, conflict-copy при пересечении | Synch — дословно; LiveSync — chunk-level |
-| Шифрование путей | Synch (v2 из спеки уже в проде) |
-| Самохостинг одной командой | Synch (Docker/systemd/Cloudflare); LiveSync — нет, там CouchDB |
-| Один статический бинарник, SQLite, ноль зависимостей | **никто** |
-| Публичный тест-харнесс на инварианты потери данных | **никто не выносит это в продукт** |
+| A server-side revision log instead of walking the tree | LiveSync (CouchDB `_changes`), Synch |
+| Push instead of a timer | LiveSync (continuous replication), Synch (near instant) |
+| 3-way markdown merge, conflict copy on overlap | Synch, word for word; LiveSync at chunk level |
+| Encrypted paths | Synch, already shipping |
+| Self-hosting in one command | Synch (Docker, systemd, Cloudflare); LiveSync no, it needs CouchDB |
+| One static binary, SQLite, no dependencies | **nobody** |
+| A public harness for data loss invariants | **nobody sells this** |
 
-## Где реальная дельта (кандидаты, не решение)
+## Where the real difference is
 
-1. **Ops-простота.** Один Go-бинарник + SQLite против CouchDB и против Cloudflare-зависимости
-   Synch. «Скопировал файл на VPS, systemd-юнит, готово» — это честное отличие от обоих.
-2. **Гарантии, а не фичи.** Тест-харнесс из §9 как публичный артефакт: «вот 10 сценариев, при которых
-   конкуренты теряют текст, вот прогон в CI». Ни один игрок этим не торгует, а боль ровно тут.
-3. **Отсутствие вендора в контуре.** Synch хостед сидит на Cloudflare; официальный Sync — на серверах
-   Obsidian. Наш — только свой VPS.
+**Operational simplicity.** One Go binary and SQLite against CouchDB on one side and Synch's
+Cloudflare dependency on the other. "Copy a file to a server, add a systemd unit, done" is an
+honest difference from both.
 
-## Проверить до первой строки кода
+**Guarantees rather than features.** The harness from section 9 as a public artefact: here
+are ten scenarios where sync loses text, and here is the CI run proving these do not. Nobody
+in this field sells that, and the pain is precisely there.
 
-- Поднять Synch self-hosted и прожить на нём неделю: если он закрывает задачу целиком,
-  дельту нужно формулировать честно, а не задним числом.
-- Прогнать по Synch и LiveSync сценарии 1–10 из §9 спеки. Если оба валятся хотя бы на трёх —
-  дельта «гарантии» подтверждена данными, а не гипотезой.
-- Проверить, как каждый ведёт себя на мобильном после недели фоновых убийств приложения.
+**No vendor in the loop.** Synch hosted sits on Cloudflare and the official Sync sits on
+Obsidian's servers. This one sits on your own machine.
 
-## Источники
+## What the numbers say
 
-- https://obsidian.md/blog/standard-plan/ — тарифы официального Sync
-- https://remotelysave.com/pricing — разрез free/PRO Remotely Save
-- https://github.com/vrtmrz/obsidian-livesync — бэкенды и предупреждения LiveSync
-- https://github.com/vrtmrz/obsidian-livesync/blob/main/docs/p2p_sync_updates_2026.md — P2P 2026
-- https://github.com/hjinco/synch + https://synch.run/ — Synch, MIT, E2EE, self-host
-- https://www.stephanmiller.com/sync-obsidian-vault-across-devices/ — обзор бесплатных путей 2026
-- https://forum.obsidian.md/t/sync-mac-pc-and-ios-using-syncthing-mobius-sync/72022 — Syncthing + iOS
+Across the whole catalogue of 6,845 plugins the median is **540 downloads**. The top 25%
+starts at 4,151 and the top 10% at 15,921. More than half the catalogue, 4,009 plugins, sits
+below a thousand.
+
+The instructive comparison is Synch against Remotely Save. Synch is technically the stronger
+product and has 3,351 downloads. Remotely Save does less and resolves conflicts worse in its
+free tier, and has 2.1 million. **Technical superiority does not convert into installs.** The
+gap is years of presence and the position in a catalogue that sorts by popularity, which is a
+loop that feeds itself.
+
+A realistic target is therefore not two million but ten thousand, which is the top 10% of the
+catalogue.
+
+## To check before writing more code
+
+Stand up Synch self-hosted and live on it for a week. If it covers the job completely, the
+difference has to be stated honestly rather than invented afterwards.
+
+Run scenarios 1 to 10 from section 9 of the spec against Synch and LiveSync. If both fail at
+least three, the "guarantees" difference is backed by data rather than opinion.
+
+Check how each behaves on mobile after a week of the app being killed in the background.
+
+## Sources
+
+- https://obsidian.md/blog/standard-plan/ official Sync pricing
+- https://remotelysave.com/pricing the free and PRO split
+- https://github.com/vrtmrz/obsidian-livesync backends and warnings
+- https://github.com/vrtmrz/obsidian-livesync/blob/main/docs/p2p_sync_updates_2026.md
+- https://github.com/hjinco/synch and https://synch.run/
+- https://github.com/obsidianmd/obsidian-releases download statistics
+- https://www.stephanmiller.com/sync-obsidian-vault-across-devices/ free routes in 2026
+- https://forum.obsidian.md/t/sync-mac-pc-and-ios-using-syncthing-mobius-sync/72022

@@ -1,82 +1,84 @@
-# Решения по ходу разработки (дельта к spec v0.1)
+# Decisions made along the way (delta to spec v0.1)
 
-Спека не переписывается задним числом — здесь копятся отклонения и их причины.
-Всё, что тут закрыто, переедет в v0.2 при следующей ревизии.
+The spec is not rewritten after the fact. Deviations and their reasons collect here, and
+move into v0.2 at the next revision.
 
-## Закрыто
+## Settled
 
-**Q11.1 — мультиюзер или один волт на инстанс?**
-Ни то, ни другое: **один волт = свой каталог** (`data/vaults/<имя>/meta.db` + `blobs/`),
-токен указывает, какой каталог открыть. Схема остаётся без `vault_id`, мультитенантности
-и её рисков нет, а несколько волтов на одном сервере работают. Изоляция проверена тестом
-`TestVaultIsolation`.
+**Product model.** Free, open source, funded by donations. There will be no subscription and
+no hosted service.
 
-**Новое поле `renamed_from` в `files`.**
-Спека §4.5 требует, чтобы переименование не выглядело удалением на другом устройстве —
-но без явного признака в логе клиент видит именно пару tombstone + новый файл. Добавлено
-поле, оно отдаётся в `/changes`. Клиент может сделать локальный `rename` вместо
-«скачать заново и удалить старое».
+The reason is not altruism, it is who actually uses this. The audience for self-hosted sync
+is people who deliberately turned down Obsidian Sync at four dollars a month and are willing
+to run a server instead. Selling a subscription to people who already rejected one makes no
+sense: by choosing this they removed themselves from that market. Monetising access would
+contradict the product rather than extend it.
 
-**Порядок проверок при записи: идемпотентность ДО `base_rev`.**
-Первый прогон харнесса поймал: клиент, которого убили между успешным PUT и записью
-локального индекса, повторяет запрос со старой базой и получает 409 на ровном месте.
-Теперь совпадение хеша содержимого — no-op с текущей ревизией независимо от `base_rev`
-(результат на диске тот же, терять нечего). То же для повторного удаления.
+What follows for development: no free and paid tiers, no limits on vaults or devices, no
+telemetry, no mandatory account. Everything the product does is available to everyone at
+once.
 
-**`seq` не двигается на no-op.** Иначе каждый повтор после обрыва будил бы все остальные
-устройства на пустую дельту.
+**Licence.** MIT for the whole repository. Hosting the server as a service is not planned,
+so there is nothing to protect against somebody else's SaaS, and MIT removes friction both
+for the catalogue submission and for contributors. The decision is irreversible for releases
+already published, and was taken deliberately before the first one.
 
-**Валидация путей — на сервере, а не только на клиенте.**
-NFD-путь отвергается с 400. Обоснование: нормализация на клиенте (§4) остаётся, но клиентов
-будет несколько версий, а разъехавшуюся кириллицу потом не собрать. Заодно режутся `..`,
-абсолютные пути, пустые сегменты, управляющие символы, хвостовые пробелы и точки
-(последнее — ради Windows).
+**Q11.1, multi-user or one vault per instance?** Neither: **one vault is one directory**
+(`data/vaults/<name>/meta.db` plus `blobs/`), and a token says which directory to open. The
+schema needs no `vault_id`, there is no multi-tenancy and none of its risks, and several
+vaults on one server still work. Isolation is covered by `TestVaultIsolation`.
 
-**Занятый путь назначения при `rename` → 409, а не перезапись.** Молчаливая перезапись
-чужого файла — та самая потеря заметки, ради которой всё затевалось.
+**A new `renamed_from` column in `files`.** Spec section 4.5 requires that a rename does not
+look like a deletion on another device, but without an explicit marker in the log the client
+sees exactly a tombstone plus a new file. The column is returned by `/changes`, so a client
+can perform a local rename instead of downloading the content again and deleting the old
+path.
 
-**Токены хранятся как sha256.** Открытое значение показывается один раз при выдаче.
+**Order of checks on write: idempotency BEFORE base_rev.** The first run of the harness
+caught this. A client killed between a successful PUT and its local index update retries
+with the old base and used to get a 409 out of nowhere. Now matching content hashes are a
+no-op returning the current revision regardless of `base_rev`, because the result on disk is
+identical and there is nothing to lose. The same applies to a repeated deletion.
 
-**Загрузка с сервера не удаляет локальные файлы.** Односторонняя загрузка не должна уметь стирать волт;
-tombstones при `pullAll` пропускаются. Удаления применяются только когда появится полноценный
-двусторонний индекс.
+**`seq` does not move on a no-op.** Otherwise every retry after a dropped connection would
+wake all the other devices for an empty delta.
 
-**Расхождение при загрузке → копия рядом.** Если локальный файл отличается от серверного,
-локальная версия сначала сохраняется как `Имя (устройство ДАТА).md`, и только потом пишется
-серверная. Молчаливой перезаписи нет нигде.
+**Path validation on the server, not only on the client.** An NFD path is rejected with 400.
+Client-side normalisation stays, but there will be several client versions over time and
+non-ASCII names that have drifted apart cannot be reconciled afterwards. The same check
+rejects `..`, absolute paths, empty segments, control characters, and trailing spaces or
+dots, the last of those for the sake of Windows.
 
-## Закрыто позже
+**An occupied destination on rename gives 409 rather than an overwrite.** Silently
+overwriting somebody else's file is exactly the note loss this project exists to prevent.
 
-**Модель продукта.** Бесплатный open-source на донатной основе. Подписки не будет,
-платного хостинга не будет.
+**Tokens are stored as sha256.** The plaintext value is shown once, at issue.
 
-Причина не в альтруизме, а в том, кто именно этим пользуется. Аудитория self-hosted синка —
-это люди, которые сознательно отказались от Obsidian Sync за 4 доллара и готовы поднять
-собственный сервер. Продавать подписку тем, кто уже отверг подписку, бессмысленно по
-определению: самим фактом выбора они себя из этого рынка исключили. Значит монетизация
-через доступ противоречит продукту, а не дополняет его.
+**Downloading from the server does not delete local files.** A one-way pull must not be able
+to erase a vault, so tombstones are skipped during `pullAll`. Deletions are applied only once
+the full two-way index is in place.
 
-Отсюда следствия для разработки: никакого разделения на бесплатную и платную версии,
-никаких ограничений по количеству волтов или устройств, никакой телеметрии и никакого
-обязательного аккаунта. Всё, что умеет продукт, доступно всем сразу.
+**A local file that differs is copied aside.** If a local file differs from the server one,
+the local version is saved as `Name (device DATE).md` first, and only then is the server
+version written. Nothing is overwritten silently anywhere.
 
-**Q11.5 — лицензия.** MIT на весь репозиторий. Хостинг сервера как услуга не планируется,
-защищать от чужого SaaS нечего, а MIT снимает трение при подаче в community plugins
-и при контрибьюциях. Решение необратимо для уже выпущенных версий — зафиксировано
-до первой публикации.
+## Still open
 
-## Осталось решить
+**Whether to sync `.obsidian/`.** Exclusions currently hold `workspace.json`,
+`workspace-mobile.json` and `.trash/`. The question is whether to carry settings and plugins
+wholesale, which is convenient but wrong when the plugin sets differ between desktop and
+mobile.
 
-- **Синхронизировать ли `.obsidian/`.** Сейчас в исключениях только `workspace.json`,
-  `workspace-mobile.json` и `.trash/`. Развилка: тянуть ли настройки и плагины целиком
-  (удобно, но плагины на мобильном и десктопе разные) или оставить как есть.
-- **Лимит на вложения — жёсткий или предупреждение.** Сейчас жёсткий, 512 МБ,
-  флаг `--max-upload`.
-- **Полные версии или дельты в истории.** Пока полные (blob'ы дедуплицируются).
-  GC ещё не написан — предложение из спеки: старше 30 дней и глубже 20 ревизий.
+**Whether the attachment limit is hard or a warning.** It is hard right now, 512 MB, behind
+the `--max-upload` flag.
 
-## Не тронуто (М1 и дальше)
+**Full versions or deltas in history.** Full for now, since blobs deduplicate. The collector
+is not written yet. The proposal from the spec: drop revisions older than 30 days and deeper
+than 20.
 
-Шифрование (§6), WebSocket (§4.6), докачка на клиенте, наблюдатель волта, очередь
-загрузок, 3-way merge. Сервер к ним готов: `Range` работает, `409` несёт всё нужное
-для слияния, ревизии доступны по номеру.
+## Untouched so far
+
+Encryption (section 6), WebSocket (section 4.6), resumable downloads on the client, the
+vault watcher, the upload queue and the 3-way merge. The server is ready for all of them:
+`Range` works, a 409 carries everything a merge needs, and revisions are addressable by
+number.

@@ -1,59 +1,61 @@
-# Obsidian Self-Hosted Sync — техническое задание
+# Lockstep Sync — technical specification
 
-**Версия спеки:** 0.1 · **Статус:** черновик до первой строки кода · **Принято в работу:** 2026-08-23
+**Spec version:** 0.1 · **Status:** draft written before the first line of code
 
-## 1. Цель
+## 1. Goal
 
-Двусторонняя синхронизация Obsidian-волта между десктопом (Windows/macOS) и мобильным (iOS/Android)
-через собственный сервер. Без подписок, без чужих облаков, без OAuth.
+Two-way synchronisation of an Obsidian vault between desktop (Windows, macOS) and mobile
+(iOS, Android) through a server the user owns. No subscriptions, no third-party clouds, no
+OAuth.
 
-### Чем отличаемся от Remotely Save
+### How this differs from Remotely Save
 
-| | Remotely Save | Наше решение |
+| | Remotely Save | This |
 |---|---|---|
-| Обнаружение изменений | обход всего дерева на клиенте | серверный лог ревизий, дельта одним запросом |
-| Триггер синка | таймер / кнопка | push по WebSocket, синк за ~1 сек |
-| Конфликты | оставить новее / оставить больше | 3-way merge по markdown |
-| Пути файлов | всегда в открытом виде | шифруются (v2) |
-| Стоимость | PRO-подписка за половину бэкендов | свой сервер |
+| Finding changes | the client walks the whole tree | a server-side revision log, one request for the delta |
+| Sync trigger | timer or button | WebSocket push, about a second |
+| Conflicts | keep newer or keep larger | 3-way merge on markdown |
+| File paths | always in the clear | encrypted (v2) |
+| Cost | a PRO subscription for half the backends | your own server |
 
-Ближайший аналог по классу — Self-hosted LiveSync (CouchDB). Изучить до старта: чем мы проще
-(один бинарник вместо CouchDB) и где он объективно сильнее.
+The closest thing in the same class is Self-hosted LiveSync (CouchDB). Study it before
+starting: where this is simpler (one binary instead of CouchDB) and where it is genuinely
+stronger.
 
-## 2. Принципы
+## 2. Principles
 
-1. **Сервер — источник истины.** Никаких version vectors и распределённого консенсуса. Один сервер,
-   монотонный счётчик, все клиенты догоняют его.
-2. **Волт священен.** Любая неоднозначность разрешается в пользу сохранения обеих версий,
-   а не в пользу «чистой» синхронизации.
-3. **Все операции идемпотентны.** Клиента на мобильном убивают в произвольный момент; повтор любого
-   запроса не должен ломать состояние.
-4. **Никакого состояния в памяти сервера.** Перезапуск в любой момент безопасен.
+1. **The server is the source of truth.** No version vectors, no distributed consensus. One
+   server, a monotonic counter, and every client catches up to it.
+2. **The vault is sacred.** Any ambiguity is resolved in favour of keeping both versions,
+   not in favour of a tidy sync.
+3. **Every operation is idempotent.** A mobile client is killed at arbitrary moments;
+   repeating any request must not break state.
+4. **No state in server memory.** A restart is safe at any moment.
 
-## 3. Модель данных
+## 3. Data model
 
-### 3.1 Сервер
+### 3.1 Server
 
-Хранилище: SQLite (метаданные) + файлы на диске (содержимое).
+Storage: SQLite for metadata, files on disk for content.
 
-Содержимое адресуется по хешу — `blobs/<sha256[0:2]>/<sha256>`. Это даёт дедупликацию,
-идемпотентную загрузку и бесплатную историю: старая ревизия остаётся лежать, пока на неё
-ссылается запись в `revisions`.
+Content is addressed by hash, at `blobs/<sha256[0:2]>/<sha256>`. That gives deduplication,
+idempotent uploads and history for free: an old revision stays on disk for as long as a row
+in `revisions` points at it.
 
 ```sql
 CREATE TABLE files (
-  path        TEXT PRIMARY KEY,   -- относительный путь внутри волта
-  rev         INTEGER NOT NULL,   -- ревизия файла, +1 на каждое изменение
-  seq         INTEGER NOT NULL,   -- позиция в глобальном логе
-  hash        TEXT,               -- sha256 содержимого; NULL если удалён
+  path        TEXT PRIMARY KEY,   -- vault-relative path
+  rev         INTEGER NOT NULL,   -- file revision, +1 per change
+  seq         INTEGER NOT NULL,   -- position in the global log
+  hash        TEXT,               -- sha256 of the content; NULL when deleted
   size        INTEGER NOT NULL,
-  mtime       INTEGER NOT NULL,   -- unix ms, время правки на клиенте
+  mtime       INTEGER NOT NULL,   -- unix ms, edit time on the client
   deleted     INTEGER NOT NULL DEFAULT 0,
   folder      INTEGER NOT NULL DEFAULT 0,
-  updated_by  TEXT                -- device_id автора изменения
+  updated_by  TEXT                -- device_id that made the change
 );
 
-CREATE TABLE revisions (        -- история, для отката и 3-way merge
+CREATE TABLE revisions (        -- history, for rollback and 3-way merge
   path  TEXT NOT NULL,
   rev   INTEGER NOT NULL,
   hash  TEXT,
@@ -62,57 +64,57 @@ CREATE TABLE revisions (        -- история, для отката и 3-way 
   PRIMARY KEY (path, rev)
 );
 
-CREATE TABLE meta (             -- seq_counter и прочее
+CREATE TABLE meta (             -- seq counter and the rest
   key TEXT PRIMARY KEY, value TEXT
 );
 
 CREATE INDEX idx_files_seq ON files(seq);
 ```
 
-`seq` — глобальный монотонный счётчик на весь волт, инкрементится в той же транзакции, что и запись
-файла. Именно по нему клиенты запрашивают дельту.
+`seq` is a global monotonic counter for the whole vault, incremented in the same transaction
+as the file write. Clients request their delta by it.
 
-Удаление — не DELETE, а tombstone: `deleted = 1`, `hash = NULL`, `rev + 1`. Tombstones живут
-минимум 90 дней, потом собираются GC.
+Deletion is not a DELETE but a tombstone: `deleted = 1`, `hash = NULL`, `rev + 1`. Tombstones
+live for at least 90 days before collection.
 
-### 3.2 Клиент
+### 3.2 Client
 
-Локальный индекс в `.obsidian/plugins/lockstep-sync/state.db` (SQLite через sql.js) либо в JSON, если размер
-волта позволяет:
+A local index in `.obsidian/plugins/lockstep-sync/state.db` (SQLite through sql.js), or JSON
+while the vault is small enough:
 
 ```
 path -> {
-  base_rev,      // ревизия, от которой клиент оттолкнулся
-  base_hash,     // хеш той же ревизии — база для 3-way merge
-  local_hash,    // хеш текущего состояния на диске
+  base_rev,      // the revision the client based itself on
+  base_hash,     // hash of that same revision, the base for a 3-way merge
+  local_hash,    // hash of what is on disk right now
   mtime,
-  dirty          // изменён локально, ещё не отправлен
+  dirty          // changed locally, not yet sent
 }
 ```
 
-Плюс одно глобальное значение — `last_seq`, докуда клиент дочитал лог.
+Plus one global value, `last_seq`, marking how far the client has read the log.
 
-**Важно:** `base_hash` нужен обязательно. Без общего предка 3-way merge невозможен, и мы
-скатываемся до «оставить новее», то есть до Remotely Save.
+**`base_hash` is mandatory.** Without a common ancestor a 3-way merge is impossible and
+conflict handling degrades to "keep newer", which is to say to Remotely Save.
 
-## 4. Протокол
+## 4. Protocol
 
 Base URL: `https://sync.example.com/v1`
-Аутентификация: `Authorization: Bearer <token>` на каждом запросе, включая WS. Токен генерится на
-сервере (`sync-server token add <name>`) и вставляется руками в настройки плагина. На iOS это
-единственный вменяемый способ — OAuth там ад.
+Authentication: `Authorization: Bearer <token>` on every request, WebSocket included. Tokens
+are generated on the server (`sync-server token add <name>`) and pasted into the plugin by
+hand. On mobile that is the only sane option, since OAuth there is misery.
 
-Все пути передаются в query-параметре `path`, URL-encoded, в NFC-нормализации (macOS отдаёт NFD —
-нормализовать на клиенте до отправки, иначе кириллица и умляуты разъедутся между устройствами).
+Paths travel in the `path` query parameter, URL-encoded, in NFC. macOS produces NFD, so the
+client normalises before sending. Otherwise non-ASCII names drift apart between devices.
 
 ### 4.1 `GET /changes?since=<seq>&limit=500`
 
-Дельта с момента `since`. Основной механизм — вместо обхода дерева.
+The delta since `since`. This is the mechanism, in place of walking the tree.
 
 ```json
 {
   "entries": [
-    {"seq": 1043, "path": "Заметки/Ереван.md", "rev": 7,
+    {"seq": 1043, "path": "Notes/Yerevan.md", "rev": 7,
      "hash": "9f2b...", "size": 4211, "mtime": 1755600000000,
      "deleted": false, "folder": false, "updated_by": "desk-01"}
   ],
@@ -121,136 +123,138 @@ Base URL: `https://sync.example.com/v1`
 }
 ```
 
-Клиент игнорирует записи со своим `updated_by`, если `rev` совпадает с локальным — это эхо
-собственной загрузки.
+A client ignores entries carrying its own `updated_by` when `rev` matches what it has
+locally. That is the echo of its own upload.
 
 ### 4.2 `GET /file?path=<path>&rev=<rev>`
 
-Содержимое. Без `rev` — последняя ревизия. Поддерживает `Range` для докачки. Ответ отдаёт `X-Rev`
-и `ETag: <sha256>`.
+Content. Without `rev`, the latest revision. Supports `Range` for resuming. The response
+carries `X-Rev` and `ETag: <sha256>`.
 
 ### 4.3 `PUT /file?path=<path>`
 
-Заголовки:
-- `X-Base-Rev: <int>` — ревизия, от которой клиент отталкивается. `0` для нового файла.
+Headers:
+- `X-Base-Rev: <int>` the revision the client based itself on. `0` for a new file.
 - `X-Mtime: <unix ms>`
 - `Content-Type: application/octet-stream`
 
-Ответы:
-- `200 {"rev": 8, "seq": 1044, "hash": "..."}` — записано
-- `409 {"error": "conflict", "server_rev": 8, "server_hash": "..."}` — на сервере уже другая
-  ревизия, клиент уходит в merge (см. §5)
-- `200` с тем же `rev`, если хеш содержимого совпал с серверным — no-op, не плодим ревизию
+Responses:
+- `200 {"rev": 8, "seq": 1044, "hash": "..."}` written
+- `409 {"error": "conflict", "server_rev": 8, "server_hash": "..."}` the server already holds
+  a different revision and the client goes to merge, see section 5
+- `200` with the same `rev` when the content hash matches what the server holds. A no-op: no
+  new revision.
 
-### 4.4 `DELETE /file?path=<path>` — те же правила и `X-Base-Rev`.
+### 4.4 `DELETE /file?path=<path>`, same rules and the same `X-Base-Rev`.
 
-### 4.5 `POST /rename` — `{"from": "...", "to": "...", "base_rev": N}`
+### 4.5 `POST /rename`, `{"from": "...", "to": "...", "base_rev": N}`
 
-Отдельная операция принципиальна. Пара delete+create теряет историю файла и на другом устройстве
-выглядит как удаление — а удаление всегда страшнее, чем переименование.
+A separate operation on purpose. A delete plus create pair loses the file history and looks
+like a deletion on the other device, and a deletion is always scarier than a rename.
 
 ### 4.6 `WS /events`
 
-Сервер шлёт `{"seq": 1044}` при любом изменении. Клиент в ответ дёргает `/changes`. Само событие
-данных не несёт — это просто звонок, что пора синкаться. Ping/pong каждые 30 сек. При обрыве —
-реконнект с экспоненциальным backoff. **WS — оптимизация, не механизм.** Всё обязано работать и на
-голом polling, иначе после засыпания мобильного волт разъедется.
+The server sends `{"seq": 1044}` on any change. The client then calls `/changes`. The event
+carries no data, it is only a bell saying it is time to sync. Ping and pong every 30 seconds,
+reconnect with exponential backoff. **WebSocket is an optimisation, not the mechanism.**
+Everything has to work on plain polling, or a vault drifts apart after a phone goes to sleep.
 
-### 4.7 `GET /health`, `GET /stats` — размер волта, число файлов, текущий seq.
+### 4.7 `GET /health`, `GET /stats`: vault size, file count, current seq.
 
-## 5. Конфликты
+## 5. Conflicts
 
-Конфликт = клиент шлёт PUT с `base_rev`, меньшим текущего серверного.
+A conflict is a client sending a PUT whose `base_rev` is lower than the server's current one.
 
-Алгоритм на клиенте:
+On the client:
 
-1. Скачать серверную версию (`rev = server_rev`) и базу (`rev = base_rev`) — база почти всегда уже
-   лежит локально в blob-кеше.
-2. Оба текста и файл ≤ 1 МБ → 3-way merge построчно (diff3).
-   - непересекающиеся правки → сливаем молча, шлём результат с `base_rev = server_rev`
-   - пересекающиеся строки → merge с маркерами, файл кладём рядом:
-     `Заметка (conflict 2026-08-22 14:30 iPhone).md`, оригинал остаётся серверной версией
-3. Бинарник или > 1 МБ → дубликат с суффиксом, ничего не перезаписываем.
-4. Удаление против правки → **всегда побеждает правка.** Файл восстанавливается. Потерять заметку
-   хуже, чем увидеть воскресшую.
+1. Download the server version (`rev = server_rev`) and the base (`rev = base_rev`). The base
+   is almost always already in the local blob cache.
+2. Both texts and a file of 1 MB or less: a line-based 3-way merge (diff3).
+   - non-overlapping edits merge silently and the result is sent with
+     `base_rev = server_rev`
+   - overlapping lines merge with markers and the file is placed alongside as
+     `Note (conflict 2026-08-22 14:30 iPhone).md`, leaving the server version in place
+3. Binary content or more than 1 MB: a duplicate with a suffix. Nothing is overwritten.
+4. Deletion against an edit: **the edit always wins.** The file comes back. Losing a note is
+   worse than seeing one resurrected.
 
-Каждый конфликт пишется в лог плагина + уведомление в UI. Молчаливый merge — только для
-непересекающихся правок.
+Every conflict goes into the plugin log and raises a notification. Silent merging is only for
+non-overlapping edits.
 
-## 6. Шифрование
+## 6. Encryption
 
-**v1:** содержимое AES-256-GCM, ключ из пароля через Argon2id, соль хранится на сервере в `meta`.
-Nonce случайный на каждую запись. Пути и структура папок — открытым текстом.
+**v1:** content in AES-256-GCM, key derived from a passphrase with Argon2id, salt stored on
+the server in `meta`. A random nonce per write. Paths and folder structure stay in the clear.
 
-**v2:** пути через AES-SIV (детерминированное шифрование) — одинаковый путь даёт одинаковый
-шифротекст, значит primary key и дедупликация продолжают работать, а сервер не видит имён. Каждый
-сегмент пути шифруется отдельно, иначе ломается иерархия.
+**v2:** paths through AES-SIV, which is deterministic, so the same path yields the same
+ciphertext. Primary keys and deduplication keep working while the server no longer sees any
+names. Each path segment is encrypted separately, or the hierarchy breaks.
 
-Ключ никогда не уходит на сервер. Забыл пароль — данные потеряны, это озвучивается в UI при включении.
+The key never reaches the server. Forget the passphrase and the data is gone, which the
+interface says plainly when the feature is enabled.
 
-## 7. Клиент: специфика мобильного (особенно iOS)
+## 7. The client on mobile
 
-Отдельный раздел, потому что именно здесь ломаются все наивные реализации.
+A section of its own, because this is where naive implementations break.
 
-1. **Атомарная запись.** Только write temp + rename. Прямая запись в файл волта при убийстве
-   процесса даёт обрезанный файл — и это уже потеря заметки.
-2. **Приложение убивают в фоне.** Все длинные операции — чекпоинтами: состояние синка пишется в
-   индекс после каждого файла, не в конце пачки.
-3. **Синк на blur.** По событию выгрузки приложения — принудительный flush очереди.
-4. **Дебаунс** `vault.on('modify')` 2–3 сек: Obsidian сыплет события на каждое нажатие.
-5. **HTTP только через `requestUrl()`** из Obsidian API, иначе CORS на десктопе.
-6. **Лимит памяти.** Крупные вложения — стримом, не `readBinary()` целиком.
-7. **Нормализация путей NFC** перед любой отправкой (см. §4).
+1. **Atomic writes.** Write to a temporary file, then rename. Writing straight into a vault
+   file leaves a truncated file when the process is killed, and that is already a lost note.
+2. **The app is killed in the background.** Long operations run in checkpoints: sync state is
+   written to the index after every file, not at the end of a batch.
+3. **Sync on blur.** Force a queue flush when the app is being suspended.
+4. **Debounce** `vault.on('modify')` by two or three seconds. Obsidian fires an event on
+   every keystroke.
+5. **HTTP through `requestUrl()`** from the Obsidian API, or CORS blocks it on desktop.
+6. **Memory limits.** Stream large attachments rather than calling `readBinary()` on the lot.
+7. **NFC normalisation** of paths before anything is sent, see section 4.
 
-## 8. Стек
+## 8. Stack
 
-**Сервер:** Go, один статический бинарник. `net/http` + `modernc.org/sqlite` (без cgo,
-кросс-компиляция под что угодно). Systemd-юнит + Caddy для TLS. Никакого Docker, если не хочется.
+**Server:** Go, a single static binary. `net/http` and `modernc.org/sqlite`, no cgo, so it
+cross compiles anywhere. A systemd unit and Caddy for TLS. No Docker unless you want it.
 
-**Плагин:** TypeScript, официальный `obsidian-sample-plugin` как основа, esbuild.
-
-Репозиторий:
+**Plugin:** TypeScript on the official `obsidian-sample-plugin`, bundled with esbuild.
 
 ```
-/server        — Go, cmd/sync-server, internal/{store,api,auth}
-/plugin        — TS, src/{sync,crypto,ui}, manifest.json
-/spec          — этот файл, версионируется вместе с кодом
-/testkit       — харнесс из §9
+/server        Go: cmd/sync-server, internal/{store,api,auth}
+/plugin        TS: src/{sync,crypto,ui}, manifest.json
+/spec          this file, versioned alongside the code
+/testkit       the harness from section 9
 ```
 
-## 9. Тест-харнесс (пишется ДО синка)
+## 9. Test harness, written BEFORE the sync
 
-Два виртуальных волта в памяти + фейковый сервер, сценарии гоняются в CI:
+Two virtual vaults in memory plus a fake server, with the scenarios running in CI:
 
-1. Правка одного файла с двух сторон одновременно
-2. Удаление на A против правки на B
-3. Переименование на A против правки на B
-4. Обрыв соединения на середине загрузки → повтор
-5. Убийство клиента между записью файла и обновлением индекса
-6. Переименование, отличающееся только регистром (`note.md` → `Note.md`)
-7. Юникод в пути: NFC против NFD
-8. Файл 100 МБ
-9. Часы клиента ушли на сутки вперёд
-10. Два клиента создают файл с одним путём с нуля
+1. The same file edited from both sides at once
+2. Deletion on A against an edit on B
+3. A rename on A against an edit on B
+4. A connection dropped mid-upload, then retried
+5. A client killed between writing a file and updating its index
+6. A rename that only changes letter case (`note.md` to `Note.md`)
+7. Unicode in a path: NFC against NFD
+8. A 100 MB file
+9. A client clock a day fast
+10. Two clients creating the same path from nothing
 
-Каждый сценарий проверяет один инвариант: **ни одна версия текста не исчезла молча.**
+Every scenario checks a single invariant: **no version of the text disappeared quietly.**
 
-## 10. Этапы
+## 10. Stages
 
-- **Фундамент (без синка).** Сервер: схема, `/changes`, `/file` GET/PUT, токены. Плагин:
-  настройки, ручная кнопка «скачать всё с сервера». Тест-харнесс, сценарии 1–3.
-- **Рабочий двусторонний синк.** Локальный индекс, дебаунс, очередь загрузок, конфликты по §5,
-  шифрование v1. С этого момента можно осторожно пользоваться самому.
-- **То, ради чего всё затевалось.** WebSocket push, rename, докачка, история ревизий в UI,
-  восстановление удалённого.
-- **Продукт.** Шифрование путей, мультиволт, веб-морда для просмотра истории, установщик
-  сервера одной командой, заявка в community plugins.
+- **Foundation, no sync yet.** Server: schema, `/changes`, `/file` GET and PUT, tokens.
+  Plugin: settings and a manual button to download everything. The harness, scenarios 1 to 3.
+- **Working two-way sync.** Local index, debounce, upload queue, conflicts per section 5,
+  encryption v1. From here it is cautiously usable.
+- **The point of the whole thing.** WebSocket push, rename, resumable transfers, revision
+  history in the interface, recovering deleted files.
+- **Product.** Path encryption, several vaults, a web view for history, a one-command server
+  installer, and the catalogue submission.
 
-## 11. Открытые вопросы
+## 11. Open questions
 
-- [ ] Мультиюзер или один волт на инстанс? (влияет на схему, решить до первой строки кода)
-- [ ] Хранить полные версии или дельты? Предложение: полные, GC старше 30 дней и глубже 20 ревизий
-- [ ] Синхронизировать ли `.obsidian/` (настройки и плагины)? Опция, по умолчанию — только
-      `workspace.json` исключён
-- [ ] Лимит на размер вложений — жёсткий или предупреждение?
-- [ ] Лицензия: MIT или AGPL? AGPL мешает кому-то поднять это как платный SaaS
+- [ ] Multi-user or one vault per instance? Affects the schema, decide before writing code.
+- [ ] Full versions or deltas? Proposal: full, collected past 30 days and deeper than 20
+      revisions.
+- [ ] Sync `.obsidian/` or not? Optional, with `workspace.json` excluded by default.
+- [ ] Attachment size limit: hard, or a warning?
+- [ ] Licence: MIT or AGPL? AGPL stops anyone standing this up as a paid SaaS.

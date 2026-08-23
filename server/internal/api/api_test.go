@@ -20,16 +20,16 @@ import (
 	"github.com/stephansergeev/obsidian-lockstep-sync/server/internal/vault"
 )
 
-// Каждый сценарий ниже проверяет ровно один инвариант:
-// НИ ОДНА ВЕРСИЯ ТЕКСТА НЕ ИСЧЕЗЛА МОЛЧА.
-// Нумерация совпадает со списком в spec §9.
+// Every scenario below checks exactly one invariant:
+// NO VERSION OF THE TEXT DISAPPEARED QUIETLY.
+// The numbering matches the list in spec section 9.
 
-// --- харнесс ----------------------------------------------------------------
+// --- harness ----------------------------------------------------------------
 
 type harness struct {
 	t   *testing.T
 	srv *httptest.Server
-	// два устройства = два токена, как в жизни
+	// two devices means two tokens, as in real life
 	deskTok, phoneTok string
 }
 
@@ -88,7 +88,7 @@ func (h *harness) do(tok, method, url string, body io.Reader, hdr map[string]str
 	return resp, data
 }
 
-// put имитирует запись файла клиентом: base_rev — то, от чего клиент оттолкнулся.
+// put mimics a client writing a file: base_rev is what the client based it on.
 func (h *harness) put(tok, path string, baseRev int64, content string, extra ...map[string]string) putResult {
 	h.t.Helper()
 	hdr := map[string]string{"X-Base-Rev": strconv.FormatInt(baseRev, 10), "X-Mtime": "1755600000000"}
@@ -124,7 +124,7 @@ func (h *harness) rename(tok, from, to string, baseRev int64) putResult {
 	return out
 }
 
-// get читает содержимое; rev < 0 означает «последнюю».
+// get reads content; rev < 0 means the latest revision.
 func (h *harness) get(tok, path string, rev int64) (int, string) {
 	h.t.Helper()
 	u := "/v1/file?path=" + esc(path)
@@ -179,177 +179,191 @@ func sha(s string) string {
 	return hex.EncodeToString(sum[:])
 }
 
-// --- сценарии ---------------------------------------------------------------
+// --- scenarios --------------------------------------------------------------
 
-// 1. Правка одного файла с двух сторон одновременно.
-// Инвариант: серверная версия не затирается, клиент получает всё для 3-way merge.
+// 1. The same file edited from both sides at once.
+// Invariant: the server version is not clobbered and the client gets everything it
+// needs for a 3-way merge.
 func TestScenario01_ConcurrentEdit(t *testing.T) {
 	h := newHarness(t)
-	base := h.put(h.deskTok, "Заметки/Ереван.md", 0, "общий предок")
+	base := h.put(h.deskTok, "Notes/Yerevan.md", 0, "common ancestor")
 	if base.Status != 200 || base.Rev != 1 {
 		t.Fatalf("base put: %+v", base)
 	}
 
-	desk := h.put(h.deskTok, "Заметки/Ереван.md", 1, "правка с десктопа")
+	desk := h.put(h.deskTok, "Notes/Yerevan.md", 1, "edit from the desktop")
 	if desk.Status != 200 || desk.Rev != 2 {
 		t.Fatalf("desk put: %+v", desk)
 	}
 
-	phone := h.put(h.phoneTok, "Заметки/Ереван.md", 1, "правка с телефона")
+	phone := h.put(h.phoneTok, "Notes/Yerevan.md", 1, "edit from the phone")
 	if phone.Status != http.StatusConflict {
-		t.Fatalf("телефон должен был получить 409, получил %+v", phone)
+		t.Fatalf("the phone should have got a 409, got %+v", phone)
 	}
-	if phone.ServerRev != 2 || phone.ServerHash != sha("правка с десктопа") {
-		t.Fatalf("409 обязан нести серверную ревизию и хеш: %+v", phone)
-	}
-
-	// Клиент обязан суметь достать и общего предка, и серверную версию.
-	if code, body := h.get(h.phoneTok, "Заметки/Ереван.md", 1); code != 200 || body != "общий предок" {
-		t.Fatalf("предок недоступен: %d %q", code, body)
-	}
-	if code, body := h.get(h.phoneTok, "Заметки/Ереван.md", -1); code != 200 || body != "правка с десктопа" {
-		t.Fatalf("серверная версия недоступна: %d %q", code, body)
+	if phone.ServerRev != 2 || phone.ServerHash != sha("edit from the desktop") {
+		t.Fatalf("a 409 must carry the server revision and hash: %+v", phone)
 	}
 
-	// Слияние уходит на сервер уже от актуальной базы.
-	merged := h.put(h.phoneTok, "Заметки/Ереван.md", 2, "правка с десктопа + правка с телефона")
+	// The client must be able to fetch both the common ancestor and the server version.
+	if code, body := h.get(h.phoneTok, "Notes/Yerevan.md", 1); code != 200 || body != "common ancestor" {
+		t.Fatalf("ancestor unreachable: %d %q", code, body)
+	}
+	if code, body := h.get(h.phoneTok, "Notes/Yerevan.md", -1); code != 200 || body != "edit from the desktop" {
+		t.Fatalf("server version unreachable: %d %q", code, body)
+	}
+
+	// The merge goes back to the server based on the current revision.
+	merged := h.put(h.phoneTok, "Notes/Yerevan.md", 2, "edit from the desktop + edit from the phone")
 	if merged.Status != 200 || merged.Rev != 3 {
 		t.Fatalf("merge put: %+v", merged)
 	}
 }
 
-// 2. Удаление на A против правки на B. Правка обязана победить, файл — воскреснуть.
+// 2. Deletion on A against an edit on B. The edit must win and the file must come back.
 func TestScenario02_DeleteVsEdit(t *testing.T) {
 	h := newHarness(t)
-	h.put(h.deskTok, "note.md", 0, "текст")
+	h.put(h.deskTok, "note.md", 0, "text")
 
 	if d := h.del(h.deskTok, "note.md", 1); d.Status != 200 || d.Rev != 2 || !d.Deleted {
 		t.Fatalf("delete: %+v", d)
 	}
-	// Содержимое удалённого файла остаётся доступным по номеру ревизии.
-	if code, body := h.get(h.phoneTok, "note.md", 1); code != 200 || body != "текст" {
-		t.Fatalf("удалённый файл потерял историю: %d %q", code, body)
+	// The content of a deleted file stays reachable by revision number.
+	if code, body := h.get(h.phoneTok, "note.md", 1); code != 200 || body != "text" {
+		t.Fatalf("a deleted file lost its history: %d %q", code, body)
 	}
 	if code, _ := h.get(h.phoneTok, "note.md", -1); code != http.StatusGone {
-		t.Fatalf("удалённый файл должен отдавать 410, отдал %d", code)
+		t.Fatalf("a deleted file should answer 410, answered %d", code)
 	}
 
-	// Телефон правил файл, не зная об удалении.
-	stale := h.put(h.phoneTok, "note.md", 1, "текст + правка")
+	// The phone edited the file without knowing about the deletion.
+	stale := h.put(h.phoneTok, "note.md", 1, "text + edit")
 	if stale.Status != http.StatusConflict || !stale.Deleted {
-		t.Fatalf("ожидался 409 с признаком удаления: %+v", stale)
+		t.Fatalf("expected a 409 flagged as deleted: %+v", stale)
 	}
-	// Правка побеждает удаление.
-	revived := h.put(h.phoneTok, "note.md", 2, "текст + правка")
+	// The edit beats the deletion.
+	revived := h.put(h.phoneTok, "note.md", 2, "text + edit")
 	if revived.Status != 200 || revived.Rev != 3 {
-		t.Fatalf("файл не воскрес: %+v", revived)
+		t.Fatalf("the file did not come back: %+v", revived)
 	}
-	if code, body := h.get(h.deskTok, "note.md", -1); code != 200 || body != "текст + правка" {
-		t.Fatalf("после воскрешения: %d %q", code, body)
+	if code, body := h.get(h.deskTok, "note.md", -1); code != 200 || body != "text + edit" {
+		t.Fatalf("after resurrection: %d %q", code, body)
 	}
 }
 
-// 3. Переименование на A против правки на B.
-// Инвариант: на другом устройстве это НЕ выглядит удалением — есть renamed_from.
+// 3. A rename on A against an edit on B.
+// Invariant: on the other device this does NOT look like a deletion, because
+// renamed_from is there.
 func TestScenario03_RenameVsEdit(t *testing.T) {
 	h := newHarness(t)
-	h.put(h.deskTok, "старое имя.md", 0, "тело")
+	h.put(h.deskTok, "old name.md", 0, "body")
 
-	r := h.rename(h.deskTok, "старое имя.md", "новое имя.md", 1)
+	r := h.rename(h.deskTok, "old name.md", "new name.md", 1)
 	if r.Status != 200 {
 		t.Fatalf("rename: %+v", r)
 	}
-	if code, body := h.get(h.phoneTok, "новое имя.md", -1); code != 200 || body != "тело" {
-		t.Fatalf("содержимое не переехало: %d %q", code, body)
+	if code, body := h.get(h.phoneTok, "new name.md", -1); code != 200 || body != "body" {
+		t.Fatalf("the content did not move: %d %q", code, body)
 	}
 
 	ch := h.changes(h.phoneTok, 0)
 	var sawRename bool
 	for _, e := range ch.Entries {
-		if e.Path == "новое имя.md" && e.RenamedFrom == "старое имя.md" {
+		if e.Path == "new name.md" && e.RenamedFrom == "old name.md" {
 			sawRename = true
 		}
 	}
 	if !sawRename {
-		t.Fatalf("в логе нет признака переименования: %+v", ch.Entries)
+		t.Fatalf("the log carries no rename marker: %+v", ch.Entries)
 	}
 
-	// Правка по старому пути от устаревшей базы обязана упереться в конфликт.
-	if stale := h.put(h.phoneTok, "старое имя.md", 1, "правка вслепую"); stale.Status != http.StatusConflict {
-		t.Fatalf("ожидался 409 по старому пути: %+v", stale)
+	// An edit on the old path from a stale base must hit a conflict.
+	if stale := h.put(h.phoneTok, "old name.md", 1, "blind edit"); stale.Status != http.StatusConflict {
+		t.Fatalf("expected a 409 on the old path: %+v", stale)
 	}
-	// Переезд на занятый путь тоже конфликт, а не тихая перезапись.
-	h.put(h.deskTok, "занято.md", 0, "чужой текст")
-	if r2 := h.rename(h.deskTok, "новое имя.md", "занято.md", 1); r2.Status != http.StatusConflict {
-		t.Fatalf("переезд на занятый путь должен конфликтовать: %+v", r2)
+	// Moving onto an occupied path is a conflict too, not a quiet overwrite.
+	h.put(h.deskTok, "taken.md", 0, "someone else's text")
+	if r2 := h.rename(h.deskTok, "new name.md", "taken.md", 1); r2.Status != http.StatusConflict {
+		t.Fatalf("moving onto an occupied path must conflict: %+v", r2)
 	}
-	if code, body := h.get(h.deskTok, "занято.md", -1); code != 200 || body != "чужой текст" {
-		t.Fatalf("чужой текст затёрт переименованием: %d %q", code, body)
+	if code, body := h.get(h.deskTok, "taken.md", -1); code != 200 || body != "someone else's text" {
+		t.Fatalf("someone else's text was clobbered by a rename: %d %q", code, body)
 	}
 }
 
-// 4/5. Обрыв на середине и убийство клиента между записью и обновлением индекса.
-// Инвариант: повтор любого запроса идемпотентен и не плодит ревизии.
+// 4/5. A connection dropped mid-transfer, and a client killed between writing a file
+// and updating its index.
+// Invariant: retrying any request is idempotent and creates no extra revisions.
 func TestScenario04_05_RetryIsIdempotent(t *testing.T) {
 	h := newHarness(t)
-	first := h.put(h.deskTok, "note.md", 0, "содержимое")
-	repeat := h.put(h.deskTok, "note.md", 0, "содержимое") // клиент не успел записать индекс
+	first := h.put(h.deskTok, "note.md", 0, "content")
+	repeat := h.put(h.deskTok, "note.md", 0, "content") // the client never wrote its index
 	if repeat.Status != 200 || repeat.Rev != first.Rev || repeat.Seq != first.Seq {
-		t.Fatalf("повтор создал новую ревизию: first=%+v repeat=%+v", first, repeat)
+		t.Fatalf("the retry created a new revision: first=%+v repeat=%+v", first, repeat)
 	}
-	// И seq не должен уезжать вхолостую — иначе другие клиенты будут дёргаться на пустоту.
+	// And seq must not advance for nothing, or other clients wake up for an empty delta.
 	if ch := h.changes(h.phoneTok, 0); len(ch.Entries) != 1 {
-		t.Fatalf("в логе должна быть одна запись, а не %d", len(ch.Entries))
+		t.Fatalf("the log should hold one entry, not %d", len(ch.Entries))
 	}
-	// Повторное удаление — тоже no-op.
+	// A repeated deletion is a no-op too.
 	d1 := h.del(h.deskTok, "note.md", 1)
 	d2 := h.del(h.deskTok, "note.md", 1)
 	if d2.Status != 200 || d2.Rev != d1.Rev {
-		t.Fatalf("повторное удаление не идемпотентно: %+v / %+v", d1, d2)
+		t.Fatalf("repeated deletion is not idempotent: %+v / %+v", d1, d2)
 	}
 }
 
-// 6. Переименование, отличающееся только регистром.
+// 6. A rename that only changes letter case.
 func TestScenario06_CaseOnlyRename(t *testing.T) {
 	h := newHarness(t)
-	h.put(h.deskTok, "note.md", 0, "тело")
+	h.put(h.deskTok, "note.md", 0, "body")
 	if r := h.rename(h.deskTok, "note.md", "Note.md", 1); r.Status != 200 {
-		t.Fatalf("rename по регистру: %+v", r)
+		t.Fatalf("case-only rename: %+v", r)
 	}
-	if code, body := h.get(h.phoneTok, "Note.md", -1); code != 200 || body != "тело" {
+	if code, body := h.get(h.phoneTok, "Note.md", -1); code != 200 || body != "body" {
 		t.Fatalf("Note.md: %d %q", code, body)
 	}
 	if code, _ := h.get(h.phoneTok, "note.md", -1); code != http.StatusGone {
-		t.Fatalf("старый путь должен стать tombstone, получили %d", code)
+		t.Fatalf("the old path should become a tombstone, got %d", code)
 	}
 }
 
-// 7. Юникод в пути: NFC против NFD.
-// Инвариант: сервер не даёт развести один и тот же на вид путь на два файла.
+// 7. Unicode in a path: NFC against NFD.
+// Invariant: the server refuses to split one visually identical path into two files.
 func TestScenario07_UnicodeNFD(t *testing.T) {
 	h := newHarness(t)
-	// «и» + U+0306 (комбинирующая бревис) визуально даёт «й», но это NFD-форма:
-	// именно так macOS отдаёт русские имена файлов.
-	const nfd = "Заметки/И\u0306ога.md"
-	res := h.put(h.deskTok, nfd, 0, "тело")
+	// "cafe" plus U+0301 (combining acute) looks exactly like "café" but is the NFD
+	// form. This is how macOS hands out non-ASCII filenames, and it is why the same
+	// visible name can arrive as two different paths from two devices.
+	const nfd = "Notes/cafe\u0301.md"
+	res := h.put(h.deskTok, nfd, 0, "body")
 	if res.Status != http.StatusBadRequest {
-		t.Fatalf("NFD-путь должен отвергаться, получили %+v", res)
+		t.Fatalf("an NFD path must be rejected, got %+v", res)
 	}
-	// Нормализованный вариант принимается.
-	if ok := h.put(h.deskTok, "Заметки/Йога.md", 0, "тело"); ok.Status != 200 {
-		t.Fatalf("NFC-путь отвергнут: %+v", ok)
+	// The normalised form is accepted.
+	if ok := h.put(h.deskTok, "Notes/caf\u00e9.md", 0, "body"); ok.Status != 200 {
+		t.Fatalf("an NFC path was rejected: %+v", ok)
+	}
+	// Non-Latin scripts have to survive the round trip untouched. A vault is just as
+	// likely to be written in Cyrillic, Japanese or Greek as in English.
+	for _, path := range []string{"\u0417\u0430\u043c\u0435\u0442\u043a\u0438/\u0415\u0440\u0435\u0432\u0430\u043d.md", "\u30ce\u30fc\u30c8/\u6771\u4eac.md", "\u03a3\u03b7\u03bc\u03b5\u03b9\u03ce\u03c3\u03b5\u03b9\u03c2/\u0391\u03b8\u03ae\u03bd\u03b1.md"} {
+		if res := h.put(h.deskTok, path, 0, "body"); res.Status != 200 {
+			t.Fatalf("path %q was rejected: %+v", path, res)
+		}
+		if code, body := h.get(h.phoneTok, path, -1); code != 200 || body != "body" {
+			t.Fatalf("path %q did not survive the round trip: %d %q", path, code, body)
+		}
 	}
 }
 
-// 8. Большой файл: запись стримом и докачка по Range.
+// 8. A large file: streamed upload and a resumable Range download.
 func TestScenario08_LargeFileAndRange(t *testing.T) {
 	if testing.Short() {
 		t.Skip("-short")
 	}
 	h := newHarness(t)
-	big := strings.Repeat("яхта", 2<<20) // ~16 МБ в utf-8
+	big := strings.Repeat("boat", 2<<20) // about 8 MB
 	if res := h.put(h.deskTok, "attach/big.bin", 0, big); res.Status != 200 || res.Hash != sha(big) {
-		t.Fatalf("большой файл: %+v", res)
+		t.Fatalf("large file: %+v", res)
 	}
 	req, _ := http.NewRequest(http.MethodGet, h.srv.URL+"/v1/file?path=attach/big.bin", nil)
 	req.Header.Set("Authorization", "Bearer "+h.phoneTok)
@@ -360,46 +374,46 @@ func TestScenario08_LargeFileAndRange(t *testing.T) {
 	}
 	defer resp.Body.Close()
 	if resp.StatusCode != http.StatusPartialContent {
-		t.Fatalf("докачка не поддержана: %d", resp.StatusCode)
+		t.Fatalf("range requests are not supported: %d", resp.StatusCode)
 	}
 	data, _ := io.ReadAll(resp.Body)
 	if len(data) != 100 || !strings.HasPrefix(big, string(data)) {
-		t.Fatalf("Range отдал не тот кусок: %d байт", len(data))
+		t.Fatalf("Range returned the wrong slice: %d bytes", len(data))
 	}
 }
 
-// 9. Часы клиента ушли вперёд.
-// Инвариант: порядок определяется seq/rev, а не mtime — иначе «файл из будущего»
-// навсегда выигрывал бы все сравнения.
+// 9. The client clock runs ahead.
+// Invariant: ordering comes from seq and rev, not mtime. Otherwise a file "from the
+// future" would win every comparison forever.
 func TestScenario09_ClockSkew(t *testing.T) {
 	h := newHarness(t)
-	h.put(h.phoneTok, "note.md", 0, "из будущего", map[string]string{"X-Mtime": "4102444800000"}) // 2100 год
-	res := h.put(h.deskTok, "note.md", 1, "из настоящего", map[string]string{"X-Mtime": "1755600000000"})
+	h.put(h.phoneTok, "note.md", 0, "from the future", map[string]string{"X-Mtime": "4102444800000"}) // year 2100
+	res := h.put(h.deskTok, "note.md", 1, "from the present", map[string]string{"X-Mtime": "1755600000000"})
 	if res.Status != 200 || res.Rev != 2 {
-		t.Fatalf("нормальная правка проиграла кривым часам: %+v", res)
+		t.Fatalf("a normal edit lost to a skewed clock: %+v", res)
 	}
-	if code, body := h.get(h.phoneTok, "note.md", -1); code != 200 || body != "из настоящего" {
-		t.Fatalf("актуальной стала не последняя ревизия: %d %q", code, body)
+	if code, body := h.get(h.phoneTok, "note.md", -1); code != 200 || body != "from the present" {
+		t.Fatalf("the current version is not the latest revision: %d %q", code, body)
 	}
 }
 
-// 10. Два клиента создают файл с одним путём с нуля.
+// 10. Two clients create the same path from nothing.
 func TestScenario10_ConcurrentCreate(t *testing.T) {
 	h := newHarness(t)
-	a := h.put(h.deskTok, "новый.md", 0, "вариант A")
-	b := h.put(h.phoneTok, "новый.md", 0, "вариант B")
+	a := h.put(h.deskTok, "new.md", 0, "version A")
+	b := h.put(h.phoneTok, "new.md", 0, "version B")
 	if a.Status != 200 {
-		t.Fatalf("первый создатель: %+v", a)
+		t.Fatalf("first writer: %+v", a)
 	}
-	if b.Status != http.StatusConflict || b.ServerHash != sha("вариант A") {
-		t.Fatalf("второй должен получить 409 с чужим хешем: %+v", b)
+	if b.Status != http.StatusConflict || b.ServerHash != sha("version A") {
+		t.Fatalf("the second must get a 409 carrying the other hash: %+v", b)
 	}
-	if code, body := h.get(h.deskTok, "новый.md", -1); code != 200 || body != "вариант A" {
-		t.Fatalf("вариант A потерян: %d %q", code, body)
+	if code, body := h.get(h.deskTok, "new.md", -1); code != 200 || body != "version A" {
+		t.Fatalf("version A was lost: %d %q", code, body)
 	}
 }
 
-// --- протокол ---------------------------------------------------------------
+// --- protocol ---------------------------------------------------------------
 
 func TestChangesCursor(t *testing.T) {
 	h := newHarness(t)
@@ -408,41 +422,41 @@ func TestChangesCursor(t *testing.T) {
 
 	ch := h.changes(h.phoneTok, 0)
 	if len(ch.Entries) != 2 || ch.NextSeq != 2 || ch.HasMore {
-		t.Fatalf("первая дельта: %+v", ch)
+		t.Fatalf("first delta: %+v", ch)
 	}
-	// Пустая дельта не должна откатывать курсор назад.
+	// An empty delta must not move the cursor backwards.
 	if empty := h.changes(h.phoneTok, ch.NextSeq); len(empty.Entries) != 0 || empty.NextSeq != 2 {
-		t.Fatalf("пустая дельта: %+v", empty)
+		t.Fatalf("empty delta: %+v", empty)
 	}
 	h.put(h.deskTok, "a.md", 1, "1+")
 	tail := h.changes(h.phoneTok, ch.NextSeq)
 	if len(tail.Entries) != 1 || tail.Entries[0].Path != "a.md" || tail.Entries[0].Rev != 2 {
-		t.Fatalf("хвост дельты: %+v", tail.Entries)
+		t.Fatalf("delta tail: %+v", tail.Entries)
 	}
 	if tail.Entries[0].UpdatedBy != "desk-01" {
-		t.Fatalf("в логе нет автора изменения: %+v", tail.Entries[0])
+		t.Fatalf("the log carries no author: %+v", tail.Entries[0])
 	}
 }
 
 func TestAuthRequired(t *testing.T) {
 	h := newHarness(t)
-	for _, tok := range []string{"", "obs_нет-такого"} {
+	for _, tok := range []string{"", "obs_no-such-token"} {
 		resp, _ := h.do(tok, http.MethodGet, "/v1/changes?since=0", nil, nil)
 		if resp.StatusCode != http.StatusUnauthorized {
-			t.Fatalf("токен %q дал %d", tok, resp.StatusCode)
+			t.Fatalf("token %q returned %d", tok, resp.StatusCode)
 		}
 	}
 	resp, _ := h.do("", http.MethodGet, "/v1/health", nil, nil)
 	if resp.StatusCode != 200 {
-		t.Fatalf("health не должен требовать токена: %d", resp.StatusCode)
+		t.Fatalf("health must not require a token: %d", resp.StatusCode)
 	}
 }
 
 func TestPathTraversalRejected(t *testing.T) {
 	h := newHarness(t)
-	for _, p := range []string{"../побег.md", "/абсолютный.md", "a//b.md", "a/./b.md", `c:\win.md`, "", "trailing .", "trailing "} {
+	for _, p := range []string{"../escape.md", "/absolute.md", "a//b.md", "a/./b.md", `c:\win.md`, "", "trailing .", "trailing "} {
 		if res := h.put(h.deskTok, p, 0, "x"); res.Status != http.StatusBadRequest {
-			t.Fatalf("путь %q пропущен со статусом %d", p, res.Status)
+			t.Fatalf("path %q was let through with status %d", p, res.Status)
 		}
 	}
 }
@@ -462,8 +476,8 @@ func TestVaultIsolation(t *testing.T) {
 	defer srv.Close()
 	h := &harness{t: t, srv: srv, deskTok: work, phoneTok: personal}
 
-	h.put(work, "секрет.md", 0, "рабочее")
-	if code, _ := h.get(personal, "секрет.md", -1); code != http.StatusNotFound {
-		t.Fatalf("волты не изолированы: %d", code)
+	h.put(work, "secret.md", 0, "work stuff")
+	if code, _ := h.get(personal, "secret.md", -1); code != http.StatusNotFound {
+		t.Fatalf("vaults are not isolated: %d", code)
 	}
 }

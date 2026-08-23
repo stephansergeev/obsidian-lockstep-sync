@@ -1,70 +1,88 @@
-# Кто за что отвечает: сервер и плагин
+# Who does what: the server and the plugin
 
-## Одной фразой
+## In one line
 
-**Сервер — это упорядоченный журнал и склад байтов. Весь ум синхронизации живёт в плагине.**
+**The server is an ordered log and a store of bytes. All the intelligence lives in the plugin.**
 
-Граница проведена так намеренно. Сервер должен быть настолько тупым, чтобы его нельзя было
-испортить и чтобы его можно было переписать за выходные на другом языке. Всё, что требует
-понимания текста, волта и платформы, обязано жить на клиенте — там, где есть Obsidian.
+The line is drawn there on purpose. The server has to be dumb enough that it cannot corrupt
+anything and small enough to be rewritten over a weekend in another language. Everything
+that needs to understand text, vaults or platforms belongs on the client, where Obsidian is.
 
-## Сервер отвечает за
+## The server is responsible for
 
-- **Порядок.** Единственный монотонный счётчик `seq` на волт. Кто записал раньше — тот раньше
-  в журнале. Это делает ненужными version vectors и распределённый консенсус.
-- **Хранение.** Метаданные в SQLite, содержимое — файлами по sha256.
-- **Дельту.** `GET /changes?since=N` — что поменялось с курсора. Клиент никогда не обходит дерево.
-- **Обнаружение конфликта.** Клиент прислал `base_rev` меньше текущего — сервер отвечает 409
-  и прикладывает свою ревизию и хеш. **Разрешать конфликт сервер не умеет и не должен.**
-- **Историю.** Каждая ревизия остаётся доступной по номеру — иначе клиенту негде взять общего
-  предка для 3-way merge.
-- **Аутентификацию и изоляцию.** Токен = устройство = волт. Волты не видят друг друга.
-- **Атомарность операций.** Переименование — одна транзакция, а не пара delete+create.
+**Order.** A single monotonic `seq` counter per vault. Whoever wrote first is first in the
+log. That removes any need for version vectors or distributed consensus.
 
-## Сервер НЕ знает
+**Storage.** Metadata in SQLite, content as files named by their sha256.
 
-- что такое markdown, заметка, ссылка и Obsidian вообще;
-- как выглядит файловая система клиента;
-- ключ шифрования — при v1 содержимое приезжает уже зашифрованным, сервер хранит непрозрачные байты;
-- кто из клиентов прав в конфликте;
-- ничего в оперативной памяти между запросами — перезапуск безопасен в любой момент.
+**The delta.** `GET /changes?since=N` answers what changed since a cursor. A client never
+walks the vault tree.
 
-## Плагин отвечает за
+**Detecting a conflict.** A client sends a `base_rev` lower than the current one and the
+server answers 409 with its own revision and hash. **Resolving the conflict is not something
+the server can or should do.**
 
-- **Наблюдение за волтом.** События Obsidian с дебаунсом 2–3 сек (иначе на каждое нажатие клавиши
-  улетал бы запрос).
-- **Локальный индекс.** По каждому пути: `base_rev`, `base_hash`, `local_hash`, `dirty`.
-  Без `base_hash` слияние вырождается в «оставить тот, что новее», то есть в потерю версии.
-- **Решение, что и в каком порядке отправлять.**
-- **Слияние.** 3-way merge построчно, конфликтные копии с маркерами, правило «правка побеждает
-  удаление».
-- **Шифрование.** Ключ выводится из пароля и не покидает устройство.
-- **Нормализацию путей** в NFC перед отправкой (macOS отдаёт NFD).
-- **Атомарную запись** файлов и чекпоинты индекса после каждого файла — приложение на телефоне
-  убивают в произвольный момент.
-- **Исключения** (`workspace.json` и прочее, что у каждого устройства своё).
-- **UI:** настройки, статус, уведомления о конфликтах, восстановление удалённого.
+**History.** Every revision stays reachable by number. Without that a client has nowhere to
+get the common ancestor a 3-way merge needs.
 
-## Зачем вообще нужен сервер
+**Authentication and isolation.** A token is a device and a vault. Vaults cannot see each
+other.
 
-Три причины, каждой хватило бы отдельно:
+**Atomic operations.** A rename is one transaction, not a delete followed by a create.
 
-1. **Устройства редко бывают онлайн одновременно.** Правка с телефона в метро должна долететь до
-   Мака, который выключен. Кто-то обязан подержать её у себя.
-2. **Прямое соединение между телефоном и десктопом требует пробивания NAT**, релеев и обвязки,
-   которая сама по себе сложнее всего остального синка.
-3. **Кому-то нужно быть арбитром порядка.** Без единственного источника истины два устройства
-   не могут договориться, чья версия новее, без сложной распределённой машинерии.
+## The server does not know
 
-## Роль сервера автора проекта
+What markdown is, what a note or a link is, or that Obsidian exists at all. What the client
+filesystem looks like. The encryption key: content arrives already encrypted and the server
+holds opaque bytes. Which client is right in a conflict. Anything at all between requests,
+since it keeps no state in memory, which is why a restart is safe at any moment.
 
-Это важно не путать: **сервер автора не является частью продукта.**
+## The plugin is responsible for
 
-Продукт — исходный код и бинарник. Каждый пользователь поднимает **свой** экземпляр: на VPS,
-на домашнем NAS, на Raspberry Pi или прямо на своём ноутбуке. Автор запускает ровно такой же
-экземпляр на своём VPS, чтобы решать собственную задачу — синхронизацию своего волта между
-своими устройствами. Никакого общего сервера, никакой регистрации, никакого аккаунта.
+**Watching the vault.** Obsidian events, debounced by two or three seconds. Without that a
+request would fly on every keystroke.
 
-Отсюда же следствие для лицензии: раздавать доступ к своему экземпляру автор не планирует,
-поэтому весь проект под MIT — защищать от чужого хостинга нечего, а трение для пользователей
-и контрибьюторов минимальное.
+**The local index.** Per path: `base_rev`, `base_hash`, `local_hash`, `dirty`. Without
+`base_hash` a merge degrades into "keep whichever is newer", which means losing a version.
+
+**Deciding what to send and in what order.**
+
+**Merging.** Line-based 3-way merge, conflict copies with markers, and the rule that an edit
+beats a deletion.
+
+**Encryption.** The key is derived from a passphrase and never leaves the device.
+
+**Path normalisation** to NFC before sending, because macOS hands out NFD.
+
+**Atomic writes** and index checkpoints after every file, because the app is killed at
+arbitrary moments on mobile.
+
+**Exclusions**, such as `workspace.json`, which is per-device and only gets in the way.
+
+**The interface:** settings, status, conflict notifications, recovering deleted files.
+
+## Why a server is needed at all
+
+Three reasons, any one of which would be enough.
+
+Devices are rarely online at the same time. An edit made on a phone in the underground has
+to reach a desktop that is switched off. Something has to hold it in the meantime.
+
+A direct connection between a phone and a desktop means punching through NAT, running
+relays and maintaining the machinery around them, which is more complex than the rest of the
+sync put together.
+
+Somebody has to arbitrate order. Without a single source of truth two devices cannot agree
+on whose version is newer without heavy distributed machinery, and that machinery is exactly
+what loses data when it goes wrong.
+
+## The author's own server
+
+Worth stating plainly: **the author's server is not part of the product.**
+
+The product is the source code and a binary. Every user runs their own instance, on a VPS, a
+home NAS, a Raspberry Pi or their own laptop. The author runs the same instance for the same
+reason anybody else does. There is no shared server, no registration and no account.
+
+Which is also why the whole project is MIT. There is no hosting business to protect from
+someone else's hosting business.
