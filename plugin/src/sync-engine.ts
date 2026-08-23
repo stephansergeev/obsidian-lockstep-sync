@@ -337,6 +337,12 @@ export class SyncEngine {
 			if (!entry || entry.folder || !entry.dirty || this.isExcluded(path)) continue;
 			try {
 				if (!(await adapter.exists(path))) {
+					// Never uploaded, now gone. The server has nothing to forget.
+					if (entry.base_rev === 0) {
+						this.deps.index.remove(path);
+						report.skipped++;
+						continue;
+					}
 					await this.pushDeletion(client, path, entry.base_rev, report);
 					continue;
 				}
@@ -391,6 +397,14 @@ export class SyncEngine {
 			this.deps.index.remove(path);
 			report.deleted++;
 		} catch (e) {
+			if (e instanceof ApiError && e.status === 404) {
+				// Already gone on the server, or never there. Either way the index is
+				// the thing that is wrong, and holding the entry would repeat this
+				// failure on every pass forever.
+				this.deps.index.remove(path);
+				report.skipped++;
+				return;
+			}
 			if (!(e instanceof ConflictError)) throw e;
 			// Deleted here, edited there. The edit wins: bring the file back.
 			const entry = await client.getFile(path);

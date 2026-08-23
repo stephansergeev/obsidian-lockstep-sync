@@ -59,6 +59,8 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("PUT /v1/file", s.auth(s.putFile))
 	mux.HandleFunc("DELETE /v1/file", s.auth(s.deleteFile))
 	mux.HandleFunc("POST /v1/rename", s.auth(s.rename))
+	mux.HandleFunc("GET /v1/vaultkey", s.auth(s.getVaultKey))
+	mux.HandleFunc("PUT /v1/vaultkey", s.auth(s.putVaultKey))
 	return mux
 }
 
@@ -361,6 +363,48 @@ func (s *Server) rename(w http.ResponseWriter, r *http.Request, c ctx) {
 		writeErr(w, http.StatusBadRequest, "bad_request", err.Error())
 	default:
 		writeJSON(w, http.StatusOK, fileResp(f))
+	}
+}
+
+// The key derivation parameters live on the server so a second device can join the
+// vault knowing only the passphrase. They are opaque to the server, which holds no
+// key material and cannot read anything even with them in hand.
+//
+// They are write-once. Changing them without re-encrypting every file would turn the
+// whole vault into unreadable bytes, so the server refuses rather than allowing it.
+
+func (s *Server) getVaultKey(w http.ResponseWriter, r *http.Request, c ctx) {
+	value, err := c.files.GetMeta("vaultkey")
+	if errors.Is(err, store.ErrNotFound) {
+		writeErr(w, http.StatusNotFound, "not_set", "this vault has no key parameters yet")
+		return
+	}
+	if err != nil {
+		writeErr(w, http.StatusInternalServerError, "internal", err.Error())
+		return
+	}
+	w.Header().Set("Content-Type", "application/json; charset=utf-8")
+	_, _ = io.WriteString(w, value)
+}
+
+func (s *Server) putVaultKey(w http.ResponseWriter, r *http.Request, c ctx) {
+	body, err := io.ReadAll(io.LimitReader(r.Body, 8<<10))
+	if err != nil {
+		writeErr(w, http.StatusBadRequest, "bad_request", err.Error())
+		return
+	}
+	if !json.Valid(body) {
+		writeErr(w, http.StatusBadRequest, "bad_request", "expected a JSON object")
+		return
+	}
+	switch err := c.files.SetMeta("vaultkey", string(body)); {
+	case errors.Is(err, store.ErrMetaExists):
+		writeErr(w, http.StatusConflict, "already_set",
+			"this vault already has key parameters; changing them would make every file unreadable")
+	case err != nil:
+		writeErr(w, http.StatusInternalServerError, "internal", err.Error())
+	default:
+		writeJSON(w, http.StatusOK, map[string]any{"ok": true})
 	}
 }
 

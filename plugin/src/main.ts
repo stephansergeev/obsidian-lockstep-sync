@@ -135,6 +135,12 @@ export default class LockstepPlugin extends Plugin {
 		const path = toNFC(rawPath);
 		if (this.engine.isSuppressed(path) || this.engine.isExcluded(path)) return;
 		const known = this.index.get(path);
+
+		// A path the server has never seen, disappearing. There is nothing to report:
+		// a conflict copy deleted by hand used to end up here, and the plugin would
+		// spend every pass telling the server to delete a file it never had.
+		if (!known && !this.app.vault.getAbstractFileByPath(path)) return;
+
 		this.index.set(path, {
 			base_rev: known?.base_rev ?? 0,
 			base_hash: known?.base_hash ?? "",

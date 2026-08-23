@@ -402,6 +402,42 @@ func (s *Store) RevisionHash(path string, rev int64) (string, error) {
 	return hash.String, nil
 }
 
+// GetMeta reads an opaque value the client keeps on the server, such as the key
+// derivation parameters. The server never interprets these.
+func (s *Store) GetMeta(key string) (string, error) {
+	var v sql.NullString
+	err := s.db.QueryRow(`SELECT value FROM meta WHERE key=?`, "client:"+key).Scan(&v)
+	if errors.Is(err, sql.ErrNoRows) {
+		return "", ErrNotFound
+	}
+	if err != nil {
+		return "", err
+	}
+	return v.String, nil
+}
+
+// SetMeta stores a client value once. It refuses to change an existing one:
+// key derivation parameters cannot be swapped without re-encrypting the vault,
+// and a silent change would turn every note into unreadable bytes.
+func (s *Store) SetMeta(key, value string) error {
+	res, err := s.db.Exec(`INSERT INTO meta(key,value) VALUES(?,?)
+		ON CONFLICT(key) DO NOTHING`, "client:"+key, value)
+	if err != nil {
+		return err
+	}
+	n, err := res.RowsAffected()
+	if err != nil {
+		return err
+	}
+	if n == 0 {
+		return ErrMetaExists
+	}
+	return nil
+}
+
+// ErrMetaExists means a client value is already set and will not be overwritten.
+var ErrMetaExists = errors.New("already set")
+
 // Stats is the vault summary behind /stats, and for the operator's eyes.
 type Stats struct {
 	Files   int64 `json:"files"`
