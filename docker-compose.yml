@@ -1,0 +1,25 @@
+# Lockstep Sync, the container route.
+#
+# The installer in ops/ is the shorter path and the one the README leads with. This
+# exists for machines that only run containers, such as a NAS.
+#
+# Read the volume line before you start it. It is a bind mount to a directory you
+# can see and back up, not a named volume, and that is on purpose: a named volume
+# is deleted by "docker compose down -v", and what would be deleted here is every
+# note and every revision of it.
+
+services:
+  lockstep:
+    image: ghcr.io/stephansergeev/obsidian-lockstep-sync:latest
+    container_name: lockstep-sync
+    restart: unless-stopped
+    # Loopback only. Put a reverse proxy with TLS in front of it, the way the
+    # README describes. Never publish this port to the internet as it is.
+    ports:
+      - "127.0.0.1:8080:8080"
+    volumes:
+      # A real directory next to this file. Back this up.
+      - ./data:/data
+    # Runs as an ordinary user rather than root. Make the directory match:
+    #   mkdir -p data && sudo chown 1000:1000 data
+    user: "1000:1000"

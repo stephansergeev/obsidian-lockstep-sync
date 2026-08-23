@@ -110,6 +110,26 @@ sudo -u lockstep /usr/local/bin/lockstep-sync-server import --data /var/lib/lock
 anyone who catches it can read, write and delete. Content encryption does not help here:
 it hides what is in your notes, not the right to destroy them.
 
+### With Docker
+
+For machines that only run containers, such as a NAS. The installer above is shorter and is
+the path this project leads with; this one exists so that a compose file is an option rather
+than a missing feature.
+
+```bash
+curl -fsSLO https://raw.githubusercontent.com/stephansergeev/obsidian-lockstep-sync/main/docker-compose.yml
+mkdir -p data && sudo chown 1000:1000 data
+docker compose up -d
+docker compose exec lockstep /sync-server token add --data /data --vault main --name desk
+```
+
+**Read the volume line before you start it.** It is a bind mount to a `data` directory next
+to the compose file, not a named volume, and that is deliberate. A named volume is what
+`docker compose down -v` destroys, and what would be destroyed here is every note and every
+revision of it. Back that directory up like any other data.
+
+The container publishes to `127.0.0.1` only. TLS is still your reverse proxy's job.
+
 ### Without a domain
 
 If you would rather not point a name at a machine, put the server and your devices on the
