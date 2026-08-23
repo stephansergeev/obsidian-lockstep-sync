@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: MIT
 
 import { App, Notice, PluginSettingTab, Setting } from "obsidian";
+import { otherSideLabel } from "./conflict-notice";
 import { t } from "./i18n";
 import type LockstepPlugin from "./main";
 
@@ -231,7 +232,11 @@ export class SyncSettingsTab extends PluginSettingTab {
 			const setting = new Setting(containerEl)
 				.setName(c.path)
 				.setDesc(
-					t("conflict.detail", { device: c.device, when: new Date(c.at).toLocaleString() }),
+					t("conflict.detail", {
+						device: c.device,
+						other: c.server_device || t("conflict.serverFallback"),
+						when: new Date(c.at).toLocaleString(),
+					}),
 				);
 
 			const decide = async (choice: "mine" | "server" | "merged") => {
@@ -265,7 +270,7 @@ export class SyncSettingsTab extends PluginSettingTab {
 					.onClick(() => void decide("mine")),
 			);
 			setting.addButton((b) =>
-				b.setButtonText(t("conflict.keepServer")).onClick(() => void decide("server")),
+				b.setButtonText(otherSideLabel(c)).onClick(() => void decide("server")),
 			);
 		}
 	}

@@ -43,6 +43,8 @@ export class ConflictError extends Error {
 		readonly serverRev: number,
 		readonly serverHash: string,
 		readonly deleted: boolean,
+		/** Which device wrote the revision the server holds, as that device named itself. */
+		readonly serverDevice: string,
 	) {
 		super(`conflict on ${path}: server rev ${serverRev}`);
 		this.name = "ConflictError";
@@ -93,6 +95,7 @@ export class SyncClient {
 				Number(j.server_rev ?? 0),
 				String(j.server_hash ?? ""),
 				Boolean(j.deleted),
+				String(j.updated_by ?? ""),
 			);
 		}
 		if (resp.status >= 400) {

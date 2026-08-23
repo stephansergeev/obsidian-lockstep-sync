@@ -38,24 +38,25 @@ const en: Dict = {
 	"conflict.none": "Nothing to decide. Every file is in step.",
 	"conflict.intro":
 		"Both versions are on disk and neither has been changed. Read them and say which one stands.",
-	"conflict.detail": "changed on {device} and on the server, {when}",
-	"conflict.openServer": "open the server version",
+	"conflict.detail": "changed on {device} and on {other}, {when}",
+	"conflict.openServer": "open the version from {device}",
 	"conflict.openMine": "open the version from {device}",
 	"conflict.notMergeable":
 		"Too large, or not text. Both files are kept, but they cannot be merged line by line.",
 	"conflict.keepBoth": "Keep both edits",
 	"conflict.keepBoth.tooltip":
 		"Nothing is discarded. Both texts go into the note, marked, so you can settle them in one place.",
-	"conflict.keepMine": "Keep {device}",
+	"conflict.keepMine": "Keep the version from {device}",
 	"conflict.keepMine.tooltip": "Take the version written on this device and drop the other.",
-	"conflict.keepServer": "Keep the server's",
+	"conflict.keepServer": "Keep the version from {device}",
+	"conflict.keepServer.unknown": "Keep the version from the server",
+	"conflict.serverFallback": "the server",
 	"conflict.keepServer.tooltip": "Take the version already on the server and drop this device's.",
 	"conflict.resolved": "{path} settled",
 	"conflict.gone": "{path} is no longer in the vault",
 	"conflict.pending": "{count} to decide",
 	"cmd.conflicts": "Resolve files changed on both sides",
-	"notice.conflictQueued":
-		"Lockstep: {path} was changed on both sides. Both versions are kept, open the plugin to choose.",
+	"notice.conflictQueued": "Lockstep: {path} was changed on both sides. Both versions are kept.",
 
 	"settings.section.encryption": "Encryption",
 	"settings.encryption.name": "Encrypt content",
@@ -145,24 +146,25 @@ const ru: Dict = {
 	"conflict.none": "Решать нечего. Все файлы идут в ногу.",
 	"conflict.intro":
 		"Обе версии лежат на диске, ни одна не тронута. Посмотри их и скажи, какая остаётся.",
-	"conflict.detail": "правили на {device} и на сервере, {when}",
-	"conflict.openServer": "открыть серверную версию",
+	"conflict.detail": "правили на {device} и на {other}, {when}",
+	"conflict.openServer": "открыть версию с {device}",
 	"conflict.openMine": "открыть версию с {device}",
 	"conflict.notMergeable":
 		"Слишком большой файл или не текст. Обе версии сохранены, но построчно свести их нельзя.",
 	"conflict.keepBoth": "Сохранить все правки",
 	"conflict.keepBoth.tooltip":
 		"Ничего не выбрасывается. Оба текста ложатся в заметку с пометками, чтобы свести их в одном месте.",
-	"conflict.keepMine": "Оставить {device}",
+	"conflict.keepMine": "Оставить версию с {device}",
 	"conflict.keepMine.tooltip": "Взять версию, написанную на этом устройстве, другую убрать.",
-	"conflict.keepServer": "Оставить серверную",
+	"conflict.keepServer": "Оставить версию с {device}",
+	"conflict.keepServer.unknown": "Оставить версию с сервера",
+	"conflict.serverFallback": "сервера",
 	"conflict.keepServer.tooltip": "Взять версию, которая уже на сервере, эту убрать.",
 	"conflict.resolved": "{path} решено",
 	"conflict.gone": "{path} больше нет в волте",
 	"conflict.pending": "решить: {count}",
 	"cmd.conflicts": "Разобрать файлы, изменённые с двух сторон",
-	"notice.conflictQueued":
-		"Lockstep: {path} правили с двух сторон. Обе версии сохранены, открой плагин и выбери.",
+	"notice.conflictQueued": "Lockstep: {path} правили с двух сторон. Обе версии сохранены.",
 
 	"settings.section.encryption": "Шифрование",
 	"settings.encryption.name": "Шифровать содержимое",

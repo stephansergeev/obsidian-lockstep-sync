@@ -152,6 +152,7 @@ func writeConflict(w http.ResponseWriter, c *store.ConflictError) {
 		"server_rev":  c.ServerRev,
 		"server_hash": c.ServerHash,
 		"deleted":     c.Deleted,
+		"updated_by":  c.UpdatedBy,
 	})
 }
 

@@ -67,6 +67,7 @@ type putResult struct {
 	Error      string `json:"error"`
 	ServerRev  int64  `json:"server_rev"`
 	ServerHash string `json:"server_hash"`
+	UpdatedBy  string `json:"updated_by"`
 }
 
 func (h *harness) do(tok, method, url string, body io.Reader, hdr map[string]string) (*http.Response, []byte) {
@@ -202,6 +203,11 @@ func TestScenario01_ConcurrentEdit(t *testing.T) {
 	}
 	if phone.ServerRev != 2 || phone.ServerHash != sha("edit from the desktop") {
 		t.Fatalf("a 409 must carry the server revision and hash: %+v", phone)
+	}
+	// The client names the other side when it asks a person which version stands,
+	// so the conflict has to say which device wrote what is on the server.
+	if phone.UpdatedBy != "desk-01" {
+		t.Fatalf("a 409 must name the device that wrote the server revision: %+v", phone)
 	}
 
 	// The client must be able to fetch both the common ancestor and the server version.

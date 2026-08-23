@@ -254,7 +254,10 @@ export class SyncEngine {
 		}
 
 		// Both sides changed. This is the merge path.
-		await this.reconcile(client, path, local, localHash, entry.rev, known?.base_rev ?? 0, report);
+		await this.reconcile(
+			client, path, local, localHash, entry.rev, known?.base_rev ?? 0, report,
+			entry.updated_by ?? "",
+		);
 	}
 
 	private async applyRemoteDeletion(
@@ -417,7 +420,7 @@ export class SyncEngine {
 			report.uploaded++;
 		} catch (e) {
 			if (!(e instanceof ConflictError)) throw e;
-			await this.reconcile(client, path, data, hash, e.serverRev, baseRev, report);
+			await this.reconcile(client, path, data, hash, e.serverRev, baseRev, report, e.serverDevice);
 		}
 	}
 
@@ -470,6 +473,7 @@ export class SyncEngine {
 		serverRev: number,
 		baseRev: number,
 		report: SyncReport,
+		serverDevice = "",
 	): Promise<void> {
 		const fetched = await this.fetch(client, path, serverRev);
 		const server = {
@@ -487,7 +491,7 @@ export class SyncEngine {
 			localData.byteLength > MERGE_SIZE_LIMIT ||
 			server.data.byteLength > MERGE_SIZE_LIMIT
 		) {
-			await this.keepBothWithoutMerging(path, localData, server, report);
+			await this.keepBothWithoutMerging(path, localData, server, report, baseRev, false, serverDevice);
 			return;
 		}
 
@@ -499,7 +503,7 @@ export class SyncEngine {
 				// The ancestor is gone, most likely collected. Without it a merge would be
 				// guesswork, so both versions are kept instead.
 				if (!(e instanceof ApiError)) throw e;
-				await this.keepBothWithoutMerging(path, localData, server, report);
+				await this.keepBothWithoutMerging(path, localData, server, report, baseRev, false, serverDevice);
 				return;
 			}
 		}
@@ -518,7 +522,7 @@ export class SyncEngine {
 		// a person, and conflict markers make it unreadable. Both whole versions stay
 		// on disk, the server one under the real name and this device's one alongside,
 		// and the choice is left to whoever wrote them.
-		await this.keepBothWithoutMerging(path, localData, server, report, baseRev, true);
+		await this.keepBothWithoutMerging(path, localData, server, report, baseRev, true, serverDevice);
 		void localHash;
 	}
 
@@ -536,6 +540,7 @@ export class SyncEngine {
 		report: SyncReport,
 		baseRev = 0,
 		mergeable = false,
+		serverDevice = "",
 	): Promise<void> {
 		const copy = conflictName(path, this.deviceName(), new Date());
 		await this.write(copy, localData);
@@ -554,6 +559,7 @@ export class SyncEngine {
 			path,
 			copy,
 			device: this.deviceName(),
+			server_device: serverDevice,
 			at: Date.now(),
 			base_rev: baseRev,
 			server_rev: server.rev,

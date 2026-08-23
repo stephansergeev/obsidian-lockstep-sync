@@ -52,5 +52,18 @@ export function showConflictNotice(
 
 	if (conflict.mergeable) button(t("conflict.keepBoth"), "merged", true);
 	button(t("conflict.keepMine", { device: conflict.device }), "mine");
-	button(t("conflict.keepServer"), "server");
+	button(otherSideLabel(conflict), "server");
+}
+
+/**
+ * Name the other side by the name that device gave itself.
+ *
+ * "Keep the server's" tells nobody anything: the server is not where the edit came
+ * from, it is only where it passed through. Older revisions can predate the field,
+ * so there is a fallback.
+ */
+export function otherSideLabel(conflict: PendingConflict): string {
+	return conflict.server_device
+		? t("conflict.keepServer", { device: conflict.server_device })
+		: t("conflict.keepServer.unknown");
 }

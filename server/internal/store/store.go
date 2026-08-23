@@ -38,6 +38,9 @@ type ConflictError struct {
 	ServerRev  int64
 	ServerHash string
 	Deleted    bool
+	// Which device wrote the revision the server currently holds. The client uses it
+	// to name the other side when it asks a person which version stands.
+	UpdatedBy string
 }
 
 func (e *ConflictError) Error() string {
@@ -266,7 +269,10 @@ func (s *Store) write(
 		}
 	}
 	if cur.Rev != baseRev {
-		return File{}, &ConflictError{Path: path, ServerRev: cur.Rev, ServerHash: cur.Hash, Deleted: cur.Deleted}
+		return File{}, &ConflictError{
+			Path: path, ServerRev: cur.Rev, ServerHash: cur.Hash,
+			Deleted: cur.Deleted, UpdatedBy: cur.UpdatedBy,
+		}
 	}
 
 	seq, err := nextSeq(tx)
@@ -349,7 +355,10 @@ func (s *Store) Rename(from, to string, baseRev int64, updatedBy string) (File, 
 		return File{}, ErrNotFound
 	}
 	if src.Rev != baseRev {
-		return File{}, &ConflictError{Path: from, ServerRev: src.Rev, ServerHash: src.Hash, Deleted: src.Deleted}
+		return File{}, &ConflictError{
+			Path: from, ServerRev: src.Rev, ServerHash: src.Hash,
+			Deleted: src.Deleted, UpdatedBy: src.UpdatedBy,
+		}
 	}
 	dst, _, err := getTx(tx, to)
 	if err != nil {
@@ -357,7 +366,10 @@ func (s *Store) Rename(from, to string, baseRev int64, updatedBy string) (File, 
 	}
 	if !dst.Deleted && dst.Rev > 0 {
 		// The destination is taken — overwriting silently would lose a note.
-		return File{}, &ConflictError{Path: to, ServerRev: dst.Rev, ServerHash: dst.Hash, Deleted: dst.Deleted}
+		return File{}, &ConflictError{
+			Path: to, ServerRev: dst.Rev, ServerHash: dst.Hash,
+			Deleted: dst.Deleted, UpdatedBy: dst.UpdatedBy,
+		}
 	}
 
 	seqDst, err := nextSeq(tx)

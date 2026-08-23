@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: MIT
 
 import { App, Modal, Notice, Setting, TFile } from "obsidian";
+import { otherSideLabel } from "./conflict-notice";
 import { t } from "./i18n";
 import type { PendingConflict } from "./index-store";
 
@@ -47,12 +48,17 @@ export class ConflictModal extends Modal {
 				cls: "setting-item-description",
 				text: t("conflict.detail", {
 					device: c.device,
+					other: c.server_device || t("conflict.serverFallback"),
 					when: new Date(c.at).toLocaleString(),
 				}),
 			});
 
 			const links = box.createDiv({ cls: "setting-item-description" });
-			this.link(links, t("conflict.openServer"), c.path);
+			this.link(
+				links,
+				t("conflict.openServer", { device: c.server_device || t("conflict.serverFallback") }),
+				c.path,
+			);
 			links.createSpan({ text: "  ·  " });
 			this.link(links, t("conflict.openMine", { device: c.device }), c.copy);
 

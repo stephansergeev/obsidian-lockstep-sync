@@ -42,7 +42,10 @@ export interface IndexEntry {
 export interface PendingConflict {
 	path: string;
 	copy: string;
+	/** The name this device gave itself in settings. */
 	device: string;
+	/** The name the other device gave itself, taken from whoever wrote the server revision. */
+	server_device?: string;
 	at: number;
 	base_rev: number;
 	server_rev: number;
