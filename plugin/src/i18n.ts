@@ -57,6 +57,10 @@ const en: Dict = {
 	"notice.conflictQueued":
 		"Lockstep: {path} was changed on both sides. Both versions are kept, open the plugin to choose.",
 
+	"settings.benchmark.name": "Measure key derivation",
+	"settings.benchmark.desc":
+		"Times the passphrase-to-key step on this device. Takes a few seconds and changes nothing.",
+	"settings.benchmark.button": "Measure",
 	"settings.section.encryption": "Encryption",
 	"settings.encryption.name": "Encrypt content",
 	"settings.encryption.desc":
@@ -166,6 +170,10 @@ const ru: Dict = {
 	"notice.conflictQueued":
 		"Lockstep: {path} правили с двух сторон. Обе версии сохранены, открой плагин и выбери.",
 
+	"settings.benchmark.name": "Замерить выведение ключа",
+	"settings.benchmark.desc":
+		"Меряет, сколько на этом устройстве занимает превращение пароля в ключ. Несколько секунд, ничего не меняет.",
+	"settings.benchmark.button": "Замерить",
 	"settings.section.encryption": "Шифрование",
 	"settings.encryption.name": "Шифровать содержимое",
 	"settings.encryption.desc":

@@ -168,6 +168,17 @@ export class SyncSettingsTab extends PluginSettingTab {
 			});
 		}
 
+		// Reachable without the command palette, which on a phone is several taps away
+		// and hard to find if you did not already know it was there.
+		new Setting(containerEl)
+			.setName(t("settings.benchmark.name"))
+			.setDesc(t("settings.benchmark.desc"))
+			.addButton((b) =>
+				b.setButtonText(t("settings.benchmark.button")).onClick(async () => {
+					await this.plugin.runBenchmark();
+				}),
+			);
+
 		new Setting(containerEl).setName(t("settings.section.maintenance")).setHeading();
 
 		new Setting(containerEl)

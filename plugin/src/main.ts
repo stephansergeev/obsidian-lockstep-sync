@@ -69,7 +69,7 @@ export default class LockstepPlugin extends Plugin {
 		this.addCommand({
 			id: "benchmark-kdf",
 			name: t("cmd.benchmark"),
-			callback: () => void this.benchmark(),
+			callback: () => void this.runBenchmark(),
 		});
 		this.addCommand({
 			id: "resolve-conflicts",
@@ -323,7 +323,7 @@ export default class LockstepPlugin extends Plugin {
 	}
 
 	/** Measure key derivation here, on this device, instead of guessing. */
-	private async benchmark(): Promise<void> {
+	async runBenchmark(): Promise<void> {
 		new Notice(t("notice.benchmarking"), 5000);
 		const { benchmarkKdf, reportBenchmark } = await import("./kdf-benchmark");
 		try {
