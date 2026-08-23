@@ -42,5 +42,13 @@ jobs:
           cache-dependency-path: plugin/package-lock.json
       - working-directory: plugin
         run: npm ci
+      - name: types
+        working-directory: plugin
+        run: npm run check
+      # The three-way merge is the one place in the plugin where text can be
+      # destroyed, so it is tested on its own before anything is bundled.
+      - name: merge tests
+        working-directory: plugin
+        run: npm test
       - working-directory: plugin
         run: npm run build
