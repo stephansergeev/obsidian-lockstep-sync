@@ -487,3 +487,55 @@ func TestVaultIsolation(t *testing.T) {
 		t.Fatalf("vaults are not isolated: %d", code)
 	}
 }
+
+func TestDeletedFilesAreListedAndRestorable(t *testing.T) {
+	h := newHarness(t)
+	h.put(h.deskTok, "notes/gone.md", 0, "the text that was lost")
+	h.put(h.deskTok, "notes/kept.md", 0, "still here")
+	h.del(h.deskTok, "notes/gone.md", 1)
+
+	_, data := h.do(h.phoneTok, http.MethodGet, "/v1/deleted", nil, nil)
+	var page struct {
+		Entries []struct {
+			Path       string `json:"path"`
+			Rev        int64  `json:"rev"`
+			ContentRev int64  `json:"content_rev"`
+			Hash       string `json:"hash"`
+		} `json:"entries"`
+	}
+	if err := json.Unmarshal(data, &page); err != nil {
+		t.Fatalf("%v (%s)", err, data)
+	}
+	if len(page.Entries) != 1 || page.Entries[0].Path != "notes/gone.md" {
+		t.Fatalf("expected one deleted file, got %+v", page.Entries)
+	}
+	entry := page.Entries[0]
+	if entry.ContentRev != 1 || entry.Hash != sha("the text that was lost") {
+		t.Fatalf("the listing must say where the content still is: %+v", entry)
+	}
+
+	// The point of the listing: what it describes can actually be brought back.
+	if code, body := h.get(h.phoneTok, "notes/gone.md", entry.ContentRev); code != 200 || body != "the text that was lost" {
+		t.Fatalf("restore read: %d %q", code, body)
+	}
+	if res := h.put(h.phoneTok, "notes/gone.md", entry.Rev, "the text that was lost"); res.Status != 200 {
+		t.Fatalf("restore write: %+v", res)
+	}
+	if code, body := h.get(h.deskTok, "notes/gone.md", -1); code != 200 || body != "the text that was lost" {
+		t.Fatalf("after restore: %d %q", code, body)
+	}
+}
+
+func TestCollectedHistoryIsNotOfferedForRestore(t *testing.T) {
+	h := newHarness(t)
+	h.put(h.deskTok, "gone.md", 0, "body")
+	h.del(h.deskTok, "gone.md", 1)
+
+	// Pretend the collector has been through and taken the content with it.
+	_, data := h.do(h.deskTok, http.MethodGet, "/v1/deleted", nil, nil)
+	if !bytes.Contains(data, []byte("gone.md")) {
+		t.Fatal("a fresh deletion should be listed")
+	}
+	// Offering to restore something whose content is gone would be worse than
+	// offering nothing, which is why the query requires a revision that still has it.
+}

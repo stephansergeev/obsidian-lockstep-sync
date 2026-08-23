@@ -529,3 +529,77 @@ test("hidden paths survive renames and deletions between devices", async (t) => 
 	await b.sync();
 	assert.equal(await b.vault.exists("notes/second.md"), false);
 });
+
+test("a file deleted on one device can be brought back from the other", async (t) => {
+	const { a, b, cleanup } = await twoDevices();
+	t.after(cleanup);
+
+	await a.edit("notes/important.md", "the text that mattered\n");
+	await a.sync();
+	await b.sync();
+
+	await a.delete("notes/important.md");
+	await a.sync();
+	await b.sync();
+	assert.equal(await b.vault.exists("notes/important.md"), false);
+
+	// Deleting never erased anything. This is what makes that true in practice
+	// rather than only in the storage layer.
+	const gone = await b.engine.deletedFiles();
+	const entry = gone.find((f) => f.path === "notes/important.md");
+	assert.ok(entry, "the deletion has to be listed as recoverable");
+
+	await b.engine.restore(entry.path, entry.rev, entry.content_rev);
+	assert.equal(await b.vault.read("notes/important.md"), "the text that mattered\n");
+
+	await a.sync();
+	assert.equal(
+		await a.vault.read("notes/important.md"),
+		"the text that mattered\n",
+		"and it comes back everywhere, not just where it was restored",
+	);
+});
+
+test("restoring refuses to write over a file that exists", async (t) => {
+	const { a, b, cleanup } = await twoDevices();
+	t.after(cleanup);
+
+	await a.edit("note.md", "first life\n");
+	await a.sync();
+	await b.sync();
+	await a.delete("note.md");
+	await a.sync();
+	await b.sync();
+
+	// Somebody made a new file at the same path in the meantime.
+	await b.edit("note.md", "second life\n");
+	const entry = (await b.engine.deletedFiles()).find((f) => f.path === "note.md");
+	await assert.rejects(() => b.engine.restore(entry.path, entry.rev, entry.content_rev));
+	assert.equal(await b.vault.read("note.md"), "second life\n", "the newer file is untouched");
+});
+
+test("deleted files stay recoverable with paths hidden", async (t) => {
+	const server = await startServer();
+	const { cipher } = await VaultCipher.create("shared passphrase", {
+		iterations: 1,
+		memory_kib: 64,
+	});
+	const opts = { cipher, pathCipher: await cipher.pathCipher() };
+	const a = await makeDevice(server, "mac", server.tokens.a, opts);
+	t.after(async () => {
+		await a.cleanup();
+		await server.stop();
+	});
+
+	await a.edit("Private/note.md", "hidden even by name\n");
+	await a.sync();
+	await a.delete("Private/note.md");
+	await a.sync();
+
+	const gone = await a.engine.deletedFiles();
+	assert.equal(gone.length, 1);
+	assert.equal(gone[0].path, "Private/note.md", "the list has to show names a person recognises");
+
+	await a.engine.restore(gone[0].path, gone[0].rev, gone[0].content_rev);
+	assert.equal(await a.vault.read("Private/note.md"), "hidden even by name\n");
+});

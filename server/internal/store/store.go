@@ -450,6 +450,57 @@ func (s *Store) SetMeta(key, value string) error {
 // ErrMetaExists means a client value is already set and will not be overwritten.
 var ErrMetaExists = errors.New("already set")
 
+// Deleted is a file that is gone but still recoverable: the tombstone, plus the
+// last revision that had content behind it.
+type Deleted struct {
+	Path string `json:"path"`
+	// The tombstone's revision, which is what a client must base a restore on.
+	Rev int64 `json:"rev"`
+	// When it was deleted, as the deleting device saw the clock.
+	DeletedAt int64 `json:"deleted_at"`
+	// The last revision that still has content, and what that content is.
+	ContentRev int64  `json:"content_rev"`
+	Hash       string `json:"hash"`
+}
+
+// DeletedFiles lists what can still be brought back, most recently deleted first.
+//
+// A tombstone whose content has been collected is left out: offering to restore
+// something that cannot be restored is worse than not offering it.
+func (s *Store) DeletedFiles(limit int) ([]Deleted, error) {
+	if limit <= 0 || limit > 1000 {
+		limit = 200
+	}
+	rows, err := s.db.Query(`
+		SELECT f.path, f.rev, f.mtime,
+		       (SELECT MAX(r.rev) FROM revisions r WHERE r.path = f.path AND r.hash IS NOT NULL),
+		       (SELECT r.hash FROM revisions r WHERE r.path = f.path AND r.hash IS NOT NULL
+		         ORDER BY r.rev DESC LIMIT 1)
+		FROM files f
+		WHERE f.deleted = 1
+		ORDER BY f.seq DESC
+		LIMIT ?`, limit)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	out := []Deleted{}
+	for rows.Next() {
+		var d Deleted
+		var contentRev sql.NullInt64
+		var hash sql.NullString
+		if err := rows.Scan(&d.Path, &d.Rev, &d.DeletedAt, &contentRev, &hash); err != nil {
+			return nil, err
+		}
+		if !contentRev.Valid || !hash.Valid {
+			continue
+		}
+		d.ContentRev, d.Hash = contentRev.Int64, hash.String
+		out = append(out, d)
+	}
+	return out, rows.Err()
+}
+
 // Stats is the vault summary behind /stats, and for the operator's eyes.
 type Stats struct {
 	Files   int64 `json:"files"`

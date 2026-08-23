@@ -1,5 +1,20 @@
 # Changelog
 
+## 0.7.0
+
+Deleted files can be brought back. Every revision has been kept since the first version and
+a deletion has always been a tombstone rather than an erasure, but none of it was reachable
+without a terminal, which is a promise nobody could act on. The plugin now lists what is
+gone and restores any of it on any device. Files whose content the collector has already
+taken are left off the list: offering a restore that cannot happen is worse than offering
+none.
+
+A garbage collector, run by hand and never on a timer. A revision goes only if it is both
+older than thirty days and buried under twenty newer ones, so a file edited fifty times this
+morning keeps all fifty. Content is swept against the whole vault at once, because a blob is
+shared between paths, and that also collects the orphans every conflict has been leaving
+behind since the beginning.
+
 ## 0.6.0
 
 File and folder names are encrypted along with content. A vault says a great deal through

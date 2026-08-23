@@ -203,6 +203,13 @@ export class SyncSettingsTab extends PluginSettingTab {
 			);
 
 		new Setting(containerEl)
+			.setName(t("settings.restore.name"))
+			.setDesc(t("settings.restore.desc"))
+			.addButton((b) =>
+				b.setButtonText(t("settings.restore.button")).onClick(() => this.plugin.openRestore()),
+			);
+
+		new Setting(containerEl)
 			.setName(t("settings.reset.name"))
 			.setDesc(t("settings.reset.desc"))
 			.addButton((b) =>

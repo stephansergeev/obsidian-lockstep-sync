@@ -592,6 +592,31 @@ export class SyncEngine {
 		this.deps.onConflict(path, copy);
 	}
 
+	/** What can still be brought back. */
+	async deletedFiles() {
+		const client = this.deps.client();
+		return client ? client.deleted() : [];
+	}
+
+	/**
+	 * Bring a deleted file back.
+	 *
+	 * The content is fetched from the last revision that had any, written to the
+	 * vault, and sent up as a new revision on top of the tombstone. Other devices
+	 * then see an ordinary edit, which is exactly what this is.
+	 */
+	async restore(path: string, tombstoneRev: number, contentRev: number): Promise<void> {
+		const client = this.deps.client();
+		if (!client) throw new Error("not configured");
+		if (await this.deps.app.vault.adapter.exists(path)) {
+			throw new Error("a file already exists at that path");
+		}
+		const got = await this.fetch(client, path, contentRev);
+		await this.write(path, got.plain);
+		await this.send(client, path, tombstoneRev, got.plain, got.plainHash);
+		await this.deps.index.save();
+	}
+
 	deviceName(): string {
 		return this.deps.settings.deviceName || "local";
 	}

@@ -58,6 +58,19 @@ const en: Dict = {
 	"cmd.conflicts": "Resolve files changed on both sides",
 	"notice.conflictQueued": "Lockstep: {path} was changed on both sides. Both versions are kept.",
 
+	"restore.title": "Deleted files",
+	"restore.loading": "Asking the server what it still has…",
+	"restore.none": "Nothing to bring back. Every deletion here has been forgotten or never happened.",
+	"restore.intro":
+		"Deleting a file never erased it. These are still on the server, with the last version that had anything in it.",
+	"restore.detail": "deleted {when}",
+	"restore.button": "Bring it back",
+	"restore.done": "{path} is back",
+	"cmd.restore": "Bring back a deleted file",
+	"settings.restore.name": "Deleted files",
+	"settings.restore.desc": "Nothing is erased. Look at what is still recoverable and bring any of it back.",
+	"settings.restore.button": "Open",
+
 	"settings.section.encryption": "Encryption",
 	"settings.encryption.name": "Encrypt content",
 	"settings.encryption.desc":
@@ -166,6 +179,19 @@ const ru: Dict = {
 	"conflict.pending": "решить: {count}",
 	"cmd.conflicts": "Разобрать файлы, изменённые с двух сторон",
 	"notice.conflictQueued": "Lockstep: {path} правили с двух сторон. Обе версии сохранены.",
+
+	"restore.title": "Удалённые файлы",
+	"restore.loading": "Спрашиваю сервер, что у него осталось…",
+	"restore.none": "Возвращать нечего. Все удаления здесь либо забыты, либо их не было.",
+	"restore.intro":
+		"Удаление файла никогда его не стирало. Эти лежат на сервере вместе с последней версией, в которой что-то было.",
+	"restore.detail": "удалён {when}",
+	"restore.button": "Вернуть",
+	"restore.done": "{path} на месте",
+	"cmd.restore": "Вернуть удалённый файл",
+	"settings.restore.name": "Удалённые файлы",
+	"settings.restore.desc": "Ничего не стирается. Посмотри, что ещё можно вернуть, и верни.",
+	"settings.restore.button": "Открыть",
 
 	"settings.section.encryption": "Шифрование",
 	"settings.encryption.name": "Шифровать содержимое",

@@ -23,6 +23,16 @@ export interface ChangeEntry {
 	renamed_from?: string;
 }
 
+export interface DeletedFile {
+	path: string;
+	/** The tombstone. A restore has to be based on this. */
+	rev: number;
+	deleted_at: number;
+	/** The last revision that still has content behind it. */
+	content_rev: number;
+	hash: string;
+}
+
 export interface ChangesPage {
 	entries: ChangeEntry[];
 	next_seq: number;
@@ -179,6 +189,23 @@ export class SyncClient {
 			body: JSON.stringify(params),
 			headers: { "Content-Type": "application/json" },
 		});
+	}
+
+	/** Files that are gone but still recoverable, most recently deleted first. */
+	async deleted(limit = 200): Promise<DeletedFile[]> {
+		const resp = await this.call("GET", `/deleted?limit=${limit}`);
+		const entries = (resp.json?.entries ?? []) as DeletedFile[];
+		if (!this.paths) return entries;
+		const out: DeletedFile[] = [];
+		for (const entry of entries) {
+			try {
+				out.push({ ...entry, path: await this.local(entry.path) });
+			} catch {
+				// A name this key cannot open belongs to another vault on this server.
+				continue;
+			}
+		}
+		return out;
 	}
 
 	async getFile(path: string, rev?: number): Promise<{ data: ArrayBuffer; rev: number; hash: string }> {

@@ -70,6 +70,10 @@ same question is asked.
 An edit always beats a deletion. Delete a note on one device while editing it on another and
 it comes back, because a note that reappears is an annoyance and a note that vanishes is not.
 
+Deleting does not erase. A deleted file becomes a tombstone and its content stays where it
+was, so the plugin can list what is gone and bring any of it back, on any device, long after
+the fact.
+
 ## Running the server
 
 You need a machine reachable from the internet and a domain name pointing at it. Any small

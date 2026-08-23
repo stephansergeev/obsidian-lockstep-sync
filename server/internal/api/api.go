@@ -59,6 +59,7 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("PUT /v1/file", s.auth(s.putFile))
 	mux.HandleFunc("DELETE /v1/file", s.auth(s.deleteFile))
 	mux.HandleFunc("POST /v1/rename", s.auth(s.rename))
+	mux.HandleFunc("GET /v1/deleted", s.auth(s.deleted))
 	mux.HandleFunc("GET /v1/vaultkey", s.auth(s.getVaultKey))
 	mux.HandleFunc("PUT /v1/vaultkey", s.auth(s.putVaultKey))
 	return mux
@@ -217,6 +218,23 @@ func (s *Server) changes(w http.ResponseWriter, r *http.Request, c ctx) {
 	writeJSON(w, http.StatusOK, map[string]any{
 		"entries": entries, "next_seq": next, "has_more": more,
 	})
+}
+
+// What is gone but not lost. The history was always there and reachable by revision
+// number; this is what makes it something a person can act on rather than something
+// a person could theoretically curl.
+func (s *Server) deleted(w http.ResponseWriter, r *http.Request, c ctx) {
+	limit, err := intParam(r, "limit", 200)
+	if err != nil {
+		writeErr(w, http.StatusBadRequest, "bad_request", "limit: "+err.Error())
+		return
+	}
+	list, err := c.files.DeletedFiles(int(limit))
+	if err != nil {
+		writeErr(w, http.StatusInternalServerError, "internal", err.Error())
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]any{"entries": list})
 }
 
 func (s *Server) getFile(w http.ResponseWriter, r *http.Request, c ctx) {

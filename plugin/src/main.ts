@@ -4,6 +4,7 @@ import { Notice, Plugin, TAbstractFile, normalizePath } from "obsidian";
 import { ApiError, SyncClient, type ChangeEntry } from "./api";
 import { ConflictModal } from "./conflict-modal";
 import { showConflictNotice } from "./conflict-notice";
+import { RestoreModal } from "./restore-modal";
 import {
 	VaultCipher,
 	WrongPassphrase,
@@ -79,6 +80,11 @@ export default class LockstepPlugin extends Plugin {
 			callback: () => void this.testConnection(),
 		});
 		this.addCommand({ id: "pull-all", name: t("cmd.pull"), callback: () => void this.pullAll() });
+		this.addCommand({
+			id: "restore-deleted",
+			name: t("cmd.restore"),
+			callback: () => this.openRestore(),
+		});
 		this.addCommand({
 			id: "resolve-conflicts",
 			name: t("cmd.conflicts"),
@@ -191,6 +197,16 @@ export default class LockstepPlugin extends Plugin {
 	async resolveConflict(path: string, choice: "mine" | "server" | "merged"): Promise<void> {
 		await this.engine.resolveConflict(path, choice);
 		this.setStatus(this.lastStatus);
+	}
+
+	openRestore(): void {
+		new RestoreModal(
+			this.app,
+			() => this.engine.deletedFiles(),
+			async (file) => {
+				await this.engine.restore(file.path, file.rev, file.content_rev);
+			},
+		).open();
 	}
 
 	openConflicts(): void {
