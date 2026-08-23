@@ -21,8 +21,8 @@ jobs:
       - name: vet
         working-directory: server
         run: go vet ./...
-      # Харнесс из spec §9: каждый сценарий проверяет, что ни одна версия
-      # текста не исчезла молча. Красный тест здесь = ошибка потери данных.
+      # The harness from spec §9: every scenario checks that no version of the
+      # text disappeared quietly. A red test here means a data loss bug.
       - name: test
         working-directory: server
         run: go test -race ./...

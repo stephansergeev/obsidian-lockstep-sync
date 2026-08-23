@@ -1,7 +1,7 @@
-# TLS, HTTP/2 и сертификаты — целиком на Caddy. Сервер про них не знает.
+# TLS, HTTP/2 and certificates are entirely Caddy's job. The server knows nothing of them.
 sync.example.com {
 	reverse_proxy 127.0.0.1:8080 {
-		# Крупные вложения качаются долго — таймаут на чтение тела не режем.
+		# Large attachments take a long time, so the body timeouts stay generous.
 		transport http {
 			read_timeout 30m
 			write_timeout 30m

@@ -6,7 +6,7 @@ const production = process.argv[2] === "production";
 const ctx = await esbuild.context({
   entryPoints: ["src/main.ts"],
   bundle: true,
-  // Всё, что даёт хост, наружу не тянем — плагин должен остаться одним файлом.
+  // Anything the host provides stays external. The plugin ships as a single file.
   external: ["obsidian", "electron", ...builtins],
   format: "cjs",
   target: "es2020",

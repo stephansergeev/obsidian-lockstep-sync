@@ -1,7 +1,7 @@
 # /etc/systemd/system/sync-server.service
-# Сервер слушает только loopback: TLS и внешний доступ — задача Caddy/nginx.
+# The server listens on loopback only. TLS and public access belong to Caddy or nginx.
 [Unit]
-Description=Obsidian self-hosted sync
+Description=Lockstep Sync server
 After=network-online.target
 Wants=network-online.target
 
@@ -13,7 +13,7 @@ ExecStart=/usr/local/bin/sync-server serve --data /var/lib/sync-server --addr 12
 Restart=always
 RestartSec=3
 
-# Состояние живёт только на диске, поэтому перезапуск безопасен в любой момент.
+# All state lives on disk, so a restart is safe at any moment.
 StateDirectory=sync-server
 NoNewPrivileges=yes
 PrivateTmp=yes
