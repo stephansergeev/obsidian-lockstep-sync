@@ -256,3 +256,198 @@ test("encrypted content still deduplicates and stays quiet", async (t) => {
 
 	assert.equal(second.uploaded, 0, "an unchanged file must not become a new revision");
 });
+
+test("a binary file changed on both sides keeps both and does not try to merge", async (t) => {
+	const { a, b, cleanup } = await twoDevices();
+	t.after(cleanup);
+
+	const bytes = (fill) => {
+		const u = new Uint8Array(64);
+		u.fill(fill);
+		u[0] = 0; // a NUL byte is what marks this as not text
+		return Buffer.from(u).toString("binary");
+	};
+
+	await a.vault.writeBinary("image.bin", new Uint8Array([0, 1, 2, 3]).buffer);
+	await a.edit("image.bin", bytes(1));
+	await a.sync();
+	await b.sync();
+
+	await a.edit("image.bin", bytes(2));
+	await b.edit("image.bin", bytes(3));
+	await a.sync();
+	await b.sync();
+
+	const pending = b.index.conflicts[0];
+	assert.ok(pending, "a binary conflict still has to be reported");
+	assert.equal(pending.mergeable, false, "and it must not offer a line-by-line merge");
+	assert.equal(await b.vault.exists(pending.copy), true, "both versions stay on disk");
+});
+
+test("choosing this device's version sends it to the other one", async (t) => {
+	const { a, b, cleanup } = await twoDevices();
+	t.after(cleanup);
+
+	await a.edit("note.md", "shared\n");
+	await a.sync();
+	await b.sync();
+	await a.edit("note.md", "from the mac\n");
+	await b.edit("note.md", "from the phone\n");
+	await a.sync();
+	await b.sync();
+
+	await b.engine.resolveConflict("note.md", "mine");
+	assert.equal(await b.vault.read("note.md"), "from the phone\n");
+	assert.equal(b.index.conflicts.length, 0);
+
+	await a.sync();
+	assert.equal(await a.vault.read("note.md"), "from the phone\n");
+});
+
+test("choosing the other device's version drops the copy and keeps the note", async (t) => {
+	const { a, b, cleanup } = await twoDevices();
+	t.after(cleanup);
+
+	await a.edit("note.md", "shared\n");
+	await a.sync();
+	await b.sync();
+	await a.edit("note.md", "from the mac\n");
+	await b.edit("note.md", "from the phone\n");
+	await a.sync();
+	await b.sync();
+
+	const copy = b.index.conflicts[0].copy;
+	await b.engine.resolveConflict("note.md", "server");
+	assert.equal(await b.vault.read("note.md"), "from the mac\n");
+	assert.equal(await b.vault.exists(copy), false, "the rejected copy is cleaned up");
+	assert.equal(b.index.conflicts.length, 0);
+});
+
+test("a rename on one device and an edit on the other lose nothing", async (t) => {
+	const { a, b, cleanup } = await twoDevices();
+	t.after(cleanup);
+
+	await a.edit("old.md", "body\n");
+	await a.sync();
+	await b.sync();
+
+	await a.rename("old.md", "new.md");
+	await b.edit("old.md", "body, edited\n");
+	await a.sync();
+	await b.sync();
+	await b.sync();
+	await a.sync();
+
+	const everywhere = { ...(await a.vault.snapshot()), ...(await b.vault.snapshot()) };
+	const texts = Object.values(everywhere);
+	assert.ok(
+		texts.some((t) => t.includes("body, edited")),
+		"the edit made against the old name must exist somewhere",
+	);
+});
+
+test("two devices creating the same path from nothing keep both texts", async (t) => {
+	const { a, b, cleanup } = await twoDevices();
+	t.after(cleanup);
+
+	await a.edit("same.md", "written on the mac\n");
+	await b.edit("same.md", "written on the phone\n");
+	await a.sync();
+	await b.sync();
+
+	const files = await b.vault.snapshot();
+	const all = Object.values(files).join("\n");
+	assert.match(all, /written on the mac/);
+	assert.match(all, /written on the phone/, "neither first draft may be thrown away");
+});
+
+test("excluded paths never leave the device", async (t) => {
+	const { a, b, cleanup } = await twoDevices();
+	t.after(cleanup);
+
+	a.settings.excludes.push("private/");
+	await a.edit("private/secret.md", "not for the server\n");
+	await a.edit("shared.md", "this one travels\n");
+	await a.sync();
+	await b.sync();
+
+	assert.equal(await b.vault.exists("shared.md"), true);
+	assert.equal(await b.vault.exists("private/secret.md"), false);
+});
+
+test("a lost index is rebuilt without losing anything", async (t) => {
+	const { a, b, cleanup } = await twoDevices();
+	t.after(cleanup);
+
+	await a.edit("note.md", "content\n");
+	await a.sync();
+	await b.sync();
+
+	// The index is a cache. Losing it should cost time, not text.
+	b.index.reset();
+	await b.index.save();
+	const report = await b.sync();
+
+	assert.equal(await b.vault.read("note.md"), "content\n");
+	assert.equal(report.conflicts, 0, "identical content must not look like a conflict");
+});
+
+test("a rename that only changes case arrives intact", async (t) => {
+	const { a, b, cleanup } = await twoDevices();
+	t.after(cleanup);
+
+	await a.edit("note.md", "body\n");
+	await a.sync();
+	await b.sync();
+
+	await a.rename("note.md", "Note.md");
+	await a.sync();
+	await b.sync();
+
+	assert.equal(await b.vault.read("Note.md"), "body\n");
+});
+
+test("notes written before encryption was turned on still read afterwards", async (t) => {
+	const server = await startServer();
+	const a = await makeDevice(server, "mac", server.tokens.a);
+	t.after(async () => {
+		await a.cleanup();
+		await server.stop();
+	});
+
+	await a.edit("early.md", "written in the clear\n");
+	await a.sync();
+
+	const { cipher } = await VaultCipher.create("later passphrase", {
+		iterations: 1,
+		memory_kib: 64,
+	});
+	a.setCipher(cipher);
+	a.index.reset();
+	await a.sync();
+
+	assert.equal(await a.vault.read("early.md"), "written in the clear\n");
+	// A vault can be encrypted gradually instead of in one frightening step.
+});
+
+test("a server that goes away and comes back loses nothing", async (t) => {
+	const { server, a, b, cleanup } = await twoDevices();
+	t.after(cleanup);
+
+	await a.edit("before.md", "written before the outage\n");
+	await a.sync();
+	await b.sync();
+
+	// The client keeps working against a server that is simply not answering.
+	await a.edit("during.md", "written while it was down\n");
+	const url = a.settings.serverUrl;
+	a.settings.serverUrl = "http://127.0.0.1:9";
+	await a.sync().catch(() => {});
+	assert.equal(await a.vault.read("during.md"), "written while it was down\n");
+
+	a.settings.serverUrl = url;
+	await a.sync();
+	await b.sync();
+	assert.equal(await b.vault.read("during.md"), "written while it was down\n");
+	void server;
+});

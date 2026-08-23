@@ -203,13 +203,30 @@ export class SyncEngine {
 		// history in Obsidian instead of making it look like a delete plus a download.
 		if (entry.renamed_from) {
 			const from = toNFC(entry.renamed_from);
-			if (!this.isExcluded(from) && (await adapter.exists(from)) && !(await adapter.exists(path))) {
+			// Changing only the letter case is a rename to itself on macOS, iOS and
+			// Windows, where the filesystem does not distinguish the two names. Asking
+			// whether the destination exists answers yes, about the source, and the move
+			// used to be skipped: the index believed the new name while the disk kept
+			// the old one forever.
+			const caseOnly = from !== path && from.toLowerCase() === path.toLowerCase();
+			const destTaken = !caseOnly && (await adapter.exists(path));
+			if (!this.isExcluded(from) && (await adapter.exists(from)) && !destTaken) {
 				const local = await adapter.readBinary(from);
 				if ((await sha256(local)) === entry.hash) {
 					this.suppressed.add(from);
 					this.suppressed.add(path);
 					await this.ensureParent(path);
-					await adapter.rename(from, path);
+					if (caseOnly) {
+						// Two steps through a name that collides with neither, because one
+						// step is a no-op where case is not part of identity.
+						const parked = `${path}.lockstep-${Date.now()}`;
+						this.suppressed.add(parked);
+						await adapter.rename(from, parked);
+						await adapter.rename(parked, path);
+						this.suppressed.delete(parked);
+					} else {
+						await adapter.rename(from, path);
+					}
 					setTimeout(() => {
 						this.suppressed.delete(from);
 						this.suppressed.delete(path);
