@@ -93,6 +93,8 @@ const en: Dict = {
 
 	"error.sync": "Sync",
 
+	"cmd.benchmark": "Measure key derivation on this device",
+	"notice.benchmarking": "Lockstep: measuring, this takes a few seconds…",
 	"cmd.test": "Test connection to the server",
 	"cmd.pull": "Download everything from the server",
 
@@ -200,6 +202,8 @@ const ru: Dict = {
 
 	"error.sync": "Синхронизация",
 
+	"cmd.benchmark": "Замерить выведение ключа на этом устройстве",
+	"notice.benchmarking": "Lockstep: меряю, это займёт несколько секунд…",
 	"cmd.test": "Проверить соединение с сервером",
 	"cmd.pull": "Скачать всё с сервера",
 

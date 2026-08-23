@@ -67,6 +67,11 @@ export default class LockstepPlugin extends Plugin {
 		});
 		this.addCommand({ id: "pull-all", name: t("cmd.pull"), callback: () => void this.pullAll() });
 		this.addCommand({
+			id: "benchmark-kdf",
+			name: t("cmd.benchmark"),
+			callback: () => void this.benchmark(),
+		});
+		this.addCommand({
 			id: "resolve-conflicts",
 			name: t("cmd.conflicts"),
 			callback: () => this.openConflicts(),
@@ -315,6 +320,17 @@ export default class LockstepPlugin extends Plugin {
 		this.setStatus(this.cipherStatus);
 		if (!quiet) new Notice(`Lockstep: ${this.cipherStatus}`, 8000);
 		return true;
+	}
+
+	/** Measure key derivation here, on this device, instead of guessing. */
+	private async benchmark(): Promise<void> {
+		new Notice(t("notice.benchmarking"), 5000);
+		const { benchmarkKdf, reportBenchmark } = await import("./kdf-benchmark");
+		try {
+			reportBenchmark(await benchmarkKdf());
+		} catch (e) {
+			this.reportError(t("cmd.benchmark"), e);
+		}
 	}
 
 	async testConnection(): Promise<void> {
