@@ -1,24 +1,24 @@
 // SPDX-License-Identifier: MIT
 
-import { Notice, Plugin, normalizePath } from "obsidian";
-import { SyncClient, ApiError, type ChangeEntry } from "./api";
+import { Notice, Plugin, TAbstractFile, normalizePath } from "obsidian";
+import { ApiError, SyncClient, type ChangeEntry } from "./api";
+import { t } from "./i18n";
 import { LocalIndex } from "./index-store";
 import { conflictName, sha256, toNFC } from "./paths";
+import { SyncEngine, type SyncReport } from "./sync-engine";
 import { DEFAULT_SETTINGS, SyncSettingsTab, type SyncSettings } from "./settings";
-import { t } from "./i18n";
 
-/**
- * Settings, a connection check and downloading the vault from the server.
- *
- * Uploading is not wired up yet. Until the merge path is finished the plugin
- * deliberately cannot write to the server, so unfinished sync logic never touches
- * a live vault.
- */
+/** How long to wait after the last edit before syncing. Obsidian fires on every keystroke. */
+const DEBOUNCE_MS = 2500;
+
 export default class LockstepPlugin extends Plugin {
 	override settings: SyncSettings = { ...DEFAULT_SETTINGS };
 	index!: LocalIndex;
+	private engine!: SyncEngine;
 	private statusBar: HTMLElement | null = null;
 	private lastStatus = t("status.notConnected");
+	private debounce: ReturnType<typeof setTimeout> | null = null;
+	private interval: number | null = null;
 
 	override async onload(): Promise<void> {
 		await this.loadSettings();
@@ -27,23 +27,45 @@ export default class LockstepPlugin extends Plugin {
 		this.index = new LocalIndex(this.app.vault.adapter, dir);
 		await this.index.load();
 
+		this.engine = new SyncEngine({
+			app: this.app,
+			index: this.index,
+			settings: this.settings,
+			client: () => this.client(false),
+			onConflict: (path, copy) => new Notice(t("notice.conflict", { path, copy }), 12000),
+			log: (message, error) => console.warn(`[lockstep-sync] ${message}`, error ?? ""),
+		});
+
 		this.addSettingTab(new SyncSettingsTab(this.app, this));
 		this.statusBar = this.addStatusBarItem();
 		this.setStatus(t("status.index", { files: this.index.size, seq: this.index.lastSeq }));
 
+		this.addCommand({ id: "sync-now", name: t("cmd.sync"), callback: () => void this.syncNow() });
 		this.addCommand({
 			id: "test-connection",
 			name: t("cmd.test"),
 			callback: () => void this.testConnection(),
 		});
-		this.addCommand({
-			id: "pull-all",
-			name: t("cmd.pull"),
-			callback: () => void this.pullAll(),
+		this.addCommand({ id: "pull-all", name: t("cmd.pull"), callback: () => void this.pullAll() });
+
+		// The vault is only watched once the workspace is ready. Obsidian replays the
+		// whole tree as create events while it starts, and treating those as edits
+		// would mark every file dirty on every launch.
+		this.app.workspace.onLayoutReady(() => {
+			this.registerVaultEvents();
+			this.restartAutoSync();
+			if (this.settings.autoSync) void this.syncNow(true);
+		});
+
+		// Mobile kills the app in the background, so the queue is flushed on the way out.
+		this.registerDomEvent(window, "blur", () => void this.flush());
+		this.registerDomEvent(document, "visibilitychange", () => {
+			if (document.hidden) void this.flush();
 		});
 	}
 
 	override async onunload(): Promise<void> {
+		if (this.debounce) clearTimeout(this.debounce);
 		await this.index.save();
 	}
 
@@ -53,6 +75,7 @@ export default class LockstepPlugin extends Plugin {
 
 	async saveSettings(): Promise<void> {
 		await this.saveData(this.settings);
+		this.engine?.updateSettings(this.settings);
 	}
 
 	statusLine(): string {
@@ -64,16 +87,122 @@ export default class LockstepPlugin extends Plugin {
 		this.statusBar?.setText(`${t("status.prefix")}: ${text}`);
 	}
 
-	private client(): SyncClient | null {
+	private client(complain = true): SyncClient | null {
 		if (!this.settings.serverUrl || !this.settings.token) {
-			new Notice(t("notice.noConfig"));
+			if (complain) new Notice(t("notice.noConfig"));
 			return null;
 		}
 		return new SyncClient(this.settings.serverUrl, this.settings.token);
 	}
 
-	private isExcluded(path: string): boolean {
-		return this.settings.excludes.some((p) => path === p || path.startsWith(p));
+	// --- watching the vault ---------------------------------------------------
+
+	private registerVaultEvents(): void {
+		const mark = (file: TAbstractFile) => this.markDirty(file.path);
+		this.registerEvent(this.app.vault.on("create", mark));
+		this.registerEvent(this.app.vault.on("modify", mark));
+		this.registerEvent(this.app.vault.on("delete", mark));
+		this.registerEvent(
+			this.app.vault.on("rename", (file, oldPath) => this.onRename(file.path, oldPath)),
+		);
+	}
+
+	private markDirty(rawPath: string): void {
+		const path = toNFC(rawPath);
+		if (this.engine.isSuppressed(path) || this.engine.isExcluded(path)) return;
+		const known = this.index.get(path);
+		this.index.set(path, {
+			base_rev: known?.base_rev ?? 0,
+			base_hash: known?.base_hash ?? "",
+			local_hash: known?.local_hash ?? "",
+			mtime: Date.now(),
+			dirty: true,
+		});
+		this.scheduleSync();
+	}
+
+	private onRename(rawTo: string, rawFrom: string): void {
+		const to = toNFC(rawTo);
+		const from = toNFC(rawFrom);
+		if (this.engine.isSuppressed(to) || this.engine.isSuppressed(from)) return;
+		if (this.engine.isExcluded(to) || this.engine.isExcluded(from)) return;
+
+		const known = this.index.get(from);
+		if (known && known.base_rev > 0) {
+			this.index.queueRename({ from, to, base_rev: known.base_rev });
+			this.index.set(to, { ...known, mtime: Date.now(), dirty: known.dirty ?? false });
+			this.index.remove(from);
+		} else {
+			// The server has never seen this file, so there is nothing to move. It goes
+			// up as an ordinary new file under its new name.
+			this.markDirty(to);
+		}
+		this.scheduleSync();
+	}
+
+	private scheduleSync(): void {
+		if (!this.settings.autoSync) return;
+		if (this.debounce) clearTimeout(this.debounce);
+		this.debounce = setTimeout(() => void this.syncNow(true), DEBOUNCE_MS);
+	}
+
+	restartAutoSync(): void {
+		if (this.interval !== null) {
+			window.clearInterval(this.interval);
+			this.interval = null;
+		}
+		if (!this.settings.autoSync) return;
+		const ms = Math.max(15, this.settings.intervalSeconds) * 1000;
+		this.interval = window.setInterval(() => void this.syncNow(true), ms);
+		this.registerInterval(this.interval);
+	}
+
+	/** Force a pass right now, used when the app is about to be suspended. */
+	private async flush(): Promise<void> {
+		if (!this.settings.autoSync) return;
+		if (this.debounce) {
+			clearTimeout(this.debounce);
+			this.debounce = null;
+		}
+		await this.syncNow(true);
+	}
+
+	// --- the operations -------------------------------------------------------
+
+	async syncNow(quiet = false): Promise<void> {
+		if (!this.client(!quiet)) return;
+		if (this.engine.busy) return;
+		const started = Date.now();
+		this.setStatus(t("status.syncing"));
+		if (!quiet) new Notice(t("notice.syncing"));
+		try {
+			const report = await this.engine.sync();
+			const secs = ((Date.now() - started) / 1000).toFixed(1);
+			this.report(report, secs, quiet);
+			if (this.engine.takeQueued()) this.scheduleSync();
+		} catch (e) {
+			this.reportError(t("error.sync"), e);
+		}
+	}
+
+	private report(report: SyncReport, secs: string, quiet: boolean): void {
+		const touched =
+			report.downloaded + report.uploaded + report.merged + report.conflicts + report.deleted;
+		const line =
+			touched === 0
+				? t("status.upToDate", { seq: this.index.lastSeq })
+				: t("status.syncSummary", {
+						secs,
+						downloaded: report.downloaded,
+						uploaded: report.uploaded,
+						merged: report.merged,
+						conflicts: report.conflicts,
+					});
+		this.setStatus(line);
+		if (!quiet || report.conflicts > 0) new Notice(t("notice.syncDone", { summary: line }));
+		for (const err of report.errors.slice(0, 3)) {
+			new Notice(t("notice.error", { what: t("error.sync"), message: err }), 8000);
+		}
 	}
 
 	async testConnection(): Promise<void> {
@@ -101,40 +230,35 @@ export default class LockstepPlugin extends Plugin {
 	}
 
 	/**
-	 * Pulls the vault state from the server.
+	 * Take the whole vault from the server without sending anything back.
 	 *
-	 * The vault rule: nothing is overwritten silently. If a local file differs
-	 * from the server's, the local version is copied aside first — losing a note
-	 * is worse than seeing one extra file.
+	 * Kept as a separate operation from the sync: it is what you run on a new device,
+	 * and it never deletes a local file. Anything that differs is copied aside first.
 	 */
 	async pullAll(): Promise<void> {
 		const client = this.client();
 		if (!client) return;
-
 		let since = 0;
 		let downloaded = 0;
 		let kept = 0;
 		let skipped = 0;
 		const started = Date.now();
 		new Notice(t("notice.pullStarted"));
-
 		try {
 			for (;;) {
 				const page = await client.changes(since, 200);
 				for (const entry of page.entries) {
 					const path = toNFC(entry.path);
-					if (this.isExcluded(path)) {
+					if (this.engine.isExcluded(path)) {
 						skipped++;
 						continue;
 					}
-					const result = await this.applyRemote(client, entry, path);
+					const result = await this.applyOneWay(client, entry, path);
 					if (result === "downloaded") downloaded++;
 					else if (result === "conflict-copy") {
 						downloaded++;
 						kept++;
 					} else skipped++;
-
-					// Checkpoint after every file: the app can die right here.
 					this.index.setLastSeq(entry.seq);
 					await this.index.save();
 				}
@@ -143,7 +267,6 @@ export default class LockstepPlugin extends Plugin {
 				if (!page.has_more) break;
 			}
 			await this.index.save();
-
 			const secs = ((Date.now() - started) / 1000).toFixed(1);
 			const line = t("status.pullSummary", { downloaded, skipped, kept, secs });
 			this.setStatus(line);
@@ -154,7 +277,7 @@ export default class LockstepPlugin extends Plugin {
 		}
 	}
 
-	private async applyRemote(
+	private async applyOneWay(
 		client: SyncClient,
 		entry: ChangeEntry,
 		path: string,
@@ -172,11 +295,8 @@ export default class LockstepPlugin extends Plugin {
 			});
 			return "downloaded";
 		}
-
 		if (entry.deleted) {
-			// A download deliberately does NOT delete local files: pulling from the
-			// server must never be able to erase a vault. Deletions are applied only
-			// once the full two-way index is in place.
+			// A one-way download must never be able to erase a vault.
 			this.index.remove(path);
 			return "skipped";
 		}
@@ -193,25 +313,34 @@ export default class LockstepPlugin extends Plugin {
 				});
 				return "skipped";
 			}
-			// They differ — keep the local version aside before writing the server's.
-			const backup = conflictName(path, this.deviceLabel(), new Date());
+			const backup = conflictName(path, this.settings.deviceName || t("conflict.label"), new Date());
 			await adapter.writeBinary(backup, local);
 			await this.writeFromServer(client, entry, path);
 			return "conflict-copy";
 		}
 
-		await this.ensureParent(path);
 		await this.writeFromServer(client, entry, path);
 		return "downloaded";
 	}
 
-	private async writeFromServer(client: SyncClient, entry: ChangeEntry, path: string): Promise<void> {
+	private async writeFromServer(
+		client: SyncClient,
+		entry: ChangeEntry,
+		path: string,
+	): Promise<void> {
 		const { data, hash } = await client.getFile(path, entry.rev);
 		const actual = await sha256(data);
 		if (entry.hash && actual !== entry.hash) {
 			throw new Error(
 				t("error.corruptDownload", { path, want: entry.hash ?? "", got: actual }),
 			);
+		}
+		const slash = path.lastIndexOf("/");
+		if (slash > 0) {
+			const dir = path.slice(0, slash);
+			if (!(await this.app.vault.adapter.exists(dir))) {
+				await this.app.vault.adapter.mkdir(dir);
+			}
 		}
 		await this.app.vault.adapter.writeBinary(path, data);
 		this.index.set(path, {
@@ -220,19 +349,6 @@ export default class LockstepPlugin extends Plugin {
 			local_hash: actual,
 			mtime: entry.mtime,
 		});
-	}
-
-	private async ensureParent(path: string): Promise<void> {
-		const slash = path.lastIndexOf("/");
-		if (slash <= 0) return;
-		const dir = path.slice(0, slash);
-		if (!(await this.app.vault.adapter.exists(dir))) {
-			await this.app.vault.adapter.mkdir(dir);
-		}
-	}
-
-	private deviceLabel(): string {
-		return this.settings.deviceName || t("conflict.label");
 	}
 
 	private reportError(what: string, e: unknown): void {

@@ -10,6 +10,9 @@ export interface SyncSettings {
 	deviceName: string;
 	/** Paths that never leave this device, whatever else is configured. */
 	excludes: string[];
+	autoSync: boolean;
+	/** Seconds between background passes. */
+	intervalSeconds: number;
 }
 
 export const DEFAULT_SETTINGS: SyncSettings = {
@@ -18,6 +21,8 @@ export const DEFAULT_SETTINGS: SyncSettings = {
 	deviceName: "",
 	// workspace.json holds window state: it differs per device and only gets in the way.
 	excludes: [".obsidian/workspace.json", ".obsidian/workspace-mobile.json", ".trash/"],
+	autoSync: true,
+	intervalSeconds: 60,
 };
 
 export class SyncSettingsTab extends PluginSettingTab {
@@ -85,7 +90,42 @@ export class SyncSettingsTab extends PluginSettingTab {
 				}),
 			);
 
+		new Setting(containerEl)
+			.setName(t("settings.autoSync.name"))
+			.setDesc(t("settings.autoSync.desc"))
+			.addToggle((toggle) =>
+				toggle.setValue(this.plugin.settings.autoSync).onChange(async (v) => {
+					this.plugin.settings.autoSync = v;
+					await this.plugin.saveSettings();
+					this.plugin.restartAutoSync();
+				}),
+			);
+
+		new Setting(containerEl)
+			.setName(t("settings.interval.name"))
+			.setDesc(t("settings.interval.desc"))
+			.addText((text) =>
+				text
+					.setValue(String(this.plugin.settings.intervalSeconds))
+					.onChange(async (v) => {
+						const n = Number(v);
+						if (!Number.isFinite(n)) return;
+						this.plugin.settings.intervalSeconds = Math.max(15, Math.round(n));
+						await this.plugin.saveSettings();
+						this.plugin.restartAutoSync();
+					}),
+			);
+
 		new Setting(containerEl).setName(t("settings.section.maintenance")).setHeading();
+
+		new Setting(containerEl)
+			.setName(t("settings.sync.name"))
+			.setDesc(t("settings.sync.desc"))
+			.addButton((b) =>
+				b.setCta().setButtonText(t("settings.sync.button")).onClick(async () => {
+					await this.plugin.syncNow();
+				}),
+			);
 
 		new Setting(containerEl)
 			.setName(t("settings.test.name"))

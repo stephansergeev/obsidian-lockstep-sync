@@ -47,6 +47,15 @@ one of them is frightening.
 Content is addressed by its sha256. Deduplication and full revision history come out of
 that for free.
 
+When both sides changed the same file, the plugin fetches the common ancestor and merges
+line by line. Edits in different parts of a note merge without asking. Edits to the same
+lines produce conflict markers in a copy placed beside the file, and the file itself takes
+the server version, so nothing has to be reconstructed from memory. Binary files and
+anything over a megabyte are never merged: both versions are kept.
+
+An edit always beats a deletion. Delete a note on one device while editing it on another and
+it comes back, because a note that reappears is an annoyance and a note that vanishes is not.
+
 ## Running the server
 
 Build it, issue a token, start it:
@@ -98,6 +107,10 @@ npm run build
 Then enable the plugin, paste the server address and the token, and give the device a name.
 The name shows up in conflict copies, so you can tell which device an edit came from.
 
+After that it runs on its own. A pass fires a couple of seconds after you stop typing, on a
+timer, and when the app goes to the background, which on a phone is the moment before it
+gets killed. There is a Sync now command as well.
+
 The interface is in English and switches to Russian on its own when Obsidian itself runs in
 Russian.
 
@@ -122,12 +135,12 @@ of this went near a live vault.
 
 ## Where it stands today
 
-The server and the protocol are done and tested. The plugin reads the vault from the
-server, and anything that differs locally is kept as a copy beside the original rather than
-overwritten.
+Sync runs both ways. Edits, deletions and renames travel in both directions, conflicts merge
+line by line, and overlapping edits produce a copy rather than a decision.
 
-Uploading from the plugin, conflict merging and encryption are being finished now. Until
-they land, run this against a test vault rather than the one you care about.
+Encryption is not implemented yet, so the server sees your notes in the clear. Run this
+against a server you control and a vault you are willing to test with, and wait for
+encryption before pointing it at anything sensitive.
 
 ## Dependencies
 

@@ -21,17 +21,30 @@ export interface IndexEntry {
 	dirty?: boolean;
 }
 
+/** A local rename that has not reached the server yet. */
+export interface PendingRename {
+	from: string;
+	to: string;
+	base_rev: number;
+}
+
 interface IndexFile {
 	version: 1;
 	last_seq: number;
 	device_id: string;
 	files: Record<string, IndexEntry>;
+	/**
+	 * Renames waiting to be sent, kept on disk rather than in memory. If the app dies
+	 * between the rename and the next sync, an in-memory queue would turn the move
+	 * into a delete plus a create on every other device.
+	 */
+	renames: PendingRename[];
 }
 
-const EMPTY: IndexFile = { version: 1, last_seq: 0, device_id: "", files: {} };
+const EMPTY: IndexFile = { version: 1, last_seq: 0, device_id: "", files: {}, renames: [] };
 
 export class LocalIndex {
-	private data: IndexFile = { ...EMPTY, files: {} };
+	private data: IndexFile = { ...EMPTY, files: {}, renames: [] };
 	private saving: Promise<void> | null = null;
 	private pending = false;
 
@@ -53,7 +66,7 @@ export class LocalIndex {
 				const raw = await this.adapter.read(candidate);
 				const parsed = JSON.parse(raw) as IndexFile;
 				if (parsed && parsed.version === 1 && parsed.files) {
-					this.data = parsed;
+					this.data = { ...parsed, renames: parsed.renames ?? [] };
 					return;
 				}
 			} catch {
@@ -61,7 +74,7 @@ export class LocalIndex {
 				// worst outcome is that the next sync reads more than it needed to.
 			}
 		}
-		this.data = { ...EMPTY, files: {} };
+		this.data = { ...EMPTY, files: {}, renames: [] };
 	}
 
 	get lastSeq(): number {
@@ -96,7 +109,28 @@ export class LocalIndex {
 
 	reset(): void {
 		const id = this.data.device_id;
-		this.data = { ...EMPTY, device_id: id, files: {} };
+		this.data = { ...EMPTY, device_id: id, files: {}, renames: [] };
+	}
+
+	get renames(): PendingRename[] {
+		return this.data.renames;
+	}
+
+	queueRename(rename: PendingRename): void {
+		// A file renamed twice before a sync should travel as one move, from where the
+		// server still thinks it is to where it actually ended up.
+		const earlier = this.data.renames.find((r) => r.to === rename.from);
+		if (earlier) {
+			earlier.to = rename.to;
+			return;
+		}
+		this.data.renames.push(rename);
+	}
+
+	clearRename(rename: PendingRename): void {
+		this.data.renames = this.data.renames.filter(
+			(r) => !(r.from === rename.from && r.to === rename.to),
+		);
 	}
 
 	/**

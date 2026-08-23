@@ -34,6 +34,28 @@ const en: Dict = {
 	"settings.reset.desc": "The index is rebuilt on the next download. Vault files are left alone.",
 	"settings.reset.button": "Reset",
 
+	"settings.autoSync.name": "Sync automatically",
+	"settings.autoSync.desc":
+		"Sync a few seconds after an edit, on a timer, and when the app goes to the background.",
+	"settings.interval.name": "Timer interval",
+	"settings.interval.desc": "Seconds between background passes. Minimum 15.",
+	"settings.sync.name": "Sync now",
+	"settings.sync.desc": "Take what the server has, then send what this device has.",
+	"settings.sync.button": "Sync",
+
+	"cmd.sync": "Sync now",
+
+	"notice.syncing": "Lockstep: syncing…",
+	"notice.syncDone": "Lockstep: {summary}",
+	"notice.conflict": "Lockstep: both sides changed {path}. The merge is in {copy}",
+
+	"status.syncing": "syncing…",
+	"status.syncSummary":
+		"in {secs}s: {downloaded} down, {uploaded} up, {merged} merged, {conflicts} conflicts",
+	"status.upToDate": "up to date, seq {seq}",
+
+	"error.sync": "Sync",
+
 	"cmd.test": "Test connection to the server",
 	"cmd.pull": "Download everything from the server",
 
@@ -81,6 +103,28 @@ const ru: Dict = {
 	"settings.reset.name": "Сбросить локальный индекс",
 	"settings.reset.desc": "Индекс перестроится при следующем скачивании. Файлы волта не трогаются.",
 	"settings.reset.button": "Сбросить",
+
+	"settings.autoSync.name": "Синхронизировать автоматически",
+	"settings.autoSync.desc":
+		"Синк через несколько секунд после правки, по таймеру и при сворачивании приложения.",
+	"settings.interval.name": "Интервал таймера",
+	"settings.interval.desc": "Секунд между фоновыми проходами. Минимум 15.",
+	"settings.sync.name": "Синхронизировать сейчас",
+	"settings.sync.desc": "Забрать то, что есть на сервере, затем отправить то, что есть здесь.",
+	"settings.sync.button": "Синхронизировать",
+
+	"cmd.sync": "Синхронизировать сейчас",
+
+	"notice.syncing": "Lockstep: синхронизирую…",
+	"notice.syncDone": "Lockstep: {summary}",
+	"notice.conflict": "Lockstep: {path} правили с двух сторон. Слияние лежит в {copy}",
+
+	"status.syncing": "синхронизирую…",
+	"status.syncSummary":
+		"за {secs}с: скачано {downloaded}, отправлено {uploaded}, слито {merged}, конфликтов {conflicts}",
+	"status.upToDate": "всё синхронно, seq {seq}",
+
+	"error.sync": "Синхронизация",
 
 	"cmd.test": "Проверить соединение с сервером",
 	"cmd.pull": "Скачать всё с сервера",
