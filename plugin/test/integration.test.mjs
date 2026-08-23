@@ -470,17 +470,33 @@ test("with paths hidden, the server never learns a file name", async (t) => {
 
 	// A vault says a great deal through its names alone, before anything is opened.
 	await a.edit("Job search/Applications.md", "sent to three places\n");
-	await a.edit("Job search/CV.md", "the current version\n");
+	await a.edit("Job search/Curriculum.md", "the current version\n");
 	await a.sync();
 
-	const log = JSON.stringify(await server.rawChanges(server.tokens.a));
-	for (const word of ["Job", "search", "Applications", "CV", ".md", "three places"]) {
-		assert.equal(log.includes(word), false, `the server can see ${JSON.stringify(word)}`);
+	const log = await server.rawChanges(server.tokens.a);
+	const asText = JSON.stringify(log);
+
+	// Only words long enough that finding one by chance is not a coin toss. A short
+	// string like "CV" turns up in base64 by luck, and an assertion that passes by
+	// luck is worse than no assertion: it fails on somebody else's machine, months
+	// later, and looks like a real bug.
+	for (const word of ["search", "Applications", "Curriculum", "three places", "current version"]) {
+		assert.equal(asText.includes(word), false, `the server can see ${JSON.stringify(word)}`);
+	}
+
+	// Stronger than looking for words: no path the server stored may be a path the
+	// vault would recognise.
+	const stored = log.entries.map((e) => e.path);
+	assert.equal(stored.length, 2);
+	for (const p of stored) {
+		assert.equal(p.includes("Job search"), false);
+		assert.equal(p.endsWith(".md"), false, "even the kind of file is a leak");
+		assert.equal(p.split("/").length, 2, "though the shape of the tree is not hidden");
 	}
 
 	await b.sync();
 	assert.equal(await b.vault.read("Job search/Applications.md"), "sent to three places\n");
-	assert.equal(await b.vault.read("Job search/CV.md"), "the current version\n");
+	assert.equal(await b.vault.read("Job search/Curriculum.md"), "the current version\n");
 });
 
 test("hidden paths survive renames and deletions between devices", async (t) => {
