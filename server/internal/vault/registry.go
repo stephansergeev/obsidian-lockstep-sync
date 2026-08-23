@@ -1,9 +1,10 @@
 // SPDX-License-Identifier: MIT
 
-// Package vault — реестр волтов на диске.
+// Package vault is the on-disk registry of vaults.
 //
-// Один волт = свой каталог: meta.db (SQLite) + blobs/. Мультиволт достаётся без
-// vault_id в схеме и без мультитенантности: токен просто указывает, какой каталог открыть.
+// One vault = one directory: meta.db (SQLite) + blobs/. Multi-vault support comes
+// without a vault_id column and without multi-tenancy: a token simply says which
+// directory to open.
 package vault
 
 import (
@@ -32,7 +33,7 @@ func NewRegistry(root string) *Registry {
 	return &Registry{root: root, open: map[string]entry{}}
 }
 
-// Get открывает волт лениво и кеширует соединение.
+// Get opens a vault lazily and caches the connection.
 func (r *Registry) Get(name string) (*store.Store, *blob.Store, error) {
 	if !auth.ValidVault(name) {
 		return nil, nil, fmt.Errorf("invalid vault name %q", name)
@@ -68,7 +69,7 @@ func (r *Registry) Close() {
 	r.open = map[string]entry{}
 }
 
-// List перечисляет волты, которые уже есть на диске.
+// List enumerates the vaults that already exist on disk.
 func (r *Registry) List() ([]string, error) {
 	ents, err := os.ReadDir(filepath.Join(r.root, "vaults"))
 	if os.IsNotExist(err) {

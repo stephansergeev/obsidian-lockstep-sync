@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: MIT
 
-// Команда sync-server — весь сервер в одном статическом бинарнике.
+// Command sync-server is the whole server in one static binary.
 //
 //	sync-server serve            --data ./data --addr :8080
 //	sync-server token add        --vault main --name iphone
@@ -36,24 +36,24 @@ func main() {
 }
 
 func usage() error {
-	fmt.Fprint(os.Stderr, `sync-server — self-hosted Obsidian sync
+	fmt.Fprint(os.Stderr, `sync-server - self-hosted Obsidian vault sync
 
   serve   [--data DIR] [--addr HOST:PORT] [--max-upload BYTES]
   token   add --vault NAME --name DEVICE | list | revoke --name DEVICE
   stats   --vault NAME
   import  --from DIR [--vault NAME] [--with-config] [--dry-run]
 
-Каталог данных по умолчанию: ./data (переопределяется OBSIDIAN_SYNC_DATA).
+Data directory defaults to ./data (override with LOCKSTEP_DATA).
 `)
 	return errors.New("no command given")
 }
 
 func dataDir(fs *flag.FlagSet) *string {
-	def := os.Getenv("OBSIDIAN_SYNC_DATA")
+	def := os.Getenv("LOCKSTEP_DATA")
 	if def == "" {
 		def = "./data"
 	}
-	return fs.String("data", def, "каталог данных сервера")
+	return fs.String("data", def, "server data directory")
 }
 
 func run(args []string) error {
@@ -86,8 +86,8 @@ func openAuth(dir string) (*auth.Store, error) {
 func serve(args []string) error {
 	fs := flag.NewFlagSet("serve", flag.ExitOnError)
 	data := dataDir(fs)
-	addr := fs.String("addr", "127.0.0.1:8080", "адрес прослушивания (TLS вешается снаружи)")
-	maxUpload := fs.Int64("max-upload", 512<<20, "лимит на размер одного файла, байт; 0 — без лимита")
+	addr := fs.String("addr", "127.0.0.1:8080", "listen address (TLS is terminated in front of this)")
+	maxUpload := fs.Int64("max-upload", 512<<20, "per-file size limit in bytes; 0 means no limit")
 	if err := fs.Parse(args); err != nil {
 		return err
 	}
@@ -109,8 +109,8 @@ func serve(args []string) error {
 		Handler:           srv.Handler(),
 		ReadHeaderTimeout: 15 * time.Second,
 		IdleTimeout:       90 * time.Second,
-		// WriteTimeout намеренно не выставлен: крупные вложения качаются долго,
-		// а обрыв на середине выгрузки — это ровно тот сценарий, который мы чиним.
+		// WriteTimeout is deliberately unset: large attachments take a long time, and
+		// a cut-off mid-transfer is exactly the failure this project exists to fix.
 	}
 
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
@@ -143,13 +143,13 @@ func token(args []string) error {
 	case "add":
 		fs := flag.NewFlagSet("token add", flag.ExitOnError)
 		data := dataDir(fs)
-		vaultName := fs.String("vault", "main", "имя волта")
-		name := fs.String("name", "", "имя устройства (обязательно)")
+		vaultName := fs.String("vault", "main", "vault name")
+		name := fs.String("name", "", "device name (required)")
 		if err := fs.Parse(args[1:]); err != nil {
 			return err
 		}
 		if *name == "" {
-			return errors.New("--name обязателен")
+			return errors.New("--name is required")
 		}
 		st, err := openAuth(*data)
 		if err != nil {
@@ -160,7 +160,7 @@ func token(args []string) error {
 		if err != nil {
 			return err
 		}
-		fmt.Printf("Токен для %q (волт %q):\n\n  %s\n\nПоказывается один раз — на диске лежит только его sha256.\n", *name, *vaultName, tok)
+		fmt.Printf("Token for %q (vault %q):\n\n  %s\n\nShown once: only its sha256 is stored on disk.\n", *name, *vaultName, tok)
 		return nil
 
 	case "list":
@@ -179,12 +179,12 @@ func token(args []string) error {
 			return err
 		}
 		if len(toks) == 0 {
-			fmt.Println("токенов нет")
+			fmt.Println("no tokens")
 			return nil
 		}
 		fmt.Printf("%-20s %-16s %-20s %s\n", "DEVICE", "VAULT", "CREATED", "LAST SEEN")
 		for _, t := range toks {
-			seen := "никогда"
+			seen := "never"
 			if t.LastSeen.Unix() > 0 {
 				seen = t.LastSeen.Format(time.RFC3339)
 			}
@@ -195,7 +195,7 @@ func token(args []string) error {
 	case "revoke":
 		fs := flag.NewFlagSet("token revoke", flag.ExitOnError)
 		data := dataDir(fs)
-		name := fs.String("name", "", "имя устройства")
+		name := fs.String("name", "", "device name")
 		if err := fs.Parse(args[1:]); err != nil {
 			return err
 		}
@@ -208,7 +208,7 @@ func token(args []string) error {
 		if err != nil {
 			return err
 		}
-		fmt.Printf("отозвано токенов: %d\n", n)
+		fmt.Printf("tokens revoked: %d\n", n)
 		return nil
 	}
 	return fmt.Errorf("token: unknown subcommand %q", args[0])
@@ -217,7 +217,7 @@ func token(args []string) error {
 func stats(args []string) error {
 	fs := flag.NewFlagSet("stats", flag.ExitOnError)
 	data := dataDir(fs)
-	vaultName := fs.String("vault", "main", "имя волта")
+	vaultName := fs.String("vault", "main", "vault name")
 	if err := fs.Parse(args); err != nil {
 		return err
 	}
@@ -231,7 +231,7 @@ func stats(args []string) error {
 	if err != nil {
 		return err
 	}
-	fmt.Printf("волт      %s\nфайлов    %d\nпапок     %d\nудалено   %d\nбайт      %d\nревизий   %d\nseq       %d\n",
+	fmt.Printf("vault      %s\nfiles      %d\nfolders    %d\ndeleted    %d\nbytes      %d\nrevisions  %d\nseq        %d\n",
 		*vaultName, st.Files, st.Folders, st.Deleted, st.Bytes, st.Revs, st.Seq)
 	return nil
 }

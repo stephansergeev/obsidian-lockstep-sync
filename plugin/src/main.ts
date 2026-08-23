@@ -8,11 +8,11 @@ import { DEFAULT_SETTINGS, SyncSettingsTab, type SyncSettings } from "./settings
 import { t } from "./i18n";
 
 /**
- * M0: settings, a connection check and a one-way download from the server.
+ * Settings, a connection check and downloading the vault from the server.
  *
- * Two-way sync, vault watching and conflict merging arrive in M1. Until then the
- * plugin deliberately cannot write to the server, so unfinished sync logic never
- * touches a live vault.
+ * Uploading is not wired up yet. Until the merge path is finished the plugin
+ * deliberately cannot write to the server, so unfinished sync logic never touches
+ * a live vault.
  */
 export default class LockstepPlugin extends Plugin {
 	override settings: SyncSettings = { ...DEFAULT_SETTINGS };
@@ -174,8 +174,9 @@ export default class LockstepPlugin extends Plugin {
 		}
 
 		if (entry.deleted) {
-			// M0 deliberately does NOT delete local files: a one-way download must not
-			// be able to erase a vault. Deletions arrive in M1 with the full index.
+			// A download deliberately does NOT delete local files: pulling from the
+			// server must never be able to erase a vault. Deletions are applied only
+			// once the full two-way index is in place.
 			this.index.remove(path);
 			return "skipped";
 		}

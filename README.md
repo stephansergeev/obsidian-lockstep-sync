@@ -1,136 +1,149 @@
-# Obsidian Lockstep Sync
+# Lockstep Sync
 
-Двусторонняя синхронизация Obsidian-волта между десктопом и телефоном через **свой** сервер.
-Два устройства идут шаг в шаг — отсюда и название.
-Без подписок, без чужих облаков, без OAuth, без Docker и без CouchDB.
+Your Obsidian vault on every device, kept in step through a server you own.
 
-Состояние: **M0** — сервер и односторонняя загрузка работают. Двусторонний синк — M1.
+No subscription. Nobody else holding your notes. One binary and a SQLite file on a machine
+you control.
 
-## Почему ещё один синк
+## Why this exists
 
-Существующие решения закрывают задачу, но каждое тащит в контур то, чего здесь не хочется:
+Obsidian Sync works well and costs money, and your vault lives on servers that belong to
+someone else. The self-hosted alternatives solve that part and ask a lot in return.
+Self-hosted LiveSync needs a CouchDB instance, CORS rules and a reverse proxy. Synch and
+Osync need Docker or a Cloudflare account. Remotely Save needs an account with a cloud
+storage provider, which is the thing you were trying to avoid.
 
-- **Obsidian Sync** — подписка и чужие серверы.
-- **Remotely Save** — обход всего дерева на клиенте, синк по кнопке, слияние конфликтов в PRO.
-- **Self-hosted LiveSync** — сильный, но требует CouchDB, CORS, реверс-прокси и полдня сисадминства.
-- **Synch** — близко по идее, но хостед-версия живёт в Cloudflare.
+Lockstep needs one file. Copy it to a server, run it, paste a token into the plugin. That
+is the entire setup.
 
-Здесь — один статический бинарник на 15 МБ и SQLite. Скопировал на VPS, завёл systemd-юнит, готово.
+## How it works
 
-## Как это устроено
-
-Две программы. **Плагин** живёт внутри Obsidian на каждом устройстве. **Сервер** — отдельный
-бинарник, который вы запускаете у себя: на VPS, на домашнем NAS или прямо на своём ноутбуке.
-Общего сервера не существует, регистрации нет, аккаунтов нет — у каждого свой экземпляр
-и свои данные.
+There are two pieces. The plugin runs inside Obsidian on each of your devices. The server
+is a separate program you run yourself, on a VPS, a home NAS, a Raspberry Pi or your own
+laptop. There is no shared server, no account and no registration. Every user runs their
+own copy.
 
 ```
-   десктоп                    ваш сервер                  телефон
-┌──────────┐            ┌──────────────┐            ┌──────────┐
-│ Obsidian │            │ sync-server  │            │ Obsidian │
-│  плагин  │ ──PUT───▶  │  SQLite +    │  ◀─GET──── │  плагин  │
-│          │ ◀─changes─ │  blobs/      │  ──changes▶│          │
-└──────────┘            └──────────────┘            └──────────┘
+   desktop                     your server                   phone
+┌──────────┐             ┌──────────────┐             ┌──────────┐
+│ Obsidian │             │   lockstep   │             │ Obsidian │
+│  plugin  │ ──PUT────▶  │  SQLite +    │  ◀────GET── │  plugin  │
+│          │ ◀──changes─ │  blobs/      │  ──changes▶ │          │
+└──────────┘             └──────────────┘             └──────────┘
 ```
 
-Граница ответственности жёсткая: **сервер — это упорядоченный журнал и склад байтов, весь ум
-синхронизации живёт в плагине.** Сервер не знает, что такое markdown, не разрешает конфликты
-и не видит ключ шифрования. Подробнее — [`spec/architecture.md`](spec/architecture.md).
+The split of responsibility is deliberate. The server is an ordered log and a store of
+bytes. All the intelligence lives in the plugin. The server does not know what markdown is,
+never resolves a conflict and never sees your encryption key. That keeps it small enough to
+audit in an afternoon and boring enough to trust.
 
-## Устройство
+Changes are found by reading a delta, not by walking the vault. Every write carries the
+revision it was based on, so the server can tell a fresh edit from a stale one and answer
+with its own version instead of overwriting yours. Deletions are tombstones, so a file that
+disappears on one device can still be recovered from another. A rename travels as a rename,
+not as a delete followed by a create, because on the far end those two look identical and
+one of them is frightening.
 
-| | |
-|---|---|
-| Обнаружение изменений | серверный лог ревизий, дельта одним запросом по `seq` |
-| Конфликты | 409 с серверной ревизией и хешем → 3-way merge на клиенте |
-| Содержимое | адресуется по sha256, дедупликация и история даром |
-| Удаление | tombstone, никогда не `DELETE` |
-| Переименование | отдельная операция с `renamed_from`, не пара delete+create |
+Content is addressed by its sha256. Deduplication and full revision history come out of
+that for free.
 
-Полный контракт — [`spec/spec-v0.1.md`](spec/spec-v0.1.md).
+## Running the server
 
-## Сервер
-
-Скачать бинарник или собрать из исходников:
+Build it, issue a token, start it:
 
 ```bash
 cd server
 go build -o sync-server ./cmd/sync-server
 
-./sync-server token add --data ./data --vault main --name desk-01   # токен показывается один раз
+./sync-server token add --data ./data --vault main --name desk-01
 ./sync-server serve     --data ./data --addr 127.0.0.1:8080
 ```
 
-Для пробы хватит и одной машины: сервер по умолчанию слушает `127.0.0.1:8080`, и плагин
-на том же компьютере ходит на `http://127.0.0.1:8080`.
+The token is printed once. Only its sha256 is kept on disk.
 
-Для настоящей работы между устройствами TLS вешается снаружи (Caddy, nginx) — сервер слушает
-локально и сертификатами не занимается. Готовые заготовки лежат в [`ops/`](ops/):
-systemd-юнит с изоляцией процесса и Caddyfile.
+For a first look one machine is enough. The server listens on `127.0.0.1:8080` by default
+and the plugin on the same computer points at `http://127.0.0.1:8080`.
 
-**Токен по открытому HTTP отдавать нельзя.** Либо TLS, либо доверенная локальная сеть.
+For real use between devices, put TLS in front of it. The server listens locally and does
+not deal with certificates. A systemd unit with process isolation and a Caddyfile are in
+[`ops/`](ops/). Never send a token over plain HTTP outside a network you trust.
 
-Один волт = свой каталог `data/vaults/<имя>/` с собственной базой и blob-хранилищем.
-Мультиволт достаётся без `vault_id` в схеме: токен просто указывает, какой каталог открыть.
+If you already have a vault, load it into the server in one command:
 
-## Плагин
+```bash
+./sync-server import --data ./data --vault main --from ~/Vault
+```
+
+One vault is one directory under `data/vaults/`, with its own database and its own blob
+store. Several vaults on one server work without a tenant column in the schema. The token
+simply says which directory to open.
+
+## Installing the plugin
+
+The easiest route, and the only comfortable one on a phone, is BRAT. Install BRAT from the
+community catalogue, add `stephansergeev/obsidian-lockstep-sync` as a beta plugin, and it
+will fetch the release and keep it updated.
+
+By hand: take `main.js` and `manifest.json` from any release and drop them into
+`<vault>/.obsidian/plugins/lockstep-sync/`.
+
+From source:
 
 ```bash
 cd plugin
 npm install
-npm run build          # даёт main.js
+npm run build
 ```
 
-Готовые файлы лежат в каждом релизе. Три способа поставить:
+Then enable the plugin, paste the server address and the token, and give the device a name.
+The name shows up in conflict copies, so you can tell which device an edit came from.
 
-**BRAT** (проще всего, работает и на телефоне) — поставьте плагин BRAT из каталога сообщества,
-добавьте бета-плагин `stephansergeev/obsidian-lockstep-sync`, он сам скачает релиз и будет
-обновлять. На iOS это единственный способ не воевать со скрытой папкой `.obsidian`.
+The interface is in English and switches to Russian on its own when Obsidian itself runs in
+Russian.
 
-**Руками** — скопировать `main.js` и `manifest.json` из релиза в
-`<волт>/.obsidian/plugins/lockstep-sync/`.
+## Guarantees, not promises
 
-**Из исходников** — команды выше, затем скопировать `main.js` и `manifest.json` туда же.
+Every sync tool promises it is safe. This one publishes what that means.
 
-Дальше: включить плагин в настройках, вставить адрес сервера и токен.
-
-## Гарантии, а не фичи
-
-Тест-харнесс написан **до** синка и проверяет ровно один инвариант:
-**ни одна версия текста не исчезает молча.** Десять сценариев из §9 спеки —
-одновременная правка, удаление против правки, переименование против правки, обрыв связи,
-убийство клиента между записью и индексом, регистр в имени, NFC против NFD, большой файл,
-кривые часы, создание одного пути с двух сторон.
+The test harness was written before the sync itself. It spins up a real server, drives it
+through two devices, and checks a single invariant: no version of your text disappears
+quietly. Simultaneous edits from both sides. A deletion racing an edit. A rename racing an
+edit. A connection dropped mid-upload. A client killed between writing a file and updating
+its index. A rename that only changes letter case. The same filename in two Unicode forms,
+which is what happens between macOS and everything else. A hundred megabyte attachment. A
+device whose clock is a day fast. Two devices creating the same path from nothing.
 
 ```bash
 cd server && go test ./...
 ```
 
-Два бага в собственном сервере этот харнесс поймал в первый же прогон — до того, как
-что-либо коснулось живого волта.
+It runs on every commit. It found two real bugs in this server on its first run, before any
+of this went near a live vault.
 
-## Состояние
+## Where it stands today
 
-- **M0 — готово.** Сервер, протокол `/v1`, тест-харнесс, плагин с проверкой соединения
-  и односторонней загрузкой.
-- **M1 — в работе.** Наблюдатель волта, очередь загрузок, 3-way merge, шифрование.
-- **M2** — WebSocket push, докачка, история и восстановление в UI.
+The server and the protocol are done and tested. The plugin reads the vault from the
+server, and anything that differs locally is kept as a copy beside the original rather than
+overwritten.
 
-Плагин намеренно **не умеет писать на сервер** до M1: недоделанная логика синхронизации
-не должна трогать живой волт.
+Uploading from the plugin, conflict merging and encryption are being finished now. Until
+they land, run this against a test vault rather than the one you care about.
 
-## Авторство и лицензия
+## Dependencies
 
-Автор: Stephan Sergeev — https://github.com/stephansergeev
-Оригинальный репозиторий: https://github.com/stephansergeev/obsidian-lockstep-sync
+The server uses `modernc.org/sqlite`, which is pure Go and needs no cgo, and
+`golang.org/x/text` for Unicode normalisation. Nothing else. The binary is static and
+cross compiles anywhere.
 
-MIT — весь репозиторий, и сервер, и плагин. См. [LICENSE](LICENSE). Форки и производные
-работы разрешены; условие одно — сохранить текст лицензии и строку копирайта.
-Теги релизов подписаны.
+The plugin depends on the Obsidian typings and esbuild at build time, and on nothing at
+runtime.
 
-## Зависимости
+## Author and licence
 
-Сервер: `modernc.org/sqlite` (чистый Go, без cgo) и `golang.org/x/text` (NFC-нормализация).
-Всё. Бинарник статический, кросс-компилируется куда угодно.
+Written by Stephan Sergeev. https://github.com/stephansergeev
 
-Плагин: только `obsidian` (типы) и esbuild в сборке.
+Original repository: https://github.com/stephansergeev/obsidian-lockstep-sync
+
+MIT, for the whole repository, server and plugin alike. See [LICENSE](LICENSE). Forks and
+derivative work are fine. Keep the licence text and the copyright line. Release tags are
+signed.

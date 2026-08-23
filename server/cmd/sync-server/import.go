@@ -17,31 +17,31 @@ import (
 	"github.com/stephansergeev/obsidian-lockstep-sync/server/internal/vault"
 )
 
-// importVault заливает существующий волт с диска в волт на сервере.
+// importVault uploads an existing vault from disk into a vault on the server.
 //
-// Нужен для первого заезда: клиент качает с сервера, но сервер сначала должен
-// откуда-то узнать содержимое. Операция идемпотентна — повторный запуск не
-// плодит ревизии, потому что совпадение хеша на сервере это no-op.
+// It exists for the first run: the client downloads from the server, but the server
+// has to learn the content from somewhere first. The operation is idempotent — a
+// second run creates no revisions, because matching hashes are a no-op.
 func importVault(args []string) error {
 	fs_ := flag.NewFlagSet("import", flag.ExitOnError)
 	data := dataDir(fs_)
-	vaultName := fs_.String("vault", "main", "имя волта на сервере")
-	from := fs_.String("from", "", "каталог волта на диске (обязательно)")
-	withConfig := fs_.Bool("with-config", false, "заливать и .obsidian/ (по умолчанию нет)")
-	dryRun := fs_.Bool("dry-run", false, "только показать, что было бы залито")
-	device := fs_.String("as", "import", "чьим именем подписать изменения")
+	vaultName := fs_.String("vault", "main", "vault name on the server")
+	from := fs_.String("from", "", "vault directory on disk (required)")
+	withConfig := fs_.Bool("with-config", false, "include .obsidian/ as well (off by default)")
+	dryRun := fs_.Bool("dry-run", false, "only show what would be uploaded")
+	device := fs_.String("as", "import", "device name to attribute the changes to")
 	if err := fs_.Parse(args); err != nil {
 		return err
 	}
 	if *from == "" {
-		return errors.New("--from обязателен")
+		return errors.New("--from is required")
 	}
 	root, err := filepath.Abs(*from)
 	if err != nil {
 		return err
 	}
 	if st, err := os.Stat(root); err != nil || !st.IsDir() {
-		return fmt.Errorf("%s не каталог", root)
+		return fmt.Errorf("%s is not a directory", root)
 	}
 
 	reg := vault.NewRegistry(*data)
@@ -61,7 +61,7 @@ func importVault(args []string) error {
 		if err != nil || rel == "." {
 			return err
 		}
-		// На проводе разделитель всегда '/', даже если ОС думает иначе.
+		// On the wire the separator is always '/', whatever the OS thinks.
 		rel = norm.NFC.String(filepath.ToSlash(rel))
 
 		if d.IsDir() {
@@ -80,7 +80,7 @@ func importVault(args []string) error {
 			return err
 		}
 		if *dryRun {
-			fmt.Printf("  + %s (%d байт)\n", rel, info.Size())
+			fmt.Printf("  + %s (%d bytes)\n", rel, info.Size())
 			added++
 			bytes += info.Size()
 			return nil
@@ -123,17 +123,17 @@ func importVault(args []string) error {
 	}
 
 	seq, _ := files.Seq()
-	verb := "залито"
+	verb := "uploaded"
 	if *dryRun {
-		verb = "было бы залито"
+		verb = "would upload"
 	}
-	fmt.Printf("%s: %d файлов (%d байт), без изменений %d, пропущено %d, seq=%d\n",
+	fmt.Printf("%s: %d files (%d bytes), unchanged %d, skipped %d, seq=%d\n",
 		verb, added, bytes, unchanged, skipped, seq)
 	return nil
 }
 
-// skipDir и skipFile держат в стороне то, что синхронизировать бессмысленно
-// или вредно: служебные каталоги ОС, кеши и корзину Obsidian.
+// skipDir and skipFile keep out what is pointless or harmful to sync: OS metadata,
+// caches and Obsidian's own trash.
 func skipDir(rel string, withConfig bool) bool {
 	base := filepath.Base(rel)
 	switch base {
@@ -155,7 +155,7 @@ func skipFile(rel string, withConfig bool) bool {
 		if !withConfig {
 			return true
 		}
-		// Состояние окон у каждого устройства своё, синку оно только мешает.
+		// Window state is per-device and only gets in the way of syncing.
 		return base == "workspace.json" || base == "workspace-mobile.json"
 	}
 	return false

@@ -9,8 +9,8 @@ import type { DataAdapter } from "obsidian";
  * impossible and conflict resolution degrades to "keep whichever is newer" —
  * which means silently losing one of the two versions.
  *
- * M0 keeps the index in JSON. On a vault of thousands of files that becomes the
- * bottleneck; SQLite replaces it later behind the same interface.
+ * The index is JSON for now. On a vault of thousands of files that becomes the
+ * bottleneck; SQLite will replace it behind the same interface.
  */
 export interface IndexEntry {
 	base_rev: number;

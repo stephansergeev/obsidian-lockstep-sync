@@ -1,9 +1,10 @@
 // SPDX-License-Identifier: MIT
 
-// Package blob — контент-адресуемое хранилище: blobs/<sha256[0:2]>/<sha256>.
+// Package blob is content-addressed storage: blobs/<sha256[0:2]>/<sha256>.
 //
-// Даёт три вещи даром: дедупликацию, идемпотентную загрузку (повтор пишет тот же путь)
-// и историю — старая ревизия остаётся лежать, пока на неё ссылается запись в revisions.
+// It buys three things for free: deduplication, idempotent uploads (a retry writes
+// the same path) and history — an old revision stays on disk for as long as a row
+// in revisions still points at it.
 package blob
 
 import (
@@ -21,7 +22,7 @@ var ErrNotFound = errors.New("blob not found")
 
 var hashRe = regexp.MustCompile(`^[0-9a-f]{64}$`)
 
-// ValidHash отсекает попытки подсунуть путь вместо хеша.
+// ValidHash rejects attempts to pass a path where a hash is expected.
 func ValidHash(h string) bool { return hashRe.MatchString(h) }
 
 type Store struct {
@@ -39,9 +40,9 @@ func (s *Store) path(hash string) string {
 	return filepath.Join(s.root, hash[:2], hash)
 }
 
-// Put принимает поток, считает sha256 на лету и кладёт содержимое по хешу.
-// Запись всегда идёт через временный файл + rename: оборванная загрузка не может
-// оставить в хранилище обрезанный blob.
+// Put takes a stream, hashes it as it goes and stores the content under that hash.
+// Writes always go through a temporary file plus rename: an interrupted upload
+// cannot leave a truncated blob behind.
 func (s *Store) Put(r io.Reader, limit int64) (hash string, size int64, err error) {
 	tmp, err := os.CreateTemp(filepath.Join(s.root, "tmp"), "up-*")
 	if err != nil {
@@ -78,7 +79,7 @@ func (s *Store) Put(r io.Reader, limit int64) (hash string, size int64, err erro
 		return "", 0, err
 	}
 	if _, err := os.Stat(dst); err == nil {
-		return hash, size, nil // уже лежит — дедупликация
+		return hash, size, nil // already stored — deduplication
 	}
 	if err := os.Rename(tmpName, dst); err != nil {
 		return "", 0, err
@@ -86,7 +87,7 @@ func (s *Store) Put(r io.Reader, limit int64) (hash string, size int64, err erro
 	return hash, size, nil
 }
 
-// Open отдаёт содержимое по хешу. *os.File нужен как ReadSeeker для Range-запросов.
+// Open returns content by hash. *os.File is needed as a ReadSeeker for Range requests.
 func (s *Store) Open(hash string) (*os.File, error) {
 	if !ValidHash(hash) {
 		return nil, ErrNotFound

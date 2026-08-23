@@ -1,9 +1,9 @@
 // SPDX-License-Identifier: MIT
 
-// Package auth — bearer-токены. Один токен = одно устройство = один волт.
+// Package auth handles bearer tokens. One token = one device = one vault.
 //
-// Токен генерится на сервере и вставляется руками в настройки плагина: на мобильном
-// это единственный вменяемый способ, OAuth там ад.
+// Tokens are generated on the server and pasted into the plugin by hand: on mobile
+// that is the only sane option, since OAuth there is misery.
 package auth
 
 import (
@@ -25,7 +25,7 @@ var ErrUnauthorized = errors.New("unauthorized")
 
 var vaultRe = regexp.MustCompile(`^[a-zA-Z0-9._-]{1,64}$`)
 
-// ValidVault ограничивает имя волта тем, что безопасно класть в путь на диске.
+// ValidVault limits a vault name to what is safe to put in a filesystem path.
 func ValidVault(v string) bool { return vaultRe.MatchString(v) && v != "." && v != ".." }
 
 type Token struct {
@@ -68,8 +68,8 @@ func hashToken(tok string) string {
 	return hex.EncodeToString(sum[:])
 }
 
-// Add выдаёт новый токен. Открытое значение возвращается ровно один раз —
-// на диске лежит только его sha256.
+// Add issues a new token. The plaintext value is returned exactly once — only its
+// sha256 is ever stored on disk.
 func (s *Store) Add(name, vault string) (string, error) {
 	if !ValidVault(vault) {
 		return "", fmt.Errorf("invalid vault name %q", vault)
@@ -87,7 +87,7 @@ func (s *Store) Add(name, vault string) (string, error) {
 	return tok, nil
 }
 
-// Resolve проверяет токен и возвращает волт, к которому он привязан.
+// Resolve validates a token and returns the vault it is bound to.
 func (s *Store) Resolve(tok string) (Token, error) {
 	if tok == "" {
 		return Token{}, ErrUnauthorized
@@ -104,8 +104,8 @@ func (s *Store) Resolve(tok string) (Token, error) {
 	if err != nil {
 		return Token{}, err
 	}
-	// Сравнение всё равно константное по времени: SQL-поиск по индексу уже прошёл,
-	// но привычку не нарушаем — при смене схемы это единственная защита.
+	// The comparison is constant-time even though the indexed lookup already
+	// happened: keeping the habit is the only protection left if the schema changes.
 	if subtle.ConstantTimeCompare([]byte(gotHash), []byte(h)) != 1 {
 		return Token{}, ErrUnauthorized
 	}
@@ -134,7 +134,7 @@ func (s *Store) List() ([]Token, error) {
 	return out, rows.Err()
 }
 
-// Revoke отзывает токен по имени устройства.
+// Revoke removes a token by device name.
 func (s *Store) Revoke(name string) (int64, error) {
 	res, err := s.db.Exec(`DELETE FROM tokens WHERE name=?`, name)
 	if err != nil {

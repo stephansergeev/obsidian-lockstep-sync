@@ -1,13 +1,13 @@
 // SPDX-License-Identifier: MIT
 
-// Package store хранит метаданные волта: файлы, ревизии и глобальный лог изменений.
+// Package store keeps vault metadata: files, revisions and the global change log.
 //
-// Инварианты, на которых держится всё остальное:
-//   - seq — глобальный монотонный счётчик волта, инкрементится в той же транзакции,
-//     что и запись файла. Клиенты читают дельту только по нему.
-//   - удаление — не DELETE, а tombstone (deleted=1, hash=NULL, rev+1).
-//   - каждое состояние файла попадает в revisions, чтобы клиент мог достать общего
-//     предка для 3-way merge.
+// The invariants everything else rests on:
+//   - seq is the vault's global monotonic counter, incremented in the same
+//     transaction as the file write. Clients read deltas by it and nothing else.
+//   - deletion is a tombstone (deleted=1, hash=NULL, rev+1), never a DELETE.
+//   - every file state is recorded in revisions, so a client can fetch the common
+//     ancestor it needs for a 3-way merge.
 package store
 
 import (
@@ -18,21 +18,21 @@ import (
 	_ "modernc.org/sqlite"
 )
 
-// File — текущее состояние файла в волте.
+// File is the current state of one file in the vault.
 type File struct {
 	Path        string `json:"path"`
 	Rev         int64  `json:"rev"`
 	Seq         int64  `json:"seq"`
-	Hash        string `json:"hash,omitempty"` // sha256 содержимого; пусто если удалён или папка
+	Hash        string `json:"hash,omitempty"` // sha256 of the content; empty when deleted or a folder
 	Size        int64  `json:"size"`
-	Mtime       int64  `json:"mtime"` // unix ms, время правки на клиенте
+	Mtime       int64  `json:"mtime"` // unix ms, edit time as reported by the client
 	Deleted     bool   `json:"deleted"`
 	Folder      bool   `json:"folder"`
 	UpdatedBy   string `json:"updated_by,omitempty"`
 	RenamedFrom string `json:"renamed_from,omitempty"`
 }
 
-// ConflictError возвращается, когда клиент отталкивается от устаревшей ревизии.
+// ConflictError is returned when a client based its write on a stale revision.
 type ConflictError struct {
 	Path       string
 	ServerRev  int64
@@ -44,7 +44,8 @@ func (e *ConflictError) Error() string {
 	return fmt.Sprintf("conflict on %q: server rev %d", e.Path, e.ServerRev)
 }
 
-// ErrNotFound — файла нет в волте вовсе (не путать с tombstone).
+// ErrNotFound means the path was never in the vault at all — not to be confused
+// with a tombstone.
 var ErrNotFound = errors.New("not found")
 
 type Store struct {
@@ -82,14 +83,14 @@ CREATE INDEX IF NOT EXISTS idx_files_seq ON files(seq);
 CREATE INDEX IF NOT EXISTS idx_revisions_hash ON revisions(hash);
 `
 
-// Open открывает (или создаёт) базу волта.
+// Open opens (or creates) a vault database.
 func Open(path string) (*Store, error) {
 	db, err := sql.Open("sqlite", path+"?_pragma=busy_timeout(10000)&_pragma=journal_mode(WAL)&_pragma=foreign_keys(1)&_pragma=synchronous(FULL)")
 	if err != nil {
 		return nil, err
 	}
-	// Одно соединение: запись в SQLite всё равно сериализуется, а так мы гарантируем,
-	// что транзакция seq-счётчика никогда не гоняется сама с собой.
+	// A single connection: SQLite serialises writes anyway, and this guarantees the
+	// seq-counter transaction never races against itself.
 	db.SetMaxOpenConns(1)
 	if _, err := db.Exec(schema); err != nil {
 		db.Close()
@@ -100,7 +101,7 @@ func Open(path string) (*Store, error) {
 
 func (s *Store) Close() error { return s.db.Close() }
 
-// Seq возвращает текущее значение глобального счётчика.
+// Seq returns the current value of the global counter.
 func (s *Store) Seq() (int64, error) {
 	var v sql.NullInt64
 	err := s.db.QueryRow(`SELECT CAST(value AS INTEGER) FROM meta WHERE key='seq'`).Scan(&v)
@@ -142,8 +143,8 @@ func scanFile(row interface{ Scan(...any) error }) (File, error) {
 
 const fileCols = `path, rev, seq, hash, size, mtime, deleted, folder, updated_by, renamed_from`
 
-// Get возвращает текущее состояние файла. Tombstone — тоже состояние и возвращается,
-// ErrNotFound только если пути не было никогда.
+// Get returns the current state of a file. A tombstone is a state too and is
+// returned as such; ErrNotFound means the path never existed.
 func (s *Store) Get(path string) (File, error) {
 	f, err := scanFile(s.db.QueryRow(`SELECT `+fileCols+` FROM files WHERE path=?`, path))
 	if errors.Is(err, sql.ErrNoRows) {
@@ -152,7 +153,8 @@ func (s *Store) Get(path string) (File, error) {
 	return f, err
 }
 
-// Changes отдаёт дельту лога: записи со seq строго больше since, в порядке seq.
+// Changes returns the log delta: entries with seq strictly greater than since,
+// ordered by seq.
 func (s *Store) Changes(since int64, limit int) (entries []File, nextSeqOut int64, hasMore bool, err error) {
 	if limit <= 0 || limit > 5000 {
 		limit = 500
@@ -185,10 +187,10 @@ func (s *Store) Changes(since int64, limit int) (entries []File, nextSeqOut int6
 	return entries, entries[len(entries)-1].Seq, len(entries) == limit, nil
 }
 
-// PutArgs — параметры записи содержимого.
+// PutArgs holds the parameters of a content write.
 type PutArgs struct {
 	Path      string
-	BaseRev   int64 // ревизия, от которой отталкивается клиент; 0 — файл новый
+	BaseRev   int64 // revision the client based its write on; 0 for a new file
 	Hash      string
 	Size      int64
 	Mtime     int64
@@ -196,13 +198,14 @@ type PutArgs struct {
 	UpdatedBy string
 }
 
-// Put записывает новую ревизию файла.
+// Put writes a new revision of a file.
 //
-// Идемпотентность: если содержимое совпало с текущим серверным, ревизия не плодится
-// и возвращается текущее состояние — повтор запроса после обрыва связи безопасен.
+// Idempotency: if the content matches what the server already holds, no revision is
+// created and the current state is returned — retrying after a dropped connection
+// is safe.
 func (s *Store) Put(a PutArgs) (File, error) {
-	// Совпало содержимое — значит нечего решать, даже если base_rev устарел: результат
-	// на диске тот же самый. Именно это делает повтор после обрыва безопасным.
+	// Matching content means there is nothing to decide, even with a stale base_rev:
+	// the result on disk is identical. This is what makes a retry safe.
 	sameContent := func(cur File, exists bool) (File, bool) {
 		if exists && !cur.Deleted && cur.Hash == a.Hash && cur.Folder == a.Folder {
 			return cur, true
@@ -218,10 +221,10 @@ func (s *Store) Put(a PutArgs) (File, error) {
 	})
 }
 
-// Delete ставит tombstone. Содержимое blob'а не трогается — восстановление остаётся возможным.
+// Delete writes a tombstone. The blob itself is left alone, so recovery stays possible.
 func (s *Store) Delete(path string, baseRev int64, updatedBy string) (File, error) {
 	alreadyGone := func(cur File, exists bool) (File, bool) {
-		return cur, exists && cur.Deleted // уже tombstone — повтор безопасен
+		return cur, exists && cur.Deleted // already a tombstone — the retry is safe
 	}
 	return s.write(path, baseRev, alreadyGone, func(tx *sql.Tx, cur File, exists bool, seq int64) (File, bool, error) {
 		if !exists {
@@ -235,12 +238,12 @@ func (s *Store) Delete(path string, baseRev int64, updatedBy string) (File, erro
 	})
 }
 
-// write — общая обвязка: транзакция, идемпотентный пре-чек, проверка base_rev,
-// выдача seq, запись в revisions.
+// write is the shared wrapper: transaction, idempotent pre-check, base_rev check,
+// seq allocation and the revisions row.
 //
-// Порядок важен: пре-чек идёт ДО сверки base_rev. Клиента убивают между успешной
-// записью и обновлением локального индекса, он повторяет запрос со старой базой —
-// и должен получить 200, а не конфликт на пустом месте.
+// The order matters: the pre-check runs BEFORE the base_rev comparison. A client
+// killed between a successful write and its local index update will retry with the
+// old base — and must get a 200, not a conflict out of nowhere.
 func (s *Store) write(
 	path string,
 	baseRev int64,
@@ -275,7 +278,7 @@ func (s *Store) write(
 		return File{}, err
 	}
 	if !changed {
-		// Ничего не поменялось — счётчик seq не должен уезжать вхолостую.
+		// Nothing changed — the seq counter must not advance for nothing.
 		return next, tx.Rollback()
 	}
 	if err := upsert(tx, next); err != nil {
@@ -324,10 +327,10 @@ func b2i(b bool) int {
 	return 0
 }
 
-// Rename переносит файл целиком, сохраняя историю пути в renamed_from.
+// Rename moves a file whole, recording where it came from in renamed_from.
 //
-// Это не пара delete+create: на другом устройстве такая пара выглядит как удаление,
-// а удаление всегда страшнее переименования.
+// This is not a delete+create pair: on another device such a pair looks like a
+// deletion, and a deletion is always scarier than a rename.
 func (s *Store) Rename(from, to string, baseRev int64, updatedBy string) (File, error) {
 	if from == to {
 		return File{}, errors.New("rename: from == to")
@@ -353,7 +356,7 @@ func (s *Store) Rename(from, to string, baseRev int64, updatedBy string) (File, 
 		return File{}, err
 	}
 	if !dst.Deleted && dst.Rev > 0 {
-		// Занятый путь назначения — молча перезаписывать нельзя, это потеря заметки.
+		// The destination is taken — overwriting silently would lose a note.
 		return File{}, &ConflictError{Path: to, ServerRev: dst.Rev, ServerHash: dst.Hash, Deleted: dst.Deleted}
 	}
 
@@ -383,7 +386,7 @@ func (s *Store) Rename(from, to string, baseRev int64, updatedBy string) (File, 
 	return newDst, tx.Commit()
 }
 
-// RevisionHash отдаёт хеш конкретной ревизии — база для 3-way merge на клиенте.
+// RevisionHash returns the hash of one revision — the base for a client-side merge.
 func (s *Store) RevisionHash(path string, rev int64) (string, error) {
 	var hash sql.NullString
 	err := s.db.QueryRow(`SELECT hash FROM revisions WHERE path=? AND rev=?`, path, rev).Scan(&hash)
@@ -394,12 +397,12 @@ func (s *Store) RevisionHash(path string, rev int64) (string, error) {
 		return "", err
 	}
 	if !hash.Valid {
-		return "", ErrNotFound // ревизия-tombstone: содержимого нет
+		return "", ErrNotFound // tombstone revision: there is no content
 	}
 	return hash.String, nil
 }
 
-// Stats — сводка по волту для /stats и для глаз оператора.
+// Stats is the vault summary behind /stats, and for the operator's eyes.
 type Stats struct {
 	Files   int64 `json:"files"`
 	Deleted int64 `json:"deleted"`

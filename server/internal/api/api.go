@@ -1,9 +1,9 @@
 // SPDX-License-Identifier: MIT
 
-// Package api — HTTP-поверхность сервера.
+// Package api is the server's HTTP surface.
 //
-// Контракт целиком описан в /spec. Ключевое: клиент никогда не обходит дерево,
-// он читает дельту по глобальному seq и отталкивается от base_rev при каждой записи.
+// The contract lives in /spec. The essentials: a client never walks the vault tree,
+// it reads a delta by the global seq and bases every write on a base_rev.
 package api
 
 import (
@@ -26,8 +26,9 @@ import (
 	"github.com/stephansergeev/obsidian-lockstep-sync/server/internal/store"
 )
 
-// Vaults — реестр открытых волтов. Один волт = своя SQLite-база и свой blob-каталог,
-// поэтому мультиволт не тащит в схему vault_id и не создаёт мультитенантности.
+// Vaults is the registry of open vaults. One vault = its own SQLite database and
+// blob directory, so multi-vault support needs neither a vault_id column nor any
+// multi-tenancy.
 type Vaults interface {
 	Get(name string) (*store.Store, *blob.Store, error)
 }
@@ -35,7 +36,7 @@ type Vaults interface {
 type Server struct {
 	Auth      *auth.Store
 	Vaults    Vaults
-	MaxUpload int64 // 0 — без лимита
+	MaxUpload int64 // 0 means no limit
 	Log       *slog.Logger
 
 	mu sync.Mutex
@@ -89,12 +90,12 @@ func (s *Server) auth(next func(http.ResponseWriter, *http.Request, ctx)) http.H
 	}
 }
 
-// --- пути -------------------------------------------------------------------
+// --- paths ------------------------------------------------------------------
 
-// checkPath — единственное место, где решается, что вообще может стать путём в волте.
+// checkPath is the single place that decides what may become a path in a vault.
 //
-// NFC обязателен: macOS отдаёт NFD, и если пустить оба варианта, кириллица и умляуты
-// разъедутся между устройствами на два разных файла с одинаковым видом.
+// NFC is mandatory: macOS hands out NFD, and allowing both forms would split
+// non-ASCII names into two different files that look identical.
 func checkPath(p string) (string, error) {
 	if p == "" {
 		return "", errors.New("path is empty")
@@ -128,7 +129,7 @@ func pathParam(r *http.Request) (string, error) {
 	return checkPath(r.URL.Query().Get("path"))
 }
 
-// --- ответы -----------------------------------------------------------------
+// --- responses --------------------------------------------------------------
 
 func writeJSON(w http.ResponseWriter, code int, v any) {
 	w.Header().Set("Content-Type", "application/json; charset=utf-8")
@@ -140,8 +141,8 @@ func writeErr(w http.ResponseWriter, code int, kind, msg string) {
 	writeJSON(w, code, map[string]string{"error": kind, "message": msg})
 }
 
-// writeConflict отдаёт клиенту всё, что нужно, чтобы уйти в 3-way merge:
-// текущую серверную ревизию и её хеш.
+// writeConflict hands the client everything it needs for a 3-way merge: the
+// server's current revision and its hash.
 func writeConflict(w http.ResponseWriter, c *store.ConflictError) {
 	writeJSON(w, http.StatusConflict, map[string]any{
 		"error":       "conflict",
@@ -156,7 +157,7 @@ func fileResp(f store.File) map[string]any {
 	return map[string]any{"rev": f.Rev, "seq": f.Seq, "hash": f.Hash, "path": f.Path, "deleted": f.Deleted}
 }
 
-// --- ручки ------------------------------------------------------------------
+// --- handlers -----------------------------------------------------------------
 
 func (s *Server) health(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, map[string]any{"ok": true, "time": time.Now().UTC().Format(time.RFC3339)})
@@ -247,7 +248,7 @@ func (s *Server) getFile(w http.ResponseWriter, r *http.Request, c ctx) {
 	w.Header().Set("ETag", `"`+hash+`"`)
 	w.Header().Set("X-Rev", strconv.FormatInt(rev, 10))
 	w.Header().Set("X-Mtime", strconv.FormatInt(f.Mtime, 10))
-	// ServeContent сам разбирает Range и If-None-Match — докачка достаётся даром.
+	// ServeContent handles Range and If-None-Match itself — resumable downloads for free.
 	http.ServeContent(w, r, "", time.Time{}, rc)
 }
 
@@ -269,8 +270,8 @@ func (s *Server) putFile(w http.ResponseWriter, r *http.Request, c ctx) {
 	}
 	folder := r.Header.Get("X-Folder") == "1"
 
-	// Тело пишем в blob ДО транзакции: содержимое адресуется по хешу, поэтому
-	// лишний blob при конфликте безвреден и подберётся сборщиком мусора.
+	// The body is written to a blob BEFORE the transaction: content is addressed by
+	// hash, so a stray blob left by a conflict is harmless and gets collected later.
 	var hash string
 	var size int64
 	if folder {
@@ -363,7 +364,7 @@ func (s *Server) rename(w http.ResponseWriter, r *http.Request, c ctx) {
 	}
 }
 
-// --- мелочи -----------------------------------------------------------------
+// --- helpers ------------------------------------------------------------------
 
 func intParam(r *http.Request, name string, def int64) (int64, error) {
 	q := r.URL.Query().Get(name)
