@@ -4,9 +4,9 @@ import { requestUrl, type RequestUrlResponse } from "obsidian";
 import { encodePath } from "./paths";
 
 /**
- * Клиент протокола /v1. Все запросы идут через requestUrl() из Obsidian API:
- * обычный fetch() упирается в CORS на десктопе, потому что плагин живёт
- * на origin app://obsidian.md.
+ * Client for the /v1 protocol. Every request goes through Obsidian's
+ * requestUrl(): a plain fetch() hits CORS on desktop because the plugin runs on
+ * the app://obsidian.md origin.
  */
 
 export interface ChangeEntry {
@@ -36,7 +36,7 @@ export interface WriteResult {
 	deleted: boolean;
 }
 
-/** Сервер уехал вперёд: клиент обязан уйти в merge, а не перезаписывать. */
+/** The server moved ahead: the client must merge rather than overwrite. */
 export class ConflictError extends Error {
 	constructor(
 		readonly path: string,
@@ -83,7 +83,7 @@ export class SyncClient {
 				Authorization: `Bearer ${this.token}`,
 				...(opts.headers ?? {}),
 			},
-			// Разбираем статусы сами: 409 — это не сбой, а рабочий сценарий.
+			// Statuses are handled here: 409 is a normal outcome, not a failure.
 			throw: false,
 		});
 		if (resp.status === 409) {
@@ -116,7 +116,7 @@ export class SyncClient {
 		return resp.json;
 	}
 
-	/** Дельта лога. Основной механизм — обхода дерева на клиенте нет вообще. */
+	/** The change delta. The client never walks the vault tree at all. */
 	async changes(since: number, limit = 500): Promise<ChangesPage> {
 		const resp = await this.call("GET", `/changes?since=${since}&limit=${limit}`);
 		return resp.json;

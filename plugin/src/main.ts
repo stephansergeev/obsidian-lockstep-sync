@@ -5,19 +5,20 @@ import { SyncClient, ApiError, type ChangeEntry } from "./api";
 import { LocalIndex } from "./index-store";
 import { conflictName, sha256, toNFC } from "./paths";
 import { DEFAULT_SETTINGS, SyncSettingsTab, type SyncSettings } from "./settings";
+import { t } from "./i18n";
 
 /**
- * M0: настройки, проверка соединения и односторонняя загрузка с сервера.
+ * M0: settings, a connection check and a one-way download from the server.
  *
- * Двусторонний синк, наблюдение за волтом и слияние конфликтов приезжают в M1 —
- * до тех пор плагин намеренно не умеет писать на сервер, чтобы недоделанная
- * логика не трогала живой волт.
+ * Two-way sync, vault watching and conflict merging arrive in M1. Until then the
+ * plugin deliberately cannot write to the server, so unfinished sync logic never
+ * touches a live vault.
  */
-export default class SelfHostedSyncPlugin extends Plugin {
+export default class LockstepPlugin extends Plugin {
 	override settings: SyncSettings = { ...DEFAULT_SETTINGS };
 	index!: LocalIndex;
 	private statusBar: HTMLElement | null = null;
-	private lastStatus = "не подключено";
+	private lastStatus = t("status.notConnected");
 
 	override async onload(): Promise<void> {
 		await this.loadSettings();
@@ -28,16 +29,16 @@ export default class SelfHostedSyncPlugin extends Plugin {
 
 		this.addSettingTab(new SyncSettingsTab(this.app, this));
 		this.statusBar = this.addStatusBarItem();
-		this.setStatus(`индекс: ${this.index.size} файлов, seq ${this.index.lastSeq}`);
+		this.setStatus(t("status.index", { files: this.index.size, seq: this.index.lastSeq }));
 
 		this.addCommand({
 			id: "test-connection",
-			name: "Проверить соединение с сервером",
+			name: t("cmd.test"),
 			callback: () => void this.testConnection(),
 		});
 		this.addCommand({
 			id: "pull-all",
-			name: "Скачать всё с сервера",
+			name: t("cmd.pull"),
 			callback: () => void this.pullAll(),
 		});
 	}
@@ -60,12 +61,12 @@ export default class SelfHostedSyncPlugin extends Plugin {
 
 	private setStatus(text: string): void {
 		this.lastStatus = text;
-		this.statusBar?.setText(`Sync: ${text}`);
+		this.statusBar?.setText(`${t("status.prefix")}: ${text}`);
 	}
 
 	private client(): SyncClient | null {
 		if (!this.settings.serverUrl || !this.settings.token) {
-			new Notice("Sync: не заданы адрес сервера или токен");
+			new Notice(t("notice.noConfig"));
 			return null;
 		}
 		return new SyncClient(this.settings.serverUrl, this.settings.token);
@@ -81,26 +82,30 @@ export default class SelfHostedSyncPlugin extends Plugin {
 		try {
 			await client.health();
 			const stats = await client.stats();
-			const line = `волт ${stats["vault"]}, файлов ${stats["files"]}, seq ${stats["seq"]}`;
+			const line = t("status.stats", {
+				vault: String(stats["vault"]),
+				files: String(stats["files"]),
+				seq: String(stats["seq"]),
+			});
 			this.setStatus(line);
-			new Notice(`Sync: соединение есть — ${line}`);
+			new Notice(t("notice.connected", { info: line }));
 		} catch (e) {
-			this.reportError("Проверка соединения", e);
+			this.reportError(t("error.testConnection"), e);
 		}
 	}
 
 	async resetIndex(): Promise<void> {
 		this.index.reset();
 		await this.index.save();
-		this.setStatus("индекс сброшен");
+		this.setStatus(t("status.indexReset"));
 	}
 
 	/**
-	 * Забирает состояние волта с сервера.
+	 * Pulls the vault state from the server.
 	 *
-	 * Правило волта: ничего не перезаписываем молча. Если локальный файл отличается
-	 * от серверного, локальная версия сначала уезжает в копию рядом — потерять
-	 * заметку хуже, чем увидеть лишний файл.
+	 * The vault rule: nothing is overwritten silently. If a local file differs
+	 * from the server's, the local version is copied aside first — losing a note
+	 * is worse than seeing one extra file.
 	 */
 	async pullAll(): Promise<void> {
 		const client = this.client();
@@ -111,7 +116,7 @@ export default class SelfHostedSyncPlugin extends Plugin {
 		let kept = 0;
 		let skipped = 0;
 		const started = Date.now();
-		new Notice("Sync: скачиваю с сервера…");
+		new Notice(t("notice.pullStarted"));
 
 		try {
 			for (;;) {
@@ -129,7 +134,7 @@ export default class SelfHostedSyncPlugin extends Plugin {
 						kept++;
 					} else skipped++;
 
-					// Чекпоинт после каждого файла: приложение может умереть прямо здесь.
+					// Checkpoint after every file: the app can die right here.
 					this.index.setLastSeq(entry.seq);
 					await this.index.save();
 				}
@@ -140,12 +145,12 @@ export default class SelfHostedSyncPlugin extends Plugin {
 			await this.index.save();
 
 			const secs = ((Date.now() - started) / 1000).toFixed(1);
-			const line = `скачано ${downloaded}, пропущено ${skipped}, копий сохранено ${kept} за ${secs}с`;
+			const line = t("status.pullSummary", { downloaded, skipped, kept, secs });
 			this.setStatus(line);
-			new Notice(`Sync: ${line}`);
+			new Notice(t("notice.pullDone", { summary: line }));
 		} catch (e) {
 			await this.index.save();
-			this.reportError("Скачивание", e);
+			this.reportError(t("error.pull"), e);
 		}
 	}
 
@@ -169,8 +174,8 @@ export default class SelfHostedSyncPlugin extends Plugin {
 		}
 
 		if (entry.deleted) {
-			// M0 намеренно НЕ удаляет локальные файлы: односторонняя загрузка не должна
-			// уметь стирать волт. Удаления приедут в M1 вместе с полноценным индексом.
+			// M0 deliberately does NOT delete local files: a one-way download must not
+			// be able to erase a vault. Deletions arrive in M1 with the full index.
 			this.index.remove(path);
 			return "skipped";
 		}
@@ -187,7 +192,7 @@ export default class SelfHostedSyncPlugin extends Plugin {
 				});
 				return "skipped";
 			}
-			// Расходится — локальную версию сохраняем рядом, прежде чем писать серверную.
+			// They differ — keep the local version aside before writing the server's.
 			const backup = conflictName(path, this.deviceLabel(), new Date());
 			await adapter.writeBinary(backup, local);
 			await this.writeFromServer(client, entry, path);
@@ -203,7 +208,9 @@ export default class SelfHostedSyncPlugin extends Plugin {
 		const { data, hash } = await client.getFile(path, entry.rev);
 		const actual = await sha256(data);
 		if (entry.hash && actual !== entry.hash) {
-			throw new Error(`битая загрузка ${path}: ожидали ${entry.hash}, получили ${actual}`);
+			throw new Error(
+				t("error.corruptDownload", { path, want: entry.hash ?? "", got: actual }),
+			);
 		}
 		await this.app.vault.adapter.writeBinary(path, data);
 		this.index.set(path, {
@@ -224,7 +231,7 @@ export default class SelfHostedSyncPlugin extends Plugin {
 	}
 
 	private deviceLabel(): string {
-		return this.settings.deviceName || "local";
+		return this.settings.deviceName || t("conflict.label");
 	}
 
 	private reportError(what: string, e: unknown): void {
@@ -235,7 +242,7 @@ export default class SelfHostedSyncPlugin extends Plugin {
 					? e.message
 					: String(e);
 		console.error(`[lockstep-sync] ${what}:`, e);
-		this.setStatus(`ошибка: ${msg}`);
-		new Notice(`Sync — ${what}: ${msg}`, 8000);
+		this.setStatus(t("status.error", { message: msg }));
+		new Notice(t("notice.error", { what, message: msg }), 8000);
 	}
 }

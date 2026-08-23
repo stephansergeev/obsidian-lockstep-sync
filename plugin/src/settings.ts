@@ -1,13 +1,14 @@
 // SPDX-License-Identifier: MIT
 
 import { App, Notice, PluginSettingTab, Setting } from "obsidian";
-import type SelfHostedSyncPlugin from "./main";
+import { t } from "./i18n";
+import type LockstepPlugin from "./main";
 
 export interface SyncSettings {
 	serverUrl: string;
 	token: string;
 	deviceName: string;
-	/** Пути, которые не уезжают на сервер ни при каких настройках. */
+	/** Paths that never leave this device, whatever else is configured. */
 	excludes: string[];
 }
 
@@ -15,14 +16,14 @@ export const DEFAULT_SETTINGS: SyncSettings = {
 	serverUrl: "",
 	token: "",
 	deviceName: "",
-	// workspace.json — состояние окон, оно у каждого устройства своё и синку только мешает.
+	// workspace.json holds window state: it differs per device and only gets in the way.
 	excludes: [".obsidian/workspace.json", ".obsidian/workspace-mobile.json", ".trash/"],
 };
 
 export class SyncSettingsTab extends PluginSettingTab {
 	constructor(
 		app: App,
-		private plugin: SelfHostedSyncPlugin,
+		private plugin: LockstepPlugin,
 	) {
 		super(app, plugin);
 	}
@@ -32,10 +33,10 @@ export class SyncSettingsTab extends PluginSettingTab {
 		containerEl.empty();
 
 		new Setting(containerEl)
-			.setName("Адрес сервера")
-			.setDesc("Например https://sync.example.com — без /v1 на конце.")
-			.addText((t) =>
-				t
+			.setName(t("settings.serverUrl.name"))
+			.setDesc(t("settings.serverUrl.desc"))
+			.addText((text) =>
+				text
 					.setPlaceholder("https://sync.example.com")
 					.setValue(this.plugin.settings.serverUrl)
 					.onChange(async (v) => {
@@ -45,11 +46,12 @@ export class SyncSettingsTab extends PluginSettingTab {
 			);
 
 		new Setting(containerEl)
-			.setName("Токен устройства")
-			.setDesc("Выдаётся командой sync-server token add --name <устройство>. Показывается один раз.")
-			.addText((t) => {
-				t.inputEl.type = "password";
-				t.setPlaceholder("obs_…")
+			.setName(t("settings.token.name"))
+			.setDesc(t("settings.token.desc"))
+			.addText((text) => {
+				text.inputEl.type = "password";
+				text
+					.setPlaceholder("obs_…")
 					.setValue(this.plugin.settings.token)
 					.onChange(async (v) => {
 						this.plugin.settings.token = v.trim();
@@ -58,10 +60,10 @@ export class SyncSettingsTab extends PluginSettingTab {
 			});
 
 		new Setting(containerEl)
-			.setName("Имя устройства")
-			.setDesc("Подставляется в имена конфликтных копий, чтобы было видно, откуда правка.")
-			.addText((t) =>
-				t
+			.setName(t("settings.device.name"))
+			.setDesc(t("settings.device.desc"))
+			.addText((text) =>
+				text
 					.setPlaceholder("iphone")
 					.setValue(this.plugin.settings.deviceName)
 					.onChange(async (v) => {
@@ -71,54 +73,54 @@ export class SyncSettingsTab extends PluginSettingTab {
 			);
 
 		new Setting(containerEl)
-			.setName("Исключения")
-			.setDesc("По строке на путь или префикс. Эти файлы не уезжают на сервер.")
-			.addTextArea((t) =>
-				t
-					.setValue(this.plugin.settings.excludes.join("\n"))
-					.onChange(async (v) => {
-						this.plugin.settings.excludes = v
-							.split("\n")
-							.map((s) => s.trim())
-							.filter(Boolean);
-						await this.plugin.saveSettings();
-					}),
+			.setName(t("settings.excludes.name"))
+			.setDesc(t("settings.excludes.desc"))
+			.addTextArea((text) =>
+				text.setValue(this.plugin.settings.excludes.join("\n")).onChange(async (v) => {
+					this.plugin.settings.excludes = v
+						.split("\n")
+						.map((s) => s.trim())
+						.filter(Boolean);
+					await this.plugin.saveSettings();
+				}),
 			);
 
-		containerEl.createEl("h3", { text: "Проверка и обслуживание" });
+		new Setting(containerEl).setName(t("settings.section.maintenance")).setHeading();
 
 		new Setting(containerEl)
-			.setName("Проверить соединение")
-			.setDesc("Дёргает /health и /stats — сразу видно, тот ли токен и тот ли волт.")
+			.setName(t("settings.test.name"))
+			.setDesc(t("settings.test.desc"))
 			.addButton((b) =>
-				b.setButtonText("Проверить").onClick(async () => {
+				b.setButtonText(t("settings.test.button")).onClick(async () => {
 					await this.plugin.testConnection();
 				}),
 			);
 
 		new Setting(containerEl)
-			.setName("Скачать всё с сервера")
-			.setDesc(
-				"Односторонняя операция M0: локальные файлы не удаляются, а расхождения " +
-					"сохраняются копией рядом. Ничего не перезаписывается молча.",
-			)
+			.setName(t("settings.pull.name"))
+			.setDesc(t("settings.pull.desc"))
 			.addButton((b) =>
-				b.setButtonText("Скачать").onClick(async () => {
+				b.setButtonText(t("settings.pull.button")).onClick(async () => {
 					await this.plugin.pullAll();
 				}),
 			);
 
 		new Setting(containerEl)
-			.setName("Сбросить локальный индекс")
-			.setDesc("Индекс перестроится при следующем скачивании. Файлы волта не трогаются.")
+			.setName(t("settings.reset.name"))
+			.setDesc(t("settings.reset.desc"))
 			.addButton((b) =>
-				b.setWarning().setButtonText("Сбросить").onClick(async () => {
-					await this.plugin.resetIndex();
-					new Notice("Индекс сброшен");
-				}),
+				b
+					.setWarning()
+					.setButtonText(t("settings.reset.button"))
+					.onClick(async () => {
+						await this.plugin.resetIndex();
+						new Notice(t("notice.indexReset"));
+					}),
 			);
 
-		const status = containerEl.createEl("p", { cls: "setting-item-description" });
-		status.setText(this.plugin.statusLine());
+		containerEl.createEl("p", {
+			cls: "setting-item-description",
+			text: this.plugin.statusLine(),
+		});
 	}
 }

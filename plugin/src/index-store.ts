@@ -3,14 +3,14 @@
 import type { DataAdapter } from "obsidian";
 
 /**
- * Локальный индекс: от какой ревизии клиент оттолкнулся по каждому пути.
+ * The local index: which revision the client based each path on.
  *
- * base_hash здесь не для красоты. Без общего предка 3-way merge невозможен,
- * и разрешение конфликтов скатывается до «оставить тот, что новее» — то есть
- * до молчаливой потери одной из версий.
+ * base_hash is not decoration. Without a common ancestor a 3-way merge is
+ * impossible and conflict resolution degrades to "keep whichever is newer" —
+ * which means silently losing one of the two versions.
  *
- * M0 хранит индекс в JSON. На волте в тысячи файлов это станет узким местом —
- * в M1 сюда встанет SQLite, интерфейс останется тем же.
+ * M0 keeps the index in JSON. On a vault of thousands of files that becomes the
+ * bottleneck; SQLite replaces it later behind the same interface.
  */
 export interface IndexEntry {
 	base_rev: number;
@@ -57,8 +57,8 @@ export class LocalIndex {
 					return;
 				}
 			} catch {
-				// Битый или отсутствующий индекс — не повод падать: он восстановим.
-				// Худшее последствие — следующий синк перечитает больше, чем нужно.
+				// A missing or corrupt index is not fatal: it can be rebuilt. The
+				// worst outcome is that the next sync reads more than it needed to.
 			}
 		}
 		this.data = { ...EMPTY, files: {} };
@@ -100,11 +100,11 @@ export class LocalIndex {
 	}
 
 	/**
-	 * Чекпоинт. Вызывается после КАЖДОГО файла, а не в конце пачки: приложение на
-	 * мобильном убивают в произвольный момент, и незаписанный индекс означает,
-	 * что при следующем запуске клиент считает уже скачанное несуществующим.
+	 * Checkpoint. Called after EVERY file rather than at the end of a batch: the
+	 * app is killed at arbitrary moments on mobile, and an unwritten index means
+	 * the next run treats already-downloaded files as missing.
 	 *
-	 * Предыдущая копия сохраняется рядом — оборванная запись не может обнулить индекс.
+	 * The previous copy is kept alongside, so a torn write cannot blank the index.
 	 */
 	async save(): Promise<void> {
 		if (this.saving) {
@@ -129,8 +129,8 @@ export class LocalIndex {
 				await this.adapter.write(this.prev, old);
 			}
 		} catch {
-			// Не смогли сохранить предыдущую копию — пишем всё равно, это лучше,
-			// чем оставить индекс отставшим от диска.
+			// Could not keep the previous copy — write anyway; that beats leaving
+			// the index lagging behind what is actually on disk.
 		}
 		await this.adapter.write(this.file, body);
 	}

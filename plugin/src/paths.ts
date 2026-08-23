@@ -1,23 +1,23 @@
 // SPDX-License-Identifier: MIT
 
 /**
- * Пути волта. Единственное место, где решается, как путь выглядит на проводе.
+ * Vault paths. The single place that decides how a path looks on the wire.
  *
- * NFC обязателен: macOS отдаёт имена файлов в NFD, а Windows и Android — в NFC.
- * Если не нормализовать до отправки, «Ёлка.md» с двух устройств станет двумя
- * разными файлами, визуально неразличимыми. Сервер такие пути отвергает —
- * нормализуем здесь, чтобы до сервера они не доехали.
+ * NFC is mandatory: macOS hands out filenames in NFD while Windows and Android
+ * use NFC. Without normalising before sending, the same visible name arrives as
+ * two different files from two devices. The server rejects non-NFC paths, so
+ * they are normalised here and never reach it.
  */
 export function toNFC(path: string): string {
 	return path.normalize("NFC");
 }
 
-/** Кодирование пути в query-параметр: слэши остаются читаемыми, остальное экранируется. */
+/** Encode a path for a query parameter: slashes stay readable, the rest is escaped. */
 export function encodePath(path: string): string {
 	return encodeURIComponent(toNFC(path)).replace(/%2F/g, "/");
 }
 
-/** Имя для копии, которую кладём рядом, когда перезаписывать нельзя. */
+/** Name for the copy kept alongside when overwriting is not allowed. */
 export function conflictName(path: string, label: string, when: Date): string {
 	const stamp =
 		`${when.getFullYear()}-${pad(when.getMonth() + 1)}-${pad(when.getDate())}` +
@@ -34,7 +34,7 @@ function pad(n: number): string {
 	return n < 10 ? `0${n}` : String(n);
 }
 
-/** sha256 в hex — тот же адрес содержимого, что считает сервер. */
+/** sha256 as hex — the same content address the server computes. */
 export async function sha256(data: ArrayBuffer): Promise<string> {
 	const digest = await crypto.subtle.digest("SHA-256", data);
 	return Array.from(new Uint8Array(digest))
