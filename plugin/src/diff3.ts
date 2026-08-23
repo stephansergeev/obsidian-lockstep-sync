@@ -180,6 +180,23 @@ export function merge3(
 	return { clean: conflicts === 0, text: joinLines(out, theirs || mine), conflicts };
 }
 
+/**
+ * The leading blockquote or callout prefix shared by a region, such as "> " or "> > ".
+ *
+ * Only quote markers are carried over. List bullets are deliberately left alone: a
+ * marker that looked like another list item would change the numbering of the list
+ * it is sitting in.
+ */
+function blockPrefix(...chunks: string[][]): string {
+	for (const chunk of chunks) {
+		for (const line of chunk) {
+			const m = /^((?:\s*>\s?)+)/.exec(line);
+			if (m) return m[1] as string;
+		}
+	}
+	return "";
+}
+
 function sameLines(x: string[], y: string[]): boolean {
 	return x.length === y.length && x.every((line, i) => line === y[i]);
 }
@@ -207,10 +224,21 @@ function emit(
 		return;
 	}
 	// Both sides changed the same region differently. Nothing is thrown away.
+	//
+	// The markers are Obsidian comments, not the git ones. A line of "=" turns the
+	// line above it into a heading and a line starting with ">" becomes a blockquote,
+	// so git markers wreck the rendering of the very note they describe. Comments are
+	// inert: invisible in reading view, plain in source, and they cannot be mistaken
+	// for structure.
+	//
+	// The block prefix of the surrounding lines is carried onto the markers as well.
+	// A conflict inside a callout or a quote would otherwise be cut in half by a
+	// marker line that does not continue the block.
 	onConflict();
-	out.push(`<<<<<<< ${mineLabel}`);
+	const prefix = blockPrefix(mineChunk, theirsChunk, baseChunk);
+	out.push(`${prefix}%% lockstep: ${mineLabel} %%`);
 	out.push(...mineChunk);
-	out.push("=======");
+	out.push(`${prefix}%% lockstep: ${theirsLabel} %%`);
 	out.push(...theirsChunk);
-	out.push(`>>>>>>> ${theirsLabel}`);
+	out.push(`${prefix}%% lockstep: end %%`);
 }

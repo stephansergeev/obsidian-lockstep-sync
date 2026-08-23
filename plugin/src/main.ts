@@ -2,6 +2,7 @@
 
 import { Notice, Plugin, TAbstractFile, normalizePath } from "obsidian";
 import { ApiError, SyncClient, type ChangeEntry } from "./api";
+import { ConflictModal } from "./conflict-modal";
 import { t } from "./i18n";
 import { LocalIndex } from "./index-store";
 import { conflictName, sha256, toNFC } from "./paths";
@@ -32,7 +33,7 @@ export default class LockstepPlugin extends Plugin {
 			index: this.index,
 			settings: this.settings,
 			client: () => this.client(false),
-			onConflict: (path, copy) => new Notice(t("notice.conflict", { path, copy }), 12000),
+			onConflict: (path) => new Notice(t("notice.conflictQueued", { path }), 12000),
 			log: (message, error) => console.warn(`[lockstep-sync] ${message}`, error ?? ""),
 		});
 
@@ -47,6 +48,16 @@ export default class LockstepPlugin extends Plugin {
 			callback: () => void this.testConnection(),
 		});
 		this.addCommand({ id: "pull-all", name: t("cmd.pull"), callback: () => void this.pullAll() });
+		this.addCommand({
+			id: "resolve-conflicts",
+			name: t("cmd.conflicts"),
+			callback: () => this.openConflicts(),
+		});
+
+		// The status bar is the only place a pending decision is visible on mobile,
+		// where a notice from a background pass is long gone by the time the app is
+		// opened again. Clicking it opens the list.
+		this.statusBar?.addEventListener("click", () => this.openConflicts());
 
 		// The vault is only watched once the workspace is ready. Obsidian replays the
 		// whole tree as create events while it starts, and treating those as edits
@@ -82,9 +93,22 @@ export default class LockstepPlugin extends Plugin {
 		return this.lastStatus;
 	}
 
+	openConflicts(): void {
+		new ConflictModal(
+			this.app,
+			() => this.index.conflicts,
+			async (path, choice) => {
+				await this.engine.resolveConflict(path, choice);
+				this.setStatus(this.lastStatus);
+			},
+		).open();
+	}
+
 	private setStatus(text: string): void {
 		this.lastStatus = text;
-		this.statusBar?.setText(`${t("status.prefix")}: ${text}`);
+		const pending = this.index?.conflicts.length ?? 0;
+		const suffix = pending > 0 ? ` · ${t("conflict.pending", { count: pending })}` : "";
+		this.statusBar?.setText(`${t("status.prefix")}: ${text}${suffix}`);
 	}
 
 	private client(complain = true): SyncClient | null {

@@ -48,10 +48,23 @@ Content is addressed by its sha256. Deduplication and full revision history come
 that for free.
 
 When both sides changed the same file, the plugin fetches the common ancestor and merges
-line by line. Edits in different parts of a note merge without asking. Edits to the same
-lines produce conflict markers in a copy placed beside the file, and the file itself takes
-the server version, so nothing has to be reconstructed from memory. Binary files and
-anything over a megabyte are never merged: both versions are kept.
+line by line. Edits in different parts of a note merge without asking, because there is
+nothing to decide.
+
+Edits to the same lines are not merged behind your back. Both whole versions stay on disk,
+the server one under its own name and yours beside it, and the plugin asks which one stands.
+You can open either, then keep yours, keep the server's, or have both written into the note
+with markers to reconcile by hand. Nothing is a blocking prompt: on a phone a sync often
+finishes as the app is being suspended, so the decisions wait in a list until you open it.
+
+Those markers are Obsidian comments rather than the git ones, and they carry the block
+prefix of whatever they sit inside. A line of "=" would turn the line above it into a
+heading and a line starting with ">" would open a blockquote, so git markers wreck the
+rendering of the very note they describe, and a marker without the surrounding quote prefix
+cuts a callout in half.
+
+Binary files and anything over a megabyte are never merged: both versions are kept and the
+same question is asked.
 
 An edit always beats a deletion. Delete a note on one device while editing it on another and
 it comes back, because a note that reappears is an annoyance and a note that vanishes is not.

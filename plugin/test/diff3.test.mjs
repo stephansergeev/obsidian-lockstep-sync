@@ -34,11 +34,17 @@ test("the same line edited differently conflicts and keeps both texts", () => {
 	const r = merge3(base, mine, theirs, "iphone", "desk");
 	assert.equal(r.clean, false);
 	assert.equal(r.conflicts, 1);
-	assert.match(r.text, /<<<<<<< iphone/);
+	assert.match(r.text, /%% lockstep: iphone %%/);
 	assert.match(r.text, /from the phone/);
-	assert.match(r.text, /=======/);
+	assert.match(r.text, /%% lockstep: desk %%/);
 	assert.match(r.text, /from the desktop/);
-	assert.match(r.text, />>>>>>> desk/);
+	assert.match(r.text, /%% lockstep: end %%/);
+	// Markers must not be markdown. A line of "=" makes a heading and a line
+	// starting with ">" makes a blockquote, both of which wreck the note.
+	for (const line of r.text.split("\n")) {
+		assert.ok(!/^=+$/.test(line), `line ${JSON.stringify(line)} renders as a heading`);
+		assert.ok(!/^>/.test(line), `line ${JSON.stringify(line)} renders as a quote`);
+	}
 });
 
 test("insertions at different points both survive", () => {
@@ -119,4 +125,28 @@ test("a large file merges in reasonable time", () => {
 	const r = merge3(b, mine, theirs);
 	assert.equal(r.clean, true);
 	assert.ok(Date.now() - started < 5000, "merge took too long");
+});
+
+test("markers stay inside a callout instead of cutting it in half", () => {
+	const base = "> [!note] Plan\n> one\n> two\n";
+	const mine = "> [!note] Plan\n> from the phone\n> two\n";
+	const theirs = "> [!note] Plan\n> from the desktop\n> two\n";
+	const r = merge3(base, mine, theirs, "phone", "server");
+	assert.equal(r.clean, false);
+	for (const line of r.text.split("\n")) {
+		if (line === "") continue;
+		// Every line of the region has to keep continuing the callout, markers included.
+		assert.match(line, /^>/, `line ${JSON.stringify(line)} breaks out of the callout`);
+	}
+	assert.match(r.text, /> %% lockstep: phone %%/);
+});
+
+test("markers never render as headings, rules or quotes on their own", () => {
+	const r = merge3("a\nb\nc\n", "a\nMINE\nc\n", "a\nTHEIRS\nc\n");
+	for (const line of r.text.split("\n")) {
+		assert.ok(!/^=+$/.test(line), "a line of = renders as a heading");
+		assert.ok(!/^-{3,}$/.test(line), "a line of - renders as a heading or frontmatter");
+		assert.ok(!/^>/.test(line), "a line starting with > renders as a quote");
+	}
+	assert.match(r.text, /^%% lockstep: local %%$/m);
 });

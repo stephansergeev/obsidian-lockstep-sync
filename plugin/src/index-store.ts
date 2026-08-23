@@ -21,6 +21,23 @@ export interface IndexEntry {
 	dirty?: boolean;
 }
 
+/**
+ * A file both sides changed, waiting for a person to decide.
+ *
+ * Both versions are on disk while this exists: the server one under the real name
+ * and this device's one under `copy`. Nothing is merged into the note itself until
+ * the choice is made, because a note is read by a human and conflict markers make
+ * it unreadable.
+ */
+export interface PendingConflict {
+	path: string;
+	copy: string;
+	device: string;
+	at: number;
+	base_rev: number;
+	server_rev: number;
+}
+
 /** A local rename that has not reached the server yet. */
 export interface PendingRename {
 	from: string;
@@ -39,12 +56,20 @@ interface IndexFile {
 	 * into a delete plus a create on every other device.
 	 */
 	renames: PendingRename[];
+	conflicts: PendingConflict[];
 }
 
-const EMPTY: IndexFile = { version: 1, last_seq: 0, device_id: "", files: {}, renames: [] };
+const EMPTY: IndexFile = {
+	version: 1,
+	last_seq: 0,
+	device_id: "",
+	files: {},
+	renames: [],
+	conflicts: [],
+};
 
 export class LocalIndex {
-	private data: IndexFile = { ...EMPTY, files: {}, renames: [] };
+	private data: IndexFile = { ...EMPTY, files: {}, renames: [], conflicts: [] };
 	private saving: Promise<void> | null = null;
 	private pending = false;
 
@@ -66,7 +91,7 @@ export class LocalIndex {
 				const raw = await this.adapter.read(candidate);
 				const parsed = JSON.parse(raw) as IndexFile;
 				if (parsed && parsed.version === 1 && parsed.files) {
-					this.data = { ...parsed, renames: parsed.renames ?? [] };
+					this.data = { ...parsed, renames: parsed.renames ?? [], conflicts: parsed.conflicts ?? [] };
 					return;
 				}
 			} catch {
@@ -74,7 +99,7 @@ export class LocalIndex {
 				// worst outcome is that the next sync reads more than it needed to.
 			}
 		}
-		this.data = { ...EMPTY, files: {}, renames: [] };
+		this.data = { ...EMPTY, files: {}, renames: [], conflicts: [] };
 	}
 
 	get lastSeq(): number {
@@ -109,7 +134,7 @@ export class LocalIndex {
 
 	reset(): void {
 		const id = this.data.device_id;
-		this.data = { ...EMPTY, device_id: id, files: {}, renames: [] };
+		this.data = { ...EMPTY, device_id: id, files: {}, renames: [], conflicts: [] };
 	}
 
 	get renames(): PendingRename[] {
@@ -125,6 +150,19 @@ export class LocalIndex {
 			return;
 		}
 		this.data.renames.push(rename);
+	}
+
+	get conflicts(): PendingConflict[] {
+		return this.data.conflicts;
+	}
+
+	addConflict(conflict: PendingConflict): void {
+		this.data.conflicts = this.data.conflicts.filter((c) => c.path !== conflict.path);
+		this.data.conflicts.push(conflict);
+	}
+
+	clearConflict(path: string): void {
+		this.data.conflicts = this.data.conflicts.filter((c) => c.path !== path);
 	}
 
 	clearRename(rename: PendingRename): void {

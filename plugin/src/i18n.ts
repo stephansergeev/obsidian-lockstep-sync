@@ -34,6 +34,25 @@ const en: Dict = {
 	"settings.reset.desc": "The index is rebuilt on the next download. Vault files are left alone.",
 	"settings.reset.button": "Reset",
 
+	"conflict.title": "Files changed on both sides",
+	"conflict.none": "Nothing to decide. Every file is in step.",
+	"conflict.intro":
+		"Both versions are on disk and neither has been changed. Read them and say which one stands.",
+	"conflict.detail": "changed on {device} and on the server, {when}",
+	"conflict.openServer": "open the server version",
+	"conflict.openMine": "open the version from {device}",
+	"conflict.keepMine": "Keep {device}",
+	"conflict.keepServer": "Keep server",
+	"conflict.keepMerged": "Merge by hand",
+	"conflict.keepMerged.tooltip":
+		"Put both texts into the note with markers, so you can reconcile them in one place.",
+	"conflict.resolved": "{path} settled",
+	"conflict.gone": "{path} is no longer in the vault",
+	"conflict.pending": "{count} to decide",
+	"cmd.conflicts": "Resolve files changed on both sides",
+	"notice.conflictQueued":
+		"Lockstep: {path} was changed on both sides. Both versions are kept, open the plugin to choose.",
+
 	"settings.autoSync.name": "Sync automatically",
 	"settings.autoSync.desc":
 		"Sync a few seconds after an edit, on a timer, and when the app goes to the background.",
@@ -47,7 +66,6 @@ const en: Dict = {
 
 	"notice.syncing": "Lockstep: syncing…",
 	"notice.syncDone": "Lockstep: {summary}",
-	"notice.conflict": "Lockstep: both sides changed {path}. The merge is in {copy}",
 
 	"status.syncing": "syncing…",
 	"status.syncSummary":
@@ -104,6 +122,25 @@ const ru: Dict = {
 	"settings.reset.desc": "Индекс перестроится при следующем скачивании. Файлы волта не трогаются.",
 	"settings.reset.button": "Сбросить",
 
+	"conflict.title": "Файлы, изменённые с двух сторон",
+	"conflict.none": "Решать нечего. Все файлы идут в ногу.",
+	"conflict.intro":
+		"Обе версии лежат на диске, ни одна не тронута. Посмотри их и скажи, какая остаётся.",
+	"conflict.detail": "правили на {device} и на сервере, {when}",
+	"conflict.openServer": "открыть серверную версию",
+	"conflict.openMine": "открыть версию с {device}",
+	"conflict.keepMine": "Оставить {device}",
+	"conflict.keepServer": "Оставить серверную",
+	"conflict.keepMerged": "Свести вручную",
+	"conflict.keepMerged.tooltip":
+		"Положить оба текста в заметку с маркерами, чтобы свести их в одном месте.",
+	"conflict.resolved": "{path} решено",
+	"conflict.gone": "{path} больше нет в волте",
+	"conflict.pending": "решить: {count}",
+	"cmd.conflicts": "Разобрать файлы, изменённые с двух сторон",
+	"notice.conflictQueued":
+		"Lockstep: {path} правили с двух сторон. Обе версии сохранены, открой плагин и выбери.",
+
 	"settings.autoSync.name": "Синхронизировать автоматически",
 	"settings.autoSync.desc":
 		"Синк через несколько секунд после правки, по таймеру и при сворачивании приложения.",
@@ -117,7 +154,6 @@ const ru: Dict = {
 
 	"notice.syncing": "Lockstep: синхронизирую…",
 	"notice.syncDone": "Lockstep: {summary}",
-	"notice.conflict": "Lockstep: {path} правили с двух сторон. Слияние лежит в {copy}",
 
 	"status.syncing": "синхронизирую…",
 	"status.syncSummary":

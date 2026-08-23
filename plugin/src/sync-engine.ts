@@ -467,29 +467,27 @@ export class SyncEngine {
 			return;
 		}
 
-		// Overlapping edits. The file on disk becomes the server version, and the merge
-		// with its markers is placed alongside so nothing has to be reconstructed.
-		const copy = conflictName(path, this.deviceName(), new Date());
-		await this.write(copy, encodeText(merged.text));
-		await this.write(path, server.data);
-		this.deps.index.set(path, {
-			base_rev: server.rev,
-			base_hash: server.hash,
-			local_hash: server.hash,
-			mtime: Date.now(),
-		});
-		this.deps.index.remove(copy);
-		report.conflicts++;
-		this.deps.onConflict(path, copy);
+		// Overlapping edits. Nothing is merged into the note itself: a note is read by
+		// a person, and conflict markers make it unreadable. Both whole versions stay
+		// on disk, the server one under the real name and this device's one alongside,
+		// and the choice is left to whoever wrote them.
+		await this.keepBothWithoutMerging(path, localData, server, report, baseRev);
 		void localHash;
 	}
 
-	/** Binary content, or text too large to merge line by line. */
+	/**
+	 * Keep both versions whole and record that somebody has to choose.
+	 *
+	 * Used for overlapping edits, for binary content, and for text too large to merge
+	 * line by line. In every case the rule is the same: two files on disk, no merged
+	 * text in the note, and a decision left to a person.
+	 */
 	private async keepBothWithoutMerging(
 		path: string,
 		localData: ArrayBuffer,
 		server: { data: ArrayBuffer; rev: number; hash: string },
 		report: SyncReport,
+		baseRev = 0,
 	): Promise<void> {
 		const copy = conflictName(path, this.deviceName(), new Date());
 		await this.write(copy, localData);
@@ -500,13 +498,80 @@ export class SyncEngine {
 			local_hash: server.hash,
 			mtime: Date.now(),
 		});
+		// The copy is deliberately not tracked. It exists for the person, not for the
+		// sync, and uploading it would spread one device's confusion to every other.
 		this.deps.index.remove(copy);
+		this.deps.index.addConflict({
+			path,
+			copy,
+			device: this.deviceName(),
+			at: Date.now(),
+			base_rev: baseRev,
+			server_rev: server.rev,
+		});
 		report.conflicts++;
 		this.deps.onConflict(path, copy);
 	}
 
-	private deviceName(): string {
+	deviceName(): string {
 		return this.deps.settings.deviceName || "local";
+	}
+
+	/**
+	 * Apply a person's decision about a conflict.
+	 *
+	 * "mine" sends this device's version up as a new revision. "server" simply drops
+	 * the copy. "merged" writes the three-way merge with its markers into the note so
+	 * the two texts can be reconciled by hand in one place.
+	 */
+	async resolveConflict(path: string, choice: "mine" | "server" | "merged"): Promise<void> {
+		const client = this.deps.client();
+		const pending = this.deps.index.conflicts.find((c) => c.path === path);
+		if (!client || !pending) return;
+		const adapter = this.deps.app.vault.adapter;
+
+		if (choice === "server") {
+			if (await adapter.exists(pending.copy)) await adapter.remove(pending.copy);
+			this.deps.index.clearConflict(path);
+			await this.deps.index.save();
+			return;
+		}
+
+		const mine = await adapter.readBinary(pending.copy);
+		let data = mine;
+
+		if (choice === "merged") {
+			const server = await adapter.readBinary(path);
+			const mineText = decodeText(mine);
+			const serverText = decodeText(server);
+			if (mineText === null || serverText === null) return; // binary: nothing to merge
+			let baseText = "";
+			if (pending.base_rev > 0) {
+				try {
+					baseText = decodeText((await client.getFile(path, pending.base_rev)).data) ?? "";
+				} catch {
+					baseText = "";
+				}
+			}
+			data = encodeText(
+				merge3(baseText, mineText, serverText, pending.device, "server").text,
+			);
+		}
+
+		await this.write(path, data);
+		const hash = await sha256(data);
+		const entry = this.deps.index.get(path);
+		const res = await client.putFile(path, entry?.base_rev ?? pending.server_rev, data, Date.now());
+		this.deps.index.set(path, {
+			base_rev: res.rev,
+			base_hash: res.hash || hash,
+			local_hash: hash,
+			mtime: Date.now(),
+			dirty: false,
+		});
+		if (await adapter.exists(pending.copy)) await adapter.remove(pending.copy);
+		this.deps.index.clearConflict(path);
+		await this.deps.index.save();
 	}
 }
 
