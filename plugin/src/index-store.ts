@@ -36,6 +36,8 @@ export interface PendingConflict {
 	at: number;
 	base_rev: number;
 	server_rev: number;
+	/** False for binary content and for text too large to merge line by line. */
+	mergeable: boolean;
 }
 
 /** A local rename that has not reached the server yet. */

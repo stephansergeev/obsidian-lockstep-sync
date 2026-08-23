@@ -53,8 +53,9 @@ nothing to decide.
 
 Edits to the same lines are not merged behind your back. Both whole versions stay on disk,
 the server one under its own name and yours beside it, and the plugin asks which one stands.
-You can open either, then keep yours, keep the server's, or have both written into the note
-with markers to reconcile by hand. Nothing is a blocking prompt: on a phone a sync often
+You can open either, then choose: keep both edits, which writes the two texts into the note
+with markers and discards nothing, keep this device's version, or keep the server's. Keeping
+both is offered first, because it is the only choice that cannot lose a word. Nothing is a blocking prompt: on a phone a sync often
 finishes as the app is being suspended, so the decisions wait in a list until you open it.
 
 Those markers are Obsidian comments rather than the git ones, and they carry the block

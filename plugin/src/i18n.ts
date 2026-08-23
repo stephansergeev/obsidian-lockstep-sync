@@ -41,11 +41,15 @@ const en: Dict = {
 	"conflict.detail": "changed on {device} and on the server, {when}",
 	"conflict.openServer": "open the server version",
 	"conflict.openMine": "open the version from {device}",
+	"conflict.notMergeable":
+		"Too large, or not text. Both files are kept, but they cannot be merged line by line.",
+	"conflict.keepBoth": "Keep both edits",
+	"conflict.keepBoth.tooltip":
+		"Nothing is discarded. Both texts go into the note, marked, so you can settle them in one place.",
 	"conflict.keepMine": "Keep {device}",
-	"conflict.keepServer": "Keep server",
-	"conflict.keepMerged": "Merge by hand",
-	"conflict.keepMerged.tooltip":
-		"Put both texts into the note with markers, so you can reconcile them in one place.",
+	"conflict.keepMine.tooltip": "Take the version written on this device and drop the other.",
+	"conflict.keepServer": "Keep the server's",
+	"conflict.keepServer.tooltip": "Take the version already on the server and drop this device's.",
 	"conflict.resolved": "{path} settled",
 	"conflict.gone": "{path} is no longer in the vault",
 	"conflict.pending": "{count} to decide",
@@ -129,11 +133,15 @@ const ru: Dict = {
 	"conflict.detail": "правили на {device} и на сервере, {when}",
 	"conflict.openServer": "открыть серверную версию",
 	"conflict.openMine": "открыть версию с {device}",
+	"conflict.notMergeable":
+		"Слишком большой файл или не текст. Обе версии сохранены, но построчно свести их нельзя.",
+	"conflict.keepBoth": "Сохранить все правки",
+	"conflict.keepBoth.tooltip":
+		"Ничего не выбрасывается. Оба текста ложатся в заметку с пометками, чтобы свести их в одном месте.",
 	"conflict.keepMine": "Оставить {device}",
+	"conflict.keepMine.tooltip": "Взять версию, написанную на этом устройстве, другую убрать.",
 	"conflict.keepServer": "Оставить серверную",
-	"conflict.keepMerged": "Свести вручную",
-	"conflict.keepMerged.tooltip":
-		"Положить оба текста в заметку с маркерами, чтобы свести их в одном месте.",
+	"conflict.keepServer.tooltip": "Взять версию, которая уже на сервере, эту убрать.",
 	"conflict.resolved": "{path} решено",
 	"conflict.gone": "{path} больше нет в волте",
 	"conflict.pending": "решить: {count}",

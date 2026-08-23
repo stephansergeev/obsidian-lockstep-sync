@@ -471,7 +471,7 @@ export class SyncEngine {
 		// a person, and conflict markers make it unreadable. Both whole versions stay
 		// on disk, the server one under the real name and this device's one alongside,
 		// and the choice is left to whoever wrote them.
-		await this.keepBothWithoutMerging(path, localData, server, report, baseRev);
+		await this.keepBothWithoutMerging(path, localData, server, report, baseRev, true);
 		void localHash;
 	}
 
@@ -488,6 +488,7 @@ export class SyncEngine {
 		server: { data: ArrayBuffer; rev: number; hash: string },
 		report: SyncReport,
 		baseRev = 0,
+		mergeable = false,
 	): Promise<void> {
 		const copy = conflictName(path, this.deviceName(), new Date());
 		await this.write(copy, localData);
@@ -508,6 +509,7 @@ export class SyncEngine {
 			at: Date.now(),
 			base_rev: baseRev,
 			server_rev: server.rev,
+			mergeable,
 		});
 		report.conflicts++;
 		this.deps.onConflict(path, copy);
@@ -541,6 +543,7 @@ export class SyncEngine {
 		let data = mine;
 
 		if (choice === "merged") {
+			if (!pending.mergeable) throw new Error("this file cannot be merged line by line");
 			const server = await adapter.readBinary(path);
 			const mineText = decodeText(mine);
 			const serverText = decodeText(server);

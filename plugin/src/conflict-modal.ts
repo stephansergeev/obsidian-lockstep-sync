@@ -56,20 +56,38 @@ export class ConflictModal extends Modal {
 			links.createSpan({ text: "  ·  " });
 			this.link(links, t("conflict.openMine", { device: c.device }), c.copy);
 
-			new Setting(contentEl)
+			// Keeping everything comes first and is the highlighted one. It is the only
+			// choice that cannot lose a word, so it should be the easy thing to pick
+			// when someone is deciding quickly on a phone.
+			const row = new Setting(contentEl);
+			// Binary content and very large files have no line-by-line merge, so the
+			// option is not offered rather than offered and then refused.
+			if (c.mergeable) {
+				row.addButton((b) =>
+					b
+						.setCta()
+						.setButtonText(t("conflict.keepBoth"))
+						.setTooltip(t("conflict.keepBoth.tooltip"))
+						.onClick(() => void this.choose(c.path, "merged")),
+				);
+			} else {
+				info.createDiv({
+					cls: "setting-item-description",
+					text: t("conflict.notMergeable"),
+				});
+			}
+			row
 				.addButton((b) =>
 					b
 						.setButtonText(t("conflict.keepMine", { device: c.device }))
+						.setTooltip(t("conflict.keepMine.tooltip"))
 						.onClick(() => void this.choose(c.path, "mine")),
 				)
 				.addButton((b) =>
-					b.setButtonText(t("conflict.keepServer")).onClick(() => void this.choose(c.path, "server")),
-				)
-				.addButton((b) =>
 					b
-						.setButtonText(t("conflict.keepMerged"))
-						.setTooltip(t("conflict.keepMerged.tooltip"))
-						.onClick(() => void this.choose(c.path, "merged")),
+						.setButtonText(t("conflict.keepServer"))
+						.setTooltip(t("conflict.keepServer.tooltip"))
+						.onClick(() => void this.choose(c.path, "server")),
 				);
 		}
 	}
