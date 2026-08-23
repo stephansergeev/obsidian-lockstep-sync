@@ -14,7 +14,17 @@ import type { DataAdapter } from "obsidian";
  */
 export interface IndexEntry {
 	base_rev: number;
+	/**
+	 * Hash of what the server holds for this revision. With encryption on, that is
+	 * the hash of the ciphertext, which is what /changes reports and what tells us
+	 * whether the server has moved.
+	 */
 	base_hash: string;
+	/**
+	 * Hash of the plaintext of that same revision. Kept separately because the file
+	 * on disk is plaintext, so this is what a local change is measured against.
+	 */
+	plain_hash?: string;
 	local_hash: string;
 	mtime: number;
 	folder?: boolean;

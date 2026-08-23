@@ -4,3 +4,5 @@ main.js
 
 # bundled test fixtures
 test/_*.mjs
+
+test/_*.js

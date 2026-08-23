@@ -122,6 +122,25 @@ export class SyncClient {
 		return resp.json;
 	}
 
+	/** Key derivation parameters for this vault, or null when it has none yet. */
+	async getVaultKey(): Promise<Record<string, unknown> | null> {
+		try {
+			const resp = await this.call("GET", "/vaultkey");
+			return resp.json;
+		} catch (e) {
+			if (e instanceof ApiError && e.status === 404) return null;
+			throw e;
+		}
+	}
+
+	/** Write them once. The server refuses to change them. */
+	async putVaultKey(params: unknown): Promise<void> {
+		await this.call("PUT", "/vaultkey", {
+			body: JSON.stringify(params),
+			headers: { "Content-Type": "application/json" },
+		});
+	}
+
 	async getFile(path: string, rev?: number): Promise<{ data: ArrayBuffer; rev: number; hash: string }> {
 		const q = rev === undefined ? "" : `&rev=${rev}`;
 		const resp = await this.call("GET", `/file?path=${encodePath(path)}${q}`);

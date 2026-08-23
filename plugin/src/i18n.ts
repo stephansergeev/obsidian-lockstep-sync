@@ -57,6 +57,21 @@ const en: Dict = {
 	"notice.conflictQueued":
 		"Lockstep: {path} was changed on both sides. Both versions are kept, open the plugin to choose.",
 
+	"settings.section.encryption": "Encryption",
+	"settings.encryption.name": "Encrypt content",
+	"settings.encryption.desc":
+		"Notes are encrypted on this device before they are uploaded. The server keeps bytes it cannot read. File and folder names are still visible to it.",
+	"settings.passphrase.name": "Passphrase",
+	"settings.passphrase.desc":
+		"The same passphrase on every device. It never leaves them. Lose it and the notes are gone, there is nobody to ask.",
+	"settings.passphrase.button": "Unlock",
+	"encryption.off": "Encryption is off. The server can read your notes.",
+	"encryption.locked": "Enter the passphrase to unlock this vault.",
+	"encryption.ready": "Unlocked. New uploads are encrypted.",
+	"encryption.created": "Encryption set up for this vault. Keep the passphrase safe.",
+	"encryption.wrong": "Wrong passphrase for this vault.",
+	"encryption.failed": "Could not unlock: {message}",
+
 	"settings.autoSync.name": "Sync automatically",
 	"settings.autoSync.desc":
 		"Sync a few seconds after an edit, on a timer, and when the app goes to the background.",
@@ -148,6 +163,21 @@ const ru: Dict = {
 	"cmd.conflicts": "Разобрать файлы, изменённые с двух сторон",
 	"notice.conflictQueued":
 		"Lockstep: {path} правили с двух сторон. Обе версии сохранены, открой плагин и выбери.",
+
+	"settings.section.encryption": "Шифрование",
+	"settings.encryption.name": "Шифровать содержимое",
+	"settings.encryption.desc":
+		"Заметки шифруются на этом устройстве до отправки. Сервер хранит байты, которые не может прочитать. Имена файлов и папок ему по-прежнему видны.",
+	"settings.passphrase.name": "Пароль",
+	"settings.passphrase.desc":
+		"Один и тот же пароль на всех устройствах. Он никуда не уходит. Потеряешь его — заметки потеряны, спросить не у кого.",
+	"settings.passphrase.button": "Открыть",
+	"encryption.off": "Шифрование выключено. Сервер видит твои заметки.",
+	"encryption.locked": "Введи пароль, чтобы открыть волт.",
+	"encryption.ready": "Открыто. Новые загрузки шифруются.",
+	"encryption.created": "Шифрование настроено для этого волта. Сохрани пароль.",
+	"encryption.wrong": "Неверный пароль для этого волта.",
+	"encryption.failed": "Не удалось открыть: {message}",
 
 	"settings.autoSync.name": "Синхронизировать автоматически",
 	"settings.autoSync.desc":

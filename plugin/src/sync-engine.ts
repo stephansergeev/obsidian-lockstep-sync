@@ -5,6 +5,7 @@ import { ApiError, ConflictError, SyncClient, type ChangeEntry } from "./api";
 import { merge3 } from "./diff3";
 import type { LocalIndex } from "./index-store";
 import { conflictName, sha256, toNFC } from "./paths";
+import type { Cipher } from "./crypto";
 import type { SyncSettings } from "./settings";
 
 /**
@@ -50,6 +51,8 @@ export interface EngineDeps {
 	index: LocalIndex;
 	settings: SyncSettings;
 	client: () => SyncClient | null;
+	/** Encryption in force right now, or the pass-through when it is off. */
+	cipher: () => Cipher;
 	onConflict: (path: string, copy: string) => void;
 	log: (message: string, error?: unknown) => void;
 }
@@ -230,10 +233,11 @@ export class SyncEngine {
 
 		const local = await adapter.readBinary(path);
 		const localHash = await sha256(local);
-		if (localHash === entry.hash) {
+		if (known && entry.hash === known.base_hash && localHash === known.plain_hash) {
 			this.deps.index.set(path, {
 				base_rev: entry.rev,
 				base_hash: entry.hash ?? "",
+				plain_hash: localHash,
 				local_hash: localHash,
 				mtime: entry.mtime,
 			});
@@ -241,9 +245,9 @@ export class SyncEngine {
 			return;
 		}
 
-		// The local file differs. If it never diverged from what we last saw, the
+		// The local file differs from what we last saw. If it never diverged, the
 		// server simply moved ahead and we take its version.
-		if (known && known.base_hash === localHash) {
+		if (known && known.plain_hash === localHash) {
 			await this.download(client, entry, path);
 			report.downloaded++;
 			return;
@@ -267,7 +271,7 @@ export class SyncEngine {
 		}
 		const local = await adapter.readBinary(path);
 		const localHash = await sha256(local);
-		if (known && known.base_hash === localHash) {
+		if (known && known.plain_hash === localHash) {
 			// Untouched here since we last saw it, so the deletion is safe to apply.
 			this.suppressed.add(path);
 			await adapter.remove(path);
@@ -288,17 +292,55 @@ export class SyncEngine {
 		this.deps.log(`kept a locally edited file the server deleted: ${path}`);
 	}
 
-	private async download(client: SyncClient, entry: ChangeEntry, path: string): Promise<void> {
-		const { data, hash } = await client.getFile(path, entry.rev);
-		const actual = await sha256(data);
-		if (entry.hash && actual !== entry.hash) {
-			throw new Error(`corrupt download: expected ${entry.hash}, got ${actual}`);
+	/**
+	 * Fetch a revision and decrypt it.
+	 *
+	 * The integrity check is done on the bytes as the server stored them, before
+	 * decryption: that is the only hash both sides agree on.
+	 */
+	private async fetch(
+		client: SyncClient,
+		path: string,
+		rev?: number,
+		expectHash?: string,
+	): Promise<{ plain: ArrayBuffer; cipherHash: string; plainHash: string; rev: number }> {
+		const got = await client.getFile(path, rev);
+		const cipherHash = await sha256(got.data);
+		if (expectHash && cipherHash !== expectHash) {
+			throw new Error(`corrupt download: expected ${expectHash}, got ${cipherHash}`);
 		}
-		await this.write(path, data);
+		const plain = await this.deps.cipher().decrypt(got.data);
+		return { plain, cipherHash, plainHash: await sha256(plain), rev: got.rev || rev || 0 };
+	}
+
+	/** Encrypt and upload. Returns what the index needs to remember. */
+	private async send(
+		client: SyncClient,
+		path: string,
+		baseRev: number,
+		plain: ArrayBuffer,
+		plainHash: string,
+	): Promise<void> {
+		const sealed = await this.deps.cipher().encrypt(plain);
+		const res = await client.putFile(path, baseRev, sealed, Date.now());
+		this.deps.index.set(path, {
+			base_rev: res.rev,
+			base_hash: res.hash || (await sha256(sealed)),
+			plain_hash: plainHash,
+			local_hash: plainHash,
+			mtime: Date.now(),
+			dirty: false,
+		});
+	}
+
+	private async download(client: SyncClient, entry: ChangeEntry, path: string): Promise<void> {
+		const got = await this.fetch(client, path, entry.rev, entry.hash);
+		await this.write(path, got.plain);
 		this.deps.index.set(path, {
 			base_rev: entry.rev,
-			base_hash: hash || actual,
-			local_hash: actual,
+			base_hash: entry.hash ?? got.cipherHash,
+			plain_hash: got.plainHash,
+			local_hash: got.plainHash,
 			mtime: entry.mtime,
 		});
 	}
@@ -348,7 +390,7 @@ export class SyncEngine {
 				}
 				const data = await adapter.readBinary(path);
 				const hash = await sha256(data);
-				if (hash === entry.base_hash) {
+				if (hash === entry.plain_hash) {
 					// Changed and changed back. Nothing to send.
 					this.deps.index.set(path, { ...entry, local_hash: hash, dirty: false });
 					report.skipped++;
@@ -371,14 +413,7 @@ export class SyncEngine {
 		report: SyncReport,
 	): Promise<void> {
 		try {
-			const res = await client.putFile(path, baseRev, data, Date.now());
-			this.deps.index.set(path, {
-				base_rev: res.rev,
-				base_hash: res.hash || hash,
-				local_hash: hash,
-				mtime: Date.now(),
-				dirty: false,
-			});
+			await this.send(client, path, baseRev, data, hash);
 			report.uploaded++;
 		} catch (e) {
 			if (!(e instanceof ConflictError)) throw e;
@@ -407,12 +442,13 @@ export class SyncEngine {
 			}
 			if (!(e instanceof ConflictError)) throw e;
 			// Deleted here, edited there. The edit wins: bring the file back.
-			const entry = await client.getFile(path);
-			await this.write(path, entry.data);
+			const got = await this.fetch(client, path);
+			await this.write(path, got.plain);
 			this.deps.index.set(path, {
-				base_rev: entry.rev,
-				base_hash: entry.hash,
-				local_hash: entry.hash,
+				base_rev: got.rev,
+				base_hash: got.cipherHash,
+				plain_hash: got.plainHash,
+				local_hash: got.plainHash,
 				mtime: Date.now(),
 			});
 			report.conflicts++;
@@ -435,7 +471,13 @@ export class SyncEngine {
 		baseRev: number,
 		report: SyncReport,
 	): Promise<void> {
-		const server = await client.getFile(path, serverRev);
+		const fetched = await this.fetch(client, path, serverRev);
+		const server = {
+			data: fetched.plain,
+			rev: serverRev,
+			hash: fetched.cipherHash,
+			plainHash: fetched.plainHash,
+		};
 		const localText = decodeText(localData);
 		const serverText = decodeText(server.data);
 
@@ -452,8 +494,7 @@ export class SyncEngine {
 		let baseText = "";
 		if (baseRev > 0) {
 			try {
-				const base = await client.getFile(path, baseRev);
-				baseText = decodeText(base.data) ?? "";
+				baseText = decodeText((await this.fetch(client, path, baseRev)).plain) ?? "";
 			} catch (e) {
 				// The ancestor is gone, most likely collected. Without it a merge would be
 				// guesswork, so both versions are kept instead.
@@ -468,15 +509,7 @@ export class SyncEngine {
 		if (merged.clean) {
 			const data = encodeText(merged.text);
 			await this.write(path, data);
-			const hash = await sha256(data);
-			const res = await client.putFile(path, serverRev, data, Date.now());
-			this.deps.index.set(path, {
-				base_rev: res.rev,
-				base_hash: res.hash || hash,
-				local_hash: hash,
-				mtime: Date.now(),
-				dirty: false,
-			});
+			await this.send(client, path, serverRev, data, await sha256(data));
 			report.merged++;
 			return;
 		}
@@ -499,7 +532,7 @@ export class SyncEngine {
 	private async keepBothWithoutMerging(
 		path: string,
 		localData: ArrayBuffer,
-		server: { data: ArrayBuffer; rev: number; hash: string },
+		server: { data: ArrayBuffer; rev: number; hash: string; plainHash?: string },
 		report: SyncReport,
 		baseRev = 0,
 		mergeable = false,
@@ -510,7 +543,8 @@ export class SyncEngine {
 		this.deps.index.set(path, {
 			base_rev: server.rev,
 			base_hash: server.hash,
-			local_hash: server.hash,
+			plain_hash: server.plainHash,
+			local_hash: server.plainHash ?? "",
 			mtime: Date.now(),
 		});
 		// The copy is deliberately not tracked. It exists for the person, not for the
@@ -565,7 +599,7 @@ export class SyncEngine {
 			let baseText = "";
 			if (pending.base_rev > 0) {
 				try {
-					baseText = decodeText((await client.getFile(path, pending.base_rev)).data) ?? "";
+					baseText = decodeText((await this.fetch(client, path, pending.base_rev)).plain) ?? "";
 				} catch {
 					baseText = "";
 				}
@@ -576,16 +610,8 @@ export class SyncEngine {
 		}
 
 		await this.write(path, data);
-		const hash = await sha256(data);
 		const entry = this.deps.index.get(path);
-		const res = await client.putFile(path, entry?.base_rev ?? pending.server_rev, data, Date.now());
-		this.deps.index.set(path, {
-			base_rev: res.rev,
-			base_hash: res.hash || hash,
-			local_hash: hash,
-			mtime: Date.now(),
-			dirty: false,
-		});
+		await this.send(client, path, entry?.base_rev ?? pending.server_rev, data, await sha256(data));
 		if (await adapter.exists(pending.copy)) await adapter.remove(pending.copy);
 		this.deps.index.clearConflict(path);
 		await this.deps.index.save();

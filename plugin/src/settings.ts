@@ -11,6 +11,16 @@ export interface SyncSettings {
 	/** Paths that never leave this device, whatever else is configured. */
 	excludes: string[];
 	autoSync: boolean;
+	/** Encrypt content before it leaves the device. */
+	encryption: boolean;
+	/**
+	 * The passphrase, kept in the plugin's own settings file inside the vault.
+	 *
+	 * That file sits on a device you already control, and the threat this encryption
+	 * answers is the server, not your own laptop. Asking for a passphrase on every
+	 * launch would mostly train people to turn encryption off.
+	 */
+	passphrase: string;
 	/** Seconds between background passes. */
 	intervalSeconds: number;
 }
@@ -22,6 +32,8 @@ export const DEFAULT_SETTINGS: SyncSettings = {
 	// workspace.json holds window state: it differs per device and only gets in the way.
 	excludes: [".obsidian/workspace.json", ".obsidian/workspace-mobile.json", ".trash/"],
 	autoSync: true,
+	encryption: false,
+	passphrase: "",
 	intervalSeconds: 60,
 };
 
@@ -115,6 +127,46 @@ export class SyncSettingsTab extends PluginSettingTab {
 						this.plugin.restartAutoSync();
 					}),
 			);
+
+		new Setting(containerEl).setName(t("settings.section.encryption")).setHeading();
+
+		new Setting(containerEl)
+			.setName(t("settings.encryption.name"))
+			.setDesc(t("settings.encryption.desc"))
+			.addToggle((toggle) =>
+				toggle.setValue(this.plugin.settings.encryption).onChange(async (v) => {
+					this.plugin.settings.encryption = v;
+					await this.plugin.saveSettings();
+					await this.plugin.applyEncryption();
+					this.display();
+				}),
+			);
+
+		if (this.plugin.settings.encryption) {
+			new Setting(containerEl)
+				.setName(t("settings.passphrase.name"))
+				.setDesc(t("settings.passphrase.desc"))
+				.addText((text) => {
+					text.inputEl.type = "password";
+					text
+						.setValue(this.plugin.settings.passphrase)
+						.onChange(async (v) => {
+							this.plugin.settings.passphrase = v;
+							await this.plugin.saveSettings();
+						});
+				})
+				.addButton((b) =>
+					b.setButtonText(t("settings.passphrase.button")).onClick(async () => {
+						await this.plugin.applyEncryption();
+						this.display();
+					}),
+				);
+
+			containerEl.createEl("p", {
+				cls: "setting-item-description",
+				text: this.plugin.encryptionStatus(),
+			});
+		}
 
 		new Setting(containerEl).setName(t("settings.section.maintenance")).setHeading();
 

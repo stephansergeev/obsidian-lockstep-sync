@@ -2,11 +2,13 @@
 import esbuild from "esbuild";
 
 await esbuild.build({
-	entryPoints: ["src/diff3.ts"],
+	entryPoints: ["src/diff3.ts", "src/crypto.ts"],
 	bundle: true,
 	format: "esm",
 	target: "es2022",
 	platform: "node",
-	outfile: "test/_diff3.mjs",
+	outdir: "test",
+	entryNames: "_[name]",
+	outExtension: { ".js": ".mjs" },
 	logLevel: "warning",
 });

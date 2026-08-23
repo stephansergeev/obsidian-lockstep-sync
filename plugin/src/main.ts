@@ -3,6 +3,13 @@
 import { Notice, Plugin, TAbstractFile, normalizePath } from "obsidian";
 import { ApiError, SyncClient, type ChangeEntry } from "./api";
 import { ConflictModal } from "./conflict-modal";
+import {
+	VaultCipher,
+	WrongPassphrase,
+	plaintext,
+	type Cipher,
+	type VaultKeyParams,
+} from "./crypto";
 import { t } from "./i18n";
 import { LocalIndex } from "./index-store";
 import { conflictName, sha256, toNFC } from "./paths";
@@ -19,6 +26,16 @@ export default class LockstepPlugin extends Plugin {
 	private statusBar: HTMLElement | null = null;
 	private lastStatus = t("status.notConnected");
 	private debounce: ReturnType<typeof setTimeout> | null = null;
+	private cipher: Cipher = plaintext;
+	private cipherStatus = "";
+	/**
+	 * Encryption is switched on but the key is not available.
+	 *
+	 * Syncing has to stop here rather than fall back to plaintext. Falling back would
+	 * publish to the server exactly the notes this setting exists to hide, and it
+	 * would do it quietly.
+	 */
+	private locked = false;
 	private interval: number | null = null;
 
 	override async onload(): Promise<void> {
@@ -33,6 +50,7 @@ export default class LockstepPlugin extends Plugin {
 			index: this.index,
 			settings: this.settings,
 			client: () => this.client(false),
+			cipher: () => this.cipher,
 			onConflict: (path) => new Notice(t("notice.conflictQueued", { path }), 12000),
 			log: (message, error) => console.warn(`[lockstep-sync] ${message}`, error ?? ""),
 		});
@@ -63,6 +81,7 @@ export default class LockstepPlugin extends Plugin {
 		// whole tree as create events while it starts, and treating those as edits
 		// would mark every file dirty on every launch.
 		this.app.workspace.onLayoutReady(() => {
+			void this.applyEncryption();
 			this.registerVaultEvents();
 			this.restartAutoSync();
 			if (this.settings.autoSync) void this.syncNow(true);
@@ -91,6 +110,60 @@ export default class LockstepPlugin extends Plugin {
 
 	statusLine(): string {
 		return this.lastStatus;
+	}
+
+	encryptionStatus(): string {
+		return this.cipherStatus || t("encryption.locked");
+	}
+
+	/**
+	 * Bring encryption into the state the settings ask for.
+	 *
+	 * The key parameters live on the server, so the first device to enable encryption
+	 * writes them and every other device reads them and checks the passphrase against
+	 * them. That is what makes a second device able to join knowing only the words.
+	 */
+	async applyEncryption(): Promise<void> {
+		if (!this.settings.encryption) {
+			this.cipher = plaintext;
+			this.locked = false;
+			this.cipherStatus = t("encryption.off");
+			return;
+		}
+		if (!this.settings.passphrase) {
+			this.cipher = plaintext;
+			this.locked = true;
+			this.cipherStatus = t("encryption.locked");
+			return;
+		}
+		const client = this.client(false);
+		if (!client) return;
+		try {
+			const stored = (await client.getVaultKey()) as VaultKeyParams | null;
+			if (stored) {
+				this.cipher = await VaultCipher.unlock(this.settings.passphrase, stored);
+				this.locked = false;
+				this.cipherStatus = t("encryption.ready");
+			} else {
+				const { cipher, params } = await VaultCipher.create(this.settings.passphrase);
+				await client.putVaultKey(params);
+				this.cipher = cipher;
+				this.locked = false;
+				this.cipherStatus = t("encryption.created");
+				new Notice(t("encryption.created"), 10000);
+			}
+		} catch (e) {
+			// A wrong passphrase must never fall back to writing plaintext: that would
+			// quietly publish the notes this setting exists to hide.
+			this.cipher = plaintext;
+			this.locked = true;
+			this.cipherStatus =
+				e instanceof WrongPassphrase
+					? t("encryption.wrong")
+					: t("encryption.failed", { message: e instanceof Error ? e.message : String(e) });
+			new Notice(`Lockstep: ${this.cipherStatus}`, 10000);
+			throw e;
+		}
 	}
 
 	openConflicts(): void {
@@ -201,6 +274,7 @@ export default class LockstepPlugin extends Plugin {
 
 	async syncNow(quiet = false): Promise<void> {
 		if (!this.client(!quiet)) return;
+		if (this.blocked(quiet)) return;
 		if (this.engine.busy) return;
 		const started = Date.now();
 		this.setStatus(t("status.syncing"));
@@ -233,6 +307,14 @@ export default class LockstepPlugin extends Plugin {
 		for (const err of report.errors.slice(0, 3)) {
 			new Notice(t("notice.error", { what: t("error.sync"), message: err }), 8000);
 		}
+	}
+
+	/** True when encryption is on and the vault is not open. Nothing may move. */
+	private blocked(quiet: boolean): boolean {
+		if (!this.locked) return false;
+		this.setStatus(this.cipherStatus);
+		if (!quiet) new Notice(`Lockstep: ${this.cipherStatus}`, 8000);
+		return true;
 	}
 
 	async testConnection(): Promise<void> {
@@ -268,6 +350,7 @@ export default class LockstepPlugin extends Plugin {
 	async pullAll(): Promise<void> {
 		const client = this.client();
 		if (!client) return;
+		if (this.blocked(false)) return;
 		let since = 0;
 		let downloaded = 0;
 		let kept = 0;
@@ -334,13 +417,9 @@ export default class LockstepPlugin extends Plugin {
 		if (await adapter.exists(path)) {
 			const local = await adapter.readBinary(path);
 			const localHash = await sha256(local);
-			if (localHash === entry.hash) {
-				this.index.set(path, {
-					base_rev: entry.rev,
-					base_hash: entry.hash ?? "",
-					local_hash: localHash,
-					mtime: entry.mtime,
-				});
+			const known = this.index.get(path);
+			if (known?.plain_hash === localHash && known.base_hash === entry.hash) {
+				this.index.set(path, { ...known, base_rev: entry.rev, mtime: entry.mtime });
 				return "skipped";
 			}
 			const backup = conflictName(path, this.settings.deviceName || t("conflict.label"), new Date());
@@ -365,6 +444,8 @@ export default class LockstepPlugin extends Plugin {
 				t("error.corruptDownload", { path, want: entry.hash ?? "", got: actual }),
 			);
 		}
+		const plain = await this.cipher.decrypt(data);
+		const plainHash = await sha256(plain);
 		const slash = path.lastIndexOf("/");
 		if (slash > 0) {
 			const dir = path.slice(0, slash);
@@ -372,11 +453,12 @@ export default class LockstepPlugin extends Plugin {
 				await this.app.vault.adapter.mkdir(dir);
 			}
 		}
-		await this.app.vault.adapter.writeBinary(path, data);
+		await this.app.vault.adapter.writeBinary(path, plain);
 		this.index.set(path, {
 			base_rev: entry.rev,
 			base_hash: hash || actual,
-			local_hash: actual,
+			plain_hash: plainHash,
+			local_hash: plainHash,
 			mtime: entry.mtime,
 		});
 	}

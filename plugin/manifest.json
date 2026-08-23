@@ -1,7 +1,7 @@
 {
   "id": "lockstep-sync",
   "name": "Lockstep Sync",
-  "version": "0.3.2",
+  "version": "0.4.0",
   "minAppVersion": "1.5.0",
   "description": "Two-way vault sync through your own server. Self-hosted, no subscription, no cloud, single binary. Conflict-safe: nothing is overwritten silently.",
   "author": "Stephan Sergeev",

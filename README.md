@@ -152,9 +152,38 @@ of this went near a live vault.
 Sync runs both ways. Edits, deletions and renames travel in both directions, conflicts merge
 line by line, and overlapping edits produce a copy rather than a decision.
 
-Encryption is not implemented yet, so the server sees your notes in the clear. Run this
-against a server you control and a vault you are willing to test with, and wait for
-encryption before pointing it at anything sensitive.
+Content is encrypted on the device before it is uploaded. File and folder names are not yet:
+the server can see the shape of your vault, though not what is in it. Encrypting the paths
+as well is the next piece of work.
+
+## Encryption
+
+Turn it on, choose a passphrase, and use the same one on every device. Content is sealed with
+AES-256-GCM before it leaves, and the server holds bytes it cannot read. The key is derived
+from the passphrase and never goes anywhere.
+
+The derivation parameters are stored on the server as an opaque record, so a second device
+joins the vault knowing only the passphrase. They are write-once: changing them without
+re-encrypting every file would turn the whole vault into noise, so the server refuses.
+
+Two choices here trade something away and are worth knowing about.
+
+The key is derived with PBKDF2-SHA256 rather than Argon2id. Web Crypto has no Argon2, and
+the alternative is shipping a WebAssembly build inside a plugin that has to run on a phone.
+PBKDF2 is weaker against dedicated cracking hardware but needs no dependency and no native
+code. Because the parameters live in that record, moving to Argon2id later is a migration
+rather than a break.
+
+The nonce is derived from the content rather than drawn at random. A random one would make
+every upload of an unchanged file produce different bytes, which defeats deduplication,
+breaks the idempotent retry the protocol depends on, and wakes every other device for a file
+nobody touched. The cost is that the server can tell two files hold identical content,
+though not what that content is.
+
+If the passphrase is wrong or missing, syncing stops. It never falls back to plaintext,
+because falling back would quietly upload exactly what the setting exists to hide.
+
+Lose the passphrase and the notes are gone. There is nobody to ask.
 
 ## Dependencies
 
