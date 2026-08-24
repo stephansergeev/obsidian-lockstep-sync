@@ -197,7 +197,7 @@ Done.
 Put both into the plugin on your first device. For every other device, issue its
 own token so you can revoke one without touching the rest:
 
-  sudo $BIN token add --data $DATA_DIR --vault main --name iphone
+  sudo $BIN token add --data $DATA_DIR --vault main --name phone
 
 If you already have a vault, load it in one go:
 

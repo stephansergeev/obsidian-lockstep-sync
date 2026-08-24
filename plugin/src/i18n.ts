@@ -106,9 +106,11 @@ const en: Dict = {
 
 	"settings.autoSync.name": "Sync automatically",
 	"settings.autoSync.desc":
-		"Sync a few seconds after an edit, on a timer, and when the app goes to the background.",
-	"settings.interval.name": "Timer interval",
-	"settings.interval.desc": "Seconds between background passes. Minimum 15.",
+		"Keep this vault in step on its own. Without it, syncing only happens when you ask for it.",
+	"settings.interval.name": "Check the server every",
+	"settings.interval.desc":
+		"How often this device asks the server whether anything changed elsewhere, in seconds. Your own edits do not wait for it: they go a couple of seconds after you stop typing, and again when the app goes to the background. Minimum 15.",
+	"settings.interval.unit": "seconds",
 	"settings.sync.name": "Sync now",
 	"settings.sync.desc": "Take what the server has, then send what this device has.",
 	"settings.sync.button": "Sync",
@@ -247,9 +249,11 @@ const ru: Dict = {
 
 	"settings.autoSync.name": "Синхронизировать автоматически",
 	"settings.autoSync.desc":
-		"Синк через несколько секунд после правки, по таймеру и при сворачивании приложения.",
-	"settings.interval.name": "Интервал таймера",
-	"settings.interval.desc": "Секунд между фоновыми проходами. Минимум 15.",
+		"Держать волт в актуальном состоянии самостоятельно. Без этого синхронизация происходит только по твоей команде.",
+	"settings.interval.name": "Проверять сервер каждые",
+	"settings.interval.desc":
+		"Как часто это устройство спрашивает сервер, не изменилось ли что-то в другом месте, в секундах. Твои собственные правки этого не ждут: они уходят через пару секунд после того, как ты перестал печатать, и ещё раз при сворачивании приложения. Минимум 15.",
+	"settings.interval.unit": "секунд",
 	"settings.sync.name": "Синхронизировать сейчас",
 	"settings.sync.desc": "Забрать то, что есть на сервере, затем отправить то, что есть здесь.",
 	"settings.sync.button": "Синхронизировать",
