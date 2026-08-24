@@ -56,3 +56,8 @@
 	font-size: var(--font-ui-smaller);
 	color: var(--text-muted);
 }
+
+.lockstep-vault-name {
+	font-family: var(--font-monospace);
+	color: var(--text-normal);
+}

@@ -17,6 +17,10 @@ const en: Dict = {
 	"settings.token.name": "Device token",
 	"settings.token.desc":
 		"Issued by sync-server token add --name <device>. Shown once, on the server.",
+	"settings.serverVault.name": "Syncing with vault",
+	"settings.serverVault.desc":
+		"The vault on the server this token opens. What this vault is called in Obsidian is local to this device and has no effect on syncing.",
+	"settings.serverVault.unknown": "not connected",
 	"settings.device.name": "Device name",
 	"settings.device.desc":
 		"Used in conflict copy names, so you can tell which device an edit came from.",
@@ -162,6 +166,10 @@ const ru: Dict = {
 	"settings.token.name": "Токен устройства",
 	"settings.token.desc":
 		"Выдаётся командой sync-server token add --name <устройство>. Показывается один раз.",
+	"settings.serverVault.name": "Синхронизируется с волтом",
+	"settings.serverVault.desc":
+		"Волт на сервере, который открывает этот токен. Как волт назван в Obsidian — дело этого устройства и на синхронизацию не влияет.",
+	"settings.serverVault.unknown": "нет соединения",
 	"settings.device.name": "Имя устройства",
 	"settings.device.desc":
 		"Подставляется в имена конфликтных копий, чтобы было видно, откуда правка.",

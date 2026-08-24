@@ -170,6 +170,11 @@ One vault is one directory under `data/vaults/`, with its own database and its o
 store. Several vaults on one server work without a tenant column in the schema. The token
 simply says which directory to open.
 
+What a vault is called in Obsidian has nothing to do with any of this. That name is local to
+each device and is never sent anywhere, so the same vault can be called different things on
+different machines. The plugin shows which server vault a token opens, so nobody has to
+guess.
+
 ## Installing the plugin
 
 The easiest route, and the only comfortable one on a phone, is BRAT. Install BRAT from the

@@ -91,6 +91,20 @@ export class SyncSettingsTab extends PluginSettingTab {
 					});
 			});
 
+		// Which vault on the server this token opens. What the vault is called in
+		// Obsidian is local to this device and travels nowhere, so the two names are
+		// unrelated and somebody with several vaults needs to see the one that binds.
+		const vaultRow = new Setting(containerEl)
+			.setName(t("settings.serverVault.name"))
+			.setDesc(t("settings.serverVault.desc"));
+		const vaultValue = vaultRow.controlEl.createSpan({
+			cls: "lockstep-vault-name",
+			text: this.plugin.serverVaultName() || t("settings.serverVault.unknown"),
+		});
+		void this.plugin.refreshServerVault().then(() => {
+			vaultValue.setText(this.plugin.serverVaultName() || t("settings.serverVault.unknown"));
+		});
+
 		new Setting(containerEl)
 			.setName(t("settings.device.name"))
 			.setDesc(t("settings.device.desc"))

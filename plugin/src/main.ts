@@ -42,6 +42,8 @@ export default class LockstepPlugin extends Plugin {
 	private locked = false;
 	/** Said once, not on every pass. */
 	private announcedEncryptedVault = false;
+	/** Which vault on the server this device is bound to, as the server names it. */
+	private serverVault = "";
 	private interval: number | null = null;
 
 	override async onload(): Promise<void> {
@@ -138,6 +140,31 @@ export default class LockstepPlugin extends Plugin {
 
 	statusLine(): string {
 		return this.lastStatus;
+	}
+
+	/**
+	 * The vault this device syncs with, by the name the server knows.
+	 *
+	 * What a vault is called in Obsidian is local to the device and travels nowhere.
+	 * The binding is the token, and until this was shown the only way to know which
+	 * vault a token opened was to press a button and read a notice.
+	 */
+	serverVaultName(): string {
+		return this.serverVault;
+	}
+
+	async refreshServerVault(): Promise<void> {
+		const client = this.client(false);
+		if (!client) {
+			this.serverVault = "";
+			return;
+		}
+		try {
+			const stats = await client.stats();
+			this.serverVault = String(stats["vault"] ?? "");
+		} catch {
+			this.serverVault = "";
+		}
 	}
 
 	encryptionStatus(): string {
@@ -458,6 +485,7 @@ export default class LockstepPlugin extends Plugin {
 		try {
 			await client.health();
 			const stats = await client.stats();
+			this.serverVault = String(stats["vault"] ?? "");
 			const line = t("status.stats", {
 				vault: String(stats["vault"]),
 				files: String(stats["files"]),
