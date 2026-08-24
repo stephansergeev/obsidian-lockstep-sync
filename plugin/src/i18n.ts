@@ -90,6 +90,14 @@ const en: Dict = {
 	"encryption.ready": "Unlocked. New uploads are encrypted.",
 	"encryption.readyWithPaths": "Unlocked. Content and file names are both hidden from the server.",
 	"encryption.created": "Encryption set up for this vault. Keep the passphrase safe.",
+	"banner.hidden": "This vault is encrypted",
+	"banner.hiddenNames": "This vault is encrypted, names included",
+	"banner.locked": "Locked. Nothing is syncing",
+	"banner.open": "Not encrypted. The server can read everything here",
+	"encryption.explainHidden":
+		"Anything uploaded from now on is unreadable to the server. It still knows how many files there are and how the folders are arranged.",
+	"encryption.explainNotHidden":
+		"Nothing is being hidden right now. Until this says otherwise, the server can read what is uploaded.",
 	"encryption.namesStayVisible":
 		"This vault already holds files, so their names stay visible to the server. Content from now on is encrypted. To hide names as well, set encryption up on an empty vault before putting anything in it.",
 	"encryption.wrong": "Wrong passphrase for this vault.",
@@ -220,6 +228,14 @@ const ru: Dict = {
 	"encryption.ready": "Открыто. Новые загрузки шифруются.",
 	"encryption.readyWithPaths": "Открыто. И содержимое, и имена файлов скрыты от сервера.",
 	"encryption.created": "Шифрование настроено для этого волта. Сохрани пароль.",
+	"banner.hidden": "Волт зашифрован",
+	"banner.hiddenNames": "Волт зашифрован, включая имена файлов",
+	"banner.locked": "Закрыт. Синхронизация остановлена",
+	"banner.open": "Без шифрования. Сервер читает всё, что здесь есть",
+	"encryption.explainHidden":
+		"Всё, что загружается с этого момента, серверу нечитаемо. Ему по-прежнему известно, сколько файлов и как разложены папки.",
+	"encryption.explainNotHidden":
+		"Сейчас ничего не скрывается. Пока здесь написано иначе, сервер читает то, что загружается.",
 	"encryption.namesStayVisible":
 		"В волте уже есть файлы, поэтому их имена останутся видны серверу. Содержимое с этого момента шифруется. Чтобы скрыть и имена, включай шифрование на пустом волте, до того как в него что-то попадёт.",
 	"encryption.wrong": "Неверный пароль для этого волта.",

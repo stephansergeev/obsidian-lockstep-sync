@@ -135,6 +135,16 @@ export default class LockstepPlugin extends Plugin {
 		return this.cipherStatus || t("encryption.locked");
 	}
 
+	/** True when names are hidden too, not only content. */
+	hidesNames(): boolean {
+		return this.pathCipher !== null;
+	}
+
+	/** True when the vault is open and uploads are actually being encrypted. */
+	encryptionReady(): boolean {
+		return this.settings.encryption && !this.locked;
+	}
+
 	/**
 	 * Bring encryption into the state the settings ask for.
 	 *
@@ -169,6 +179,10 @@ export default class LockstepPlugin extends Plugin {
 				this.cipherStatus = t(
 					this.pathCipher ? "encryption.readyWithPaths" : "encryption.ready",
 				);
+				// Whether a vault is actually hidden is the one thing somebody turning
+				// this on wants confirmed. A grey caption under a text field is not a
+				// confirmation.
+				new Notice(`Lockstep: ${this.cipherStatus}`, 8000);
 			} else {
 				// Names can only be hidden in a vault that starts empty. Everything
 				// already on the server is stored under a readable path, and a vault
@@ -247,8 +261,12 @@ export default class LockstepPlugin extends Plugin {
 	private setStatus(text: string): void {
 		this.lastStatus = text;
 		const pending = this.index?.conflicts.length ?? 0;
-		const suffix = pending > 0 ? ` · ${t("conflict.pending", { count: pending })}` : "";
-		this.statusBar?.setText(`${t("status.prefix")}: ${text}${suffix}`);
+		const parts = [`${t("status.prefix")}: ${text}`];
+		// A padlock in the status bar, so the answer to "is this vault hidden" is
+		// visible from anywhere rather than only inside the settings screen.
+		if (this.settings.encryption) parts.push(this.locked ? "🔒!" : "🔒");
+		if (pending > 0) parts.push(t("conflict.pending", { count: pending }));
+		this.statusBar?.setText(parts.join(" · "));
 	}
 
 	private client(complain = true): SyncClient | null {

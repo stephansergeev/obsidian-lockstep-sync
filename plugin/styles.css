@@ -15,3 +15,47 @@
 .lockstep-conflict-notice .lockstep-conflict-buttons button {
 	flex: 1 1 auto;
 }
+
+/*
+ * Whether the server can read this vault is the first thing on the settings screen.
+ * A toggle being on and a vault being hidden are not the same thing, and somebody
+ * should not have to infer the difference from a caption.
+ */
+.lockstep-banner {
+	display: flex;
+	gap: var(--size-4-3);
+	align-items: flex-start;
+	padding: var(--size-4-3) var(--size-4-4);
+	margin-bottom: var(--size-4-4);
+	border-radius: var(--radius-m);
+	border-left: 4px solid var(--background-modifier-border);
+	background: var(--background-secondary);
+}
+
+.lockstep-banner.is-safe {
+	border-left-color: var(--color-green);
+}
+
+.lockstep-banner.is-locked {
+	border-left-color: var(--color-yellow);
+}
+
+.lockstep-banner.is-open {
+	border-left-color: var(--color-orange);
+}
+
+.lockstep-banner-mark {
+	font-size: var(--font-ui-large);
+	line-height: 1.2;
+}
+
+.lockstep-banner-title {
+	font-weight: var(--font-semibold);
+	color: var(--text-normal);
+}
+
+.lockstep-banner-detail {
+	margin-top: var(--size-2-2);
+	font-size: var(--font-ui-smaller);
+	color: var(--text-muted);
+}

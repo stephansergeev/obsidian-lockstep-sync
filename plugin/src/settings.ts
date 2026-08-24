@@ -53,8 +53,14 @@ export class SyncSettingsTab extends PluginSettingTab {
 		const { containerEl } = this;
 		containerEl.empty();
 
-		// Anything waiting on a decision goes at the very top. This is the screen
-		// people open when they were told something needs deciding.
+		// Whether the server can read this vault is the first thing on the screen,
+		// stated in a sentence rather than inferred from a toggle being on. A setting
+		// that is on and a vault that is actually hidden are not the same thing, and
+		// the difference is the whole point of the feature.
+		this.renderState(containerEl);
+
+		// Anything waiting on a decision goes next. This is the screen people open
+		// when they were told something needs deciding.
 		this.renderConflicts(containerEl);
 
 		new Setting(containerEl)
@@ -170,10 +176,13 @@ export class SyncSettingsTab extends PluginSettingTab {
 					}),
 				);
 
-			containerEl.createEl("p", {
-				cls: "setting-item-description",
-				text: this.plugin.encryptionStatus(),
-			});
+			// Stated as its own line rather than as a caption: this is the answer to
+			// the only question somebody turning encryption on actually has.
+			new Setting(containerEl).setName(this.plugin.encryptionStatus()).setDesc(
+				this.plugin.encryptionReady()
+					? t("encryption.explainHidden")
+					: t("encryption.explainNotHidden"),
+			);
 		}
 
 		new Setting(containerEl).setName(t("settings.section.maintenance")).setHeading();
@@ -263,6 +272,32 @@ export class SyncSettingsTab extends PluginSettingTab {
 		containerEl.createEl("p", {
 			cls: "setting-item-description",
 			text: this.plugin.statusLine(),
+		});
+	}
+
+	private renderState(containerEl: HTMLElement): void {
+		const encrypting = this.plugin.encryptionReady();
+		const locked = this.plugin.settings.encryption && !encrypting;
+		const banner = containerEl.createDiv({
+			cls: `lockstep-banner ${encrypting ? "is-safe" : locked ? "is-locked" : "is-open"}`,
+		});
+		banner.createSpan({ cls: "lockstep-banner-mark", text: encrypting ? "🔒" : locked ? "⏸" : "👁" });
+		const text = banner.createDiv({ cls: "lockstep-banner-text" });
+		text.createDiv({
+			cls: "lockstep-banner-title",
+			text: encrypting
+				? t(this.plugin.hidesNames() ? "banner.hiddenNames" : "banner.hidden")
+				: locked
+					? t("banner.locked")
+					: t("banner.open"),
+		});
+		text.createDiv({
+			cls: "lockstep-banner-detail",
+			text: encrypting
+				? t("encryption.explainHidden")
+				: locked
+					? this.plugin.encryptionStatus()
+					: t("encryption.explainNotHidden"),
 		});
 	}
 
