@@ -89,12 +89,10 @@ const en: Dict = {
 	"settings.passphrase.oneChance":
 		"It is written into the vault once and cannot be changed afterwards, because everything already stored is sealed with it. It cannot be recovered either. Lose it and your notes are still here, and on every other device that has them, since nothing on a device is encrypted. What becomes unreadable is the copy on the server: its history, and the ability to set up a new device from it.",
 	"settings.passphrase.short":
-		"Too short to set. At least {min} characters, and four unrelated words are better than eight awkward ones.",
+		"Short enough that a dictionary would reach it quickly, and this cannot be changed later. Four unrelated words are stronger than eight awkward characters and quicker to type on a phone.",
 	"settings.passphrase.thin":
 		"This will do, but a dictionary reaches a short passphrase long before brute force does. Four unrelated words are stronger than twelve difficult characters, and quicker to type on a phone.",
 	"settings.passphrase.good": "Long enough to be worth attacking properly.",
-	"settings.passphrase.tooShort":
-		"At least {min} characters before this can be set for good. Four unrelated words are the easiest way to get there.",
 
 	"settings.passphrase.name": "Passphrase",
 	"settings.passphrase.desc":
@@ -288,12 +286,10 @@ const ru: Dict = {
 	"settings.passphrase.oneChance":
 		"Он записывается в волт один раз и потом не меняется, потому что всё уже сохранённое запечатано именно им. Восстановить его тоже нельзя. Если потеряешь, заметки останутся здесь и на каждом устройстве, где они есть: на устройстве ничего не шифруется. Нечитаемой станет копия на сервере — её история и возможность настроить с неё новое устройство.",
 	"settings.passphrase.short":
-		"Слишком короткий, чтобы его задать. Минимум {min} символов, а четыре несвязанных слова лучше восьми неудобных знаков.",
+		"Настолько короткий, что словарь доберётся до него быстро, а поменять потом нельзя. Четыре несвязанных слова крепче восьми неудобных знаков и набираются на телефоне быстрее.",
 	"settings.passphrase.thin":
 		"Сойдёт, но до короткого пароля словарь добирается сильно раньше, чем полный перебор. Четыре несвязанных слова крепче двенадцати сложных символов и набираются на телефоне вчетверо быстрее.",
 	"settings.passphrase.good": "Достаточно длинный, чтобы его пришлось ломать всерьёз.",
-	"settings.passphrase.tooShort":
-		"Минимум {min} символов, чтобы задать его насовсем. Четыре несвязанных слова — самый простой способ дотянуть.",
 
 	"settings.passphrase.name": "Пароль",
 	"settings.passphrase.desc":

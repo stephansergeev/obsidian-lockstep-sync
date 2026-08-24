@@ -303,9 +303,10 @@ changing it would mean re-encrypting the whole vault; the server refuses rather 
 somebody with a vault their own devices cannot read. Choose it as though it is permanent,
 because it is.
 
-**Four unrelated words beat eight awkward characters.** Eight is the floor and it is refused
-below that, but a short passphrase falls to a dictionary long before anyone has to brute
-force it, and a passphrase that is painful to type on a phone gets replaced with a short one.
+**Four unrelated words beat eight awkward characters.** A short passphrase falls to a
+dictionary long before anyone has to brute force it, whatever the key derivation costs, and
+one that is painful to type on a phone gets replaced with a short one. The plugin says so
+when it sees one and then does as it is told: it is your vault.
 
 Losing it is not losing the vault. Nothing on a device is encrypted, so every device that
 has the notes still has them, readable as ever. What becomes unreadable is the copy on the

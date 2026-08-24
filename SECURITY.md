@@ -47,9 +47,10 @@ and everything stored is sealed with what they derive. Changing them without re-
 every file would leave a vault its own devices cannot read, so the server refuses the write
 rather than allowing it.
 
-**Eight characters is the floor, not the advice.** Setting a shorter one is refused. A short
-passphrase falls to a dictionary long before brute force becomes relevant, whatever the key
-derivation costs, so the guidance is four or more unrelated words.
+**A short passphrase is warned about, not refused.** It falls to a dictionary long before
+brute force becomes relevant, whatever the key derivation costs, so the guidance is four or
+more unrelated words. Somebody who reads that and chooses otherwise has made a decision about
+their own notes, and nothing here overrules it.
 
 ## About the QR code
 

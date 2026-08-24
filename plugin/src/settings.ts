@@ -4,7 +4,7 @@ import { App, Notice, PluginSettingTab, Setting } from "obsidian";
 import { otherSideLabel } from "./conflict-notice";
 import { t } from "./i18n";
 import { defaultDeviceName } from "./paths";
-import { MIN_PASSPHRASE, judgePassphrase } from "./crypto";
+import { judgePassphrase } from "./crypto";
 import type LockstepPlugin from "./main";
 
 export interface SyncSettings {
@@ -225,16 +225,6 @@ export class SyncSettingsTab extends PluginSettingTab {
 					// one fewer thing to know about.
 					text.inputEl.addEventListener("blur", async () => {
 						if (!this.plugin.settings.passphrase) return;
-						// Only refused where it would be written into a vault for good.
-						// Somebody entering an existing short one is not the person who
-						// chose it, and blocking them helps nobody.
-						if (
-							this.plugin.vaultNeedsSetup() &&
-							this.plugin.settings.passphrase.length < MIN_PASSPHRASE
-						) {
-							new Notice(t("settings.passphrase.tooShort", { min: MIN_PASSPHRASE }), 10000);
-							return;
-						}
 						try {
 							await this.plugin.applyEncryption();
 						} catch {
