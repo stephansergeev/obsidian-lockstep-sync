@@ -40,13 +40,10 @@
 	border-left-color: var(--color-yellow);
 }
 
+/* Off is a state, not a warning. Somebody running their own server has already
+   made a choice, and colouring it like an alarm argues with that choice. */
 .lockstep-banner.is-open {
-	border-left-color: var(--color-orange);
-}
-
-.lockstep-banner-mark {
-	font-size: var(--font-ui-large);
-	line-height: 1.2;
+	border-left-color: var(--background-modifier-border);
 }
 
 .lockstep-banner-title {

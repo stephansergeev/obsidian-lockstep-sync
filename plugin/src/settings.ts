@@ -281,7 +281,6 @@ export class SyncSettingsTab extends PluginSettingTab {
 		const banner = containerEl.createDiv({
 			cls: `lockstep-banner ${encrypting ? "is-safe" : locked ? "is-locked" : "is-open"}`,
 		});
-		banner.createSpan({ cls: "lockstep-banner-mark", text: encrypting ? "🔒" : locked ? "⏸" : "👁" });
 		const text = banner.createDiv({ cls: "lockstep-banner-text" });
 		text.createDiv({
 			cls: "lockstep-banner-title",
@@ -296,7 +295,7 @@ export class SyncSettingsTab extends PluginSettingTab {
 			text: encrypting
 				? t("encryption.explainHidden")
 				: locked
-					? this.plugin.encryptionStatus()
+					? `${this.plugin.encryptionStatus()} ${t("encryption.explainLocked")}`
 					: t("encryption.explainNotHidden"),
 		});
 	}

@@ -90,14 +90,15 @@ const en: Dict = {
 	"encryption.ready": "Unlocked. New uploads are encrypted.",
 	"encryption.readyWithPaths": "Unlocked. Content and file names are both hidden from the server.",
 	"encryption.created": "Encryption set up for this vault. Keep the passphrase safe.",
-	"banner.hidden": "This vault is encrypted",
-	"banner.hiddenNames": "This vault is encrypted, names included",
-	"banner.locked": "Locked. Nothing is syncing",
-	"banner.open": "Not encrypted. The server can read everything here",
+	"banner.hidden": "Encryption is on",
+	"banner.hiddenNames": "Encryption is on, file names included",
+	"banner.locked": "Waiting for the passphrase",
+	"banner.open": "Encryption is off",
 	"encryption.explainHidden":
-		"Anything uploaded from now on is unreadable to the server. It still knows how many files there are and how the folders are arranged.",
+		"Uploads are sealed on this device. Your server stores them without being able to read them, and still knows how many files there are and how the folders are arranged.",
 	"encryption.explainNotHidden":
-		"Nothing is being hidden right now. Until this says otherwise, the server can read what is uploaded.",
+		"Notes are stored on your server as ordinary files. To seal them before they leave this device, turn on Encrypt content below and choose a passphrase.",
+	"encryption.explainLocked": "Syncing is paused until the passphrase is entered below.",
 	"encryption.namesStayVisible":
 		"This vault already holds files, so their names stay visible to the server. Content from now on is encrypted. To hide names as well, set encryption up on an empty vault before putting anything in it.",
 	"encryption.wrong": "Wrong passphrase for this vault.",
@@ -135,6 +136,8 @@ const en: Dict = {
 	"notice.error": "Lockstep — {what}: {message}",
 
 	"status.prefix": "Lockstep",
+	"status.encrypted": "encrypted",
+	"status.lockedShort": "locked",
 	"status.notConnected": "not connected",
 	"status.index": "index: {files} files, seq {seq}",
 	"status.indexReset": "index reset",
@@ -228,14 +231,15 @@ const ru: Dict = {
 	"encryption.ready": "Открыто. Новые загрузки шифруются.",
 	"encryption.readyWithPaths": "Открыто. И содержимое, и имена файлов скрыты от сервера.",
 	"encryption.created": "Шифрование настроено для этого волта. Сохрани пароль.",
-	"banner.hidden": "Волт зашифрован",
-	"banner.hiddenNames": "Волт зашифрован, включая имена файлов",
-	"banner.locked": "Закрыт. Синхронизация остановлена",
-	"banner.open": "Без шифрования. Сервер читает всё, что здесь есть",
+	"banner.hidden": "Шифрование включено",
+	"banner.hiddenNames": "Шифрование включено, вместе с именами файлов",
+	"banner.locked": "Ожидание пароля",
+	"banner.open": "Шифрование выключено",
 	"encryption.explainHidden":
-		"Всё, что загружается с этого момента, серверу нечитаемо. Ему по-прежнему известно, сколько файлов и как разложены папки.",
+		"Загрузки запечатываются на этом устройстве. Твой сервер хранит их, не имея возможности прочитать, и знает только сколько файлов и как разложены папки.",
 	"encryption.explainNotHidden":
-		"Сейчас ничего не скрывается. Пока здесь написано иначе, сервер читает то, что загружается.",
+		"Заметки лежат на твоём сервере обычными файлами. Чтобы запечатывать их до отправки, включи Encrypt content ниже и задай пароль.",
+	"encryption.explainLocked": "Синхронизация на паузе, пока ниже не введён пароль.",
 	"encryption.namesStayVisible":
 		"В волте уже есть файлы, поэтому их имена останутся видны серверу. Содержимое с этого момента шифруется. Чтобы скрыть и имена, включай шифрование на пустом волте, до того как в него что-то попадёт.",
 	"encryption.wrong": "Неверный пароль для этого волта.",
@@ -273,6 +277,8 @@ const ru: Dict = {
 	"notice.error": "Lockstep — {what}: {message}",
 
 	"status.prefix": "Lockstep",
+	"status.encrypted": "зашифровано",
+	"status.lockedShort": "закрыто",
 	"status.notConnected": "не подключено",
 	"status.index": "индекс: {files} файлов, seq {seq}",
 	"status.indexReset": "индекс сброшен",

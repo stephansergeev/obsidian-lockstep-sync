@@ -262,9 +262,11 @@ export default class LockstepPlugin extends Plugin {
 		this.lastStatus = text;
 		const pending = this.index?.conflicts.length ?? 0;
 		const parts = [`${t("status.prefix")}: ${text}`];
-		// A padlock in the status bar, so the answer to "is this vault hidden" is
-		// visible from anywhere rather than only inside the settings screen.
-		if (this.settings.encryption) parts.push(this.locked ? "🔒!" : "🔒");
+		// A word rather than a symbol: the state has to be readable at a glance, and
+		// an icon makes somebody guess at what it is trying to say.
+		if (this.settings.encryption) {
+			parts.push(this.locked ? t("status.lockedShort") : t("status.encrypted"));
+		}
 		if (pending > 0) parts.push(t("conflict.pending", { count: pending }));
 		this.statusBar?.setText(parts.join(" · "));
 	}
