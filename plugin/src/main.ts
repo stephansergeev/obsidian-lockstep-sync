@@ -193,6 +193,17 @@ export default class LockstepPlugin extends Plugin {
 		}
 	}
 
+	async getRetention(): Promise<number> {
+		const client = this.client(false);
+		return client ? client.getRetention() : 30;
+	}
+
+	async setRetention(days: number): Promise<void> {
+		const client = this.client();
+		if (!client) throw new Error("not configured");
+		await client.setRetention(days);
+	}
+
 	/** Drop questions that no longer have two answers. */
 	async pruneConflicts(): Promise<void> {
 		await this.engine.pruneConflicts();

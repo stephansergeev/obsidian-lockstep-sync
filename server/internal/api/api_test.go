@@ -539,3 +539,34 @@ func TestCollectedHistoryIsNotOfferedForRestore(t *testing.T) {
 	// Offering to restore something whose content is gone would be worse than
 	// offering nothing, which is why the query requires a revision that still has it.
 }
+
+func TestRetentionDefaultsToThirtyDaysAndCanBeChanged(t *testing.T) {
+	h := newHarness(t)
+
+	_, data := h.do(h.deskTok, http.MethodGet, "/v1/retention", nil, nil)
+	var got struct {
+		Days int `json:"days"`
+	}
+	if err := json.Unmarshal(data, &got); err != nil || got.Days != 30 {
+		t.Fatalf("expected thirty days by default, got %s", data)
+	}
+
+	body := strings.NewReader(`{"days":7}`)
+	if resp, _ := h.do(h.deskTok, http.MethodPut, "/v1/retention", body, nil); resp.StatusCode != 200 {
+		t.Fatalf("setting retention: %d", resp.StatusCode)
+	}
+	_, data = h.do(h.phoneTok, http.MethodGet, "/v1/retention", nil, nil)
+	if err := json.Unmarshal(data, &got); err != nil || got.Days != 7 {
+		t.Fatalf("the other device should see the new window, got %s", data)
+	}
+
+	// Zero means the vault keeps its deletions, which has to be allowed rather than
+	// silently turned back into the default.
+	if resp, _ := h.do(h.deskTok, http.MethodPut, "/v1/retention", strings.NewReader(`{"days":0}`), nil); resp.StatusCode != 200 {
+		t.Fatalf("zero must be allowed: %d", resp.StatusCode)
+	}
+	_, data = h.do(h.deskTok, http.MethodGet, "/v1/retention", nil, nil)
+	if err := json.Unmarshal(data, &got); err != nil || got.Days != 0 {
+		t.Fatalf("zero was not kept: %s", data)
+	}
+}

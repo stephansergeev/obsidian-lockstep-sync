@@ -1,5 +1,16 @@
 # Changelog
 
+## 0.8.0
+
+Deleted notes are now erased for good after thirty days, and the window is a setting in the
+plugin. "Deleted" has to mean gone eventually or the word is a lie, and until now a deletion
+was recoverable forever whether anybody wanted that or not. Set it to zero to keep deletions
+for good instead.
+
+The sweep is the only thing on the server that deletes without being asked. It only touches
+files that were already deleted and have outlived their window. The history of files that
+still exist is never collected on a timer and still requires somebody to run gc.
+
 ## 0.7.0
 
 Deleted files can be brought back. Every revision has been kept since the first version and

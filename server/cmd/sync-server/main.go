@@ -120,6 +120,11 @@ func serve(args []string) error {
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
 
+	// The only thing here that deletes without being asked, and only files that were
+	// already deleted and have outlived the window their owner chose.
+	sweeper := &vault.Sweeper{Registry: reg, Interval: 6 * time.Hour, Log: log}
+	go sweeper.Run(ctx)
+
 	errc := make(chan error, 1)
 	go func() {
 		log.Info("listening", "addr", *addr, "data", *data)

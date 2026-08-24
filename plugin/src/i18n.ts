@@ -58,6 +58,12 @@ const en: Dict = {
 	"cmd.conflicts": "Resolve files changed on both sides",
 	"notice.conflictQueued": "Lockstep: {path} was changed on both sides. Both versions are kept.",
 
+	"settings.retention.name": "Erase deleted files after",
+	"settings.retention.desc":
+		"Deleting a note does not destroy it. It stays on the server and can be brought back for this many days, then it is erased for good. Set it to 0 to keep deleted notes forever. This is a setting of the vault, so every device follows it.",
+	"settings.retention.unit": "days",
+	"settings.retention.forever": "Deleted notes are kept forever on this vault.",
+	"settings.retention.saved": "Deleted notes are erased after {days} days",
 	"restore.title": "Deleted files",
 	"restore.loading": "Asking the server what it still has…",
 	"restore.none": "Nothing to bring back. Every deletion here has been forgotten or never happened.",
@@ -180,6 +186,12 @@ const ru: Dict = {
 	"cmd.conflicts": "Разобрать файлы, изменённые с двух сторон",
 	"notice.conflictQueued": "Lockstep: {path} правили с двух сторон. Обе версии сохранены.",
 
+	"settings.retention.name": "Стирать удалённое через",
+	"settings.retention.desc":
+		"Удаление заметки её не уничтожает. Она остаётся на сервере и её можно вернуть столько дней, сколько здесь указано, потом стирается насовсем. Ноль — хранить удалённое вечно. Это настройка волта, ей следуют все устройства.",
+	"settings.retention.unit": "дней",
+	"settings.retention.forever": "Удалённые заметки хранятся в этом волте вечно.",
+	"settings.retention.saved": "Удалённое стирается через {days} дней",
 	"restore.title": "Удалённые файлы",
 	"restore.loading": "Спрашиваю сервер, что у него осталось…",
 	"restore.none": "Возвращать нечего. Все удаления здесь либо забыты, либо их не было.",

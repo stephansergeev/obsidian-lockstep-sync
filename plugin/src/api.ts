@@ -191,6 +191,19 @@ export class SyncClient {
 		});
 	}
 
+	/** How many days a deleted file stays recoverable. Zero means for good. */
+	async getRetention(): Promise<number> {
+		const resp = await this.call("GET", "/retention");
+		return Number(resp.json?.days ?? 30);
+	}
+
+	async setRetention(days: number): Promise<void> {
+		await this.call("PUT", "/retention", {
+			body: JSON.stringify({ days }),
+			headers: { "Content-Type": "application/json" },
+		});
+	}
+
 	/** Files that are gone but still recoverable, most recently deleted first. */
 	async deleted(limit = 200): Promise<DeletedFile[]> {
 		const resp = await this.call("GET", `/deleted?limit=${limit}`);

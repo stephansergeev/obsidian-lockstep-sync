@@ -39,6 +39,9 @@ export const DEFAULT_SETTINGS: SyncSettings = {
 };
 
 export class SyncSettingsTab extends PluginSettingTab {
+	/** Held so the field does not blank out while the server is being asked. */
+	private retentionValue = "";
+
 	constructor(
 		app: App,
 		private plugin: LockstepPlugin,
@@ -201,6 +204,41 @@ export class SyncSettingsTab extends PluginSettingTab {
 					await this.plugin.pullAll();
 				}),
 			);
+
+		new Setting(containerEl)
+			.setName(t("settings.retention.name"))
+			.setDesc(t("settings.retention.desc"))
+			.addText((text) => {
+				text.inputEl.type = "number";
+				text.inputEl.min = "0";
+				text.inputEl.max = "3650";
+				text.setPlaceholder("30").setValue(this.retentionValue);
+				text.inputEl.addEventListener("blur", async () => {
+					const days = Number(text.getValue());
+					if (!Number.isFinite(days) || days < 0 || days > 3650) return;
+					try {
+						await this.plugin.setRetention(days);
+						this.retentionValue = String(days);
+						new Notice(
+							days === 0
+								? t("settings.retention.forever")
+								: t("settings.retention.saved", { days }),
+						);
+					} catch (e) {
+						new Notice(
+							t("notice.error", {
+								what: t("settings.retention.name"),
+								message: e instanceof Error ? e.message : String(e),
+							}),
+							8000,
+						);
+					}
+				});
+				void this.plugin.getRetention().then((days) => {
+					this.retentionValue = String(days);
+					text.setValue(this.retentionValue);
+				});
+			});
 
 		new Setting(containerEl)
 			.setName(t("settings.restore.name"))

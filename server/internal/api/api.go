@@ -60,6 +60,8 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("DELETE /v1/file", s.auth(s.deleteFile))
 	mux.HandleFunc("POST /v1/rename", s.auth(s.rename))
 	mux.HandleFunc("GET /v1/deleted", s.auth(s.deleted))
+	mux.HandleFunc("GET /v1/retention", s.auth(s.getRetention))
+	mux.HandleFunc("PUT /v1/retention", s.auth(s.putRetention))
 	mux.HandleFunc("GET /v1/vaultkey", s.auth(s.getVaultKey))
 	mux.HandleFunc("PUT /v1/vaultkey", s.auth(s.putVaultKey))
 	return mux
@@ -218,6 +220,48 @@ func (s *Server) changes(w http.ResponseWriter, r *http.Request, c ctx) {
 	writeJSON(w, http.StatusOK, map[string]any{
 		"entries": entries, "next_seq": next, "has_more": more,
 	})
+}
+
+// How long a deleted file stays recoverable before the server erases it.
+//
+// Unlike the key parameters this is meant to change: somebody deciding they want a
+// longer safety net, or a shorter one, is an ordinary thing to want.
+
+const defaultRetentionDays = 30
+
+func retentionOf(files *store.Store) int {
+	value, err := files.GetMeta("retention_days")
+	if err != nil {
+		return defaultRetentionDays
+	}
+	n, err := strconv.Atoi(value)
+	if err != nil || n < 0 {
+		return defaultRetentionDays
+	}
+	return n
+}
+
+func (s *Server) getRetention(w http.ResponseWriter, r *http.Request, c ctx) {
+	writeJSON(w, http.StatusOK, map[string]any{"days": retentionOf(c.files)})
+}
+
+func (s *Server) putRetention(w http.ResponseWriter, r *http.Request, c ctx) {
+	var req struct {
+		Days int `json:"days"`
+	}
+	if err := json.NewDecoder(io.LimitReader(r.Body, 1<<10)).Decode(&req); err != nil {
+		writeErr(w, http.StatusBadRequest, "bad_request", err.Error())
+		return
+	}
+	if req.Days < 0 || req.Days > 3650 {
+		writeErr(w, http.StatusBadRequest, "bad_request", "days must be between 0 and 3650")
+		return
+	}
+	if err := c.files.PutMeta("retention_days", strconv.Itoa(req.Days)); err != nil {
+		writeErr(w, http.StatusInternalServerError, "internal", err.Error())
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]any{"days": req.Days})
 }
 
 // What is gone but not lost. The history was always there and reachable by revision

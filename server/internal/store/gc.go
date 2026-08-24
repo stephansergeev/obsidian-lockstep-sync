@@ -78,6 +78,37 @@ func (s *Store) Collect(p GCPolicy) (GCResult, error) {
 	return out, tx.Commit()
 }
 
+// ForgetDeleted erases files that were deleted more than the given number of days
+// ago, along with every revision of them.
+//
+// This is the one thing here that happens on its own, because "deleted" has to mean
+// gone eventually or the word is a lie. Everything else about collection stays
+// manual. Zero days means never, and a vault set that way keeps deletions for good.
+func (s *Store) ForgetDeleted(days int) (int64, error) {
+	if days <= 0 {
+		return 0, nil
+	}
+	cutoff := time.Now().AddDate(0, 0, -days).UnixMilli()
+	tx, err := s.db.Begin()
+	if err != nil {
+		return 0, err
+	}
+	defer tx.Rollback()
+
+	if _, err := tx.Exec(`
+		DELETE FROM revisions WHERE path IN (
+			SELECT path FROM files WHERE deleted = 1 AND mtime < ?
+		)`, cutoff); err != nil {
+		return 0, err
+	}
+	res, err := tx.Exec(`DELETE FROM files WHERE deleted = 1 AND mtime < ?`, cutoff)
+	if err != nil {
+		return 0, err
+	}
+	n, _ := res.RowsAffected()
+	return n, tx.Commit()
+}
+
 // LiveHashes is every hash still pointed at by anything.
 //
 // Content is addressed by hash and shared between paths and revisions, so whether a

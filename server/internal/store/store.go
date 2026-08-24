@@ -450,6 +450,13 @@ func (s *Store) SetMeta(key, value string) error {
 // ErrMetaExists means a client value is already set and will not be overwritten.
 var ErrMetaExists = errors.New("already set")
 
+// PutMeta stores a client value that is meant to change, unlike SetMeta.
+func (s *Store) PutMeta(key, value string) error {
+	_, err := s.db.Exec(`INSERT INTO meta(key,value) VALUES(?,?)
+		ON CONFLICT(key) DO UPDATE SET value=excluded.value`, "client:"+key, value)
+	return err
+}
+
 // Deleted is a file that is gone but still recoverable: the tombstone, plus the
 // last revision that had content behind it.
 type Deleted struct {

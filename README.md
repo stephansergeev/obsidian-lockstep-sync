@@ -70,9 +70,14 @@ same question is asked.
 An edit always beats a deletion. Delete a note on one device while editing it on another and
 it comes back, because a note that reappears is an annoyance and a note that vanishes is not.
 
-Deleting does not erase. A deleted file becomes a tombstone and its content stays where it
-was, so the plugin can list what is gone and bring any of it back, on any device, long after
-the fact.
+Deleting does not erase, at first. A deleted file stays on the server and the plugin can
+list it and bring it back, on any device. After thirty days the server erases it for good.
+That window is a setting of the vault, so every device follows it, and setting it to zero
+keeps deleted notes forever.
+
+That sweep is the only thing on the server that deletes without being asked, and it only
+ever touches files that were already deleted and have outlived the window. History of files
+that still exist is never collected on a timer.
 
 ## Running the server
 
@@ -104,8 +109,9 @@ Give every device its own token, so losing one phone means revoking one token:
 sudo /usr/local/bin/lockstep-sync-server token add --data /var/lib/lockstep --vault main --name iphone
 ```
 
-History grows on its own and nothing is ever thrown away without being asked. When you want
-the space back:
+Deleted files are erased on their own schedule, as above. The history of files that still
+exist is not, and nothing about it is thrown away without being asked. When you want the
+space back:
 
 ```bash
 sudo -u lockstep /usr/local/bin/lockstep-sync-server gc --data /var/lib/lockstep --all --dry-run
