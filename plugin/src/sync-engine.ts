@@ -138,12 +138,21 @@ export class SyncEngine {
 		while (dir && dir !== "/" && !dir.startsWith(".")) {
 			try {
 				const listing = await adapter.list(dir);
-				if (listing.files.length > 0 || listing.folders.length > 0) return;
+				if (listing.files.length > 0 || listing.folders.length > 0) {
+					this.trace(`kept folder ${dir}: not empty`);
+					return;
+				}
 				this.suppressed.add(dir);
-				await adapter.rmdir(dir, false);
+				// recursive=true even though the folder was just verified empty:
+				// Obsidian's desktop adapter throws EISDIR on rmdir(dir, false), and a
+				// silent catch here left ghost folders behind every rename received on
+				// a desktop while phones, on a different adapter, cleaned up fine.
+				await adapter.rmdir(dir, true);
+				this.trace(`pruned empty folder ${dir}`);
 				setTimeout(() => this.suppressed.delete(dir), 1500);
-			} catch {
-				return; // not empty, not there, or not ours to remove
+			} catch (e) {
+				this.trace(`could not prune ${dir}: ${e instanceof Error ? e.message : e}`);
+				return;
 			}
 			dir = dir.slice(0, dir.lastIndexOf("/"));
 		}

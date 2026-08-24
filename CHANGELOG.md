@@ -1,5 +1,18 @@
 # Changelog
 
+## 0.13.1
+
+Ghost folders after a rename received on a desktop. The engine moved every file
+correctly, then asked Obsidian to remove the emptied folder without the recursive
+flag, and the desktop adapter throws EISDIR at exactly that call whatever the folder
+contains. A silent catch ate the error, so desktops kept the empty old folder beside
+the new one while phones, on a different adapter, cleaned up fine. Caught by the
+decision journal on the affected machine and confirmed against a live Obsidian.
+
+The folder is still verified empty first; only the flag changed. The test fake now
+throws the way the real desktop adapter does, so the suite fails the way a Mac does
+instead of passing on politeness the product never gets.
+
 ## 0.13.0
 
 Three settings became none.

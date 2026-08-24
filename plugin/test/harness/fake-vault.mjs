@@ -23,7 +23,7 @@ export class FakeVault {
 			remove: (p) => this.remove(p),
 			rename: (from, to) => this.rename(from, to),
 			list: (p) => this.list(p),
-			rmdir: (p) => this.rmdir(p),
+			rmdir: (p, recursive) => this.rmdir(p, recursive),
 		};
 	}
 
@@ -80,8 +80,14 @@ export class FakeVault {
 		};
 	}
 
-	async rmdir(p) {
-		await fs.rmdir(this.full(p));
+	async rmdir(p, recursive) {
+		// Obsidian's desktop adapter throws EISDIR when recursive is false, whatever
+		// the folder contains. The fake behaves the same so the suite fails the way a
+		// real desktop does, instead of passing on politeness the product never gets.
+		if (!recursive) {
+			throw new Error(`Path is a directory: rm returned EISDIR (is a directory) ${p}`);
+		}
+		await fs.rm(this.full(p), { recursive: true });
 	}
 
 	/** Everything in the vault, as a map of path to text. Used for assertions. */
