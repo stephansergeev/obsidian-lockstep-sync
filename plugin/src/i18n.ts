@@ -31,9 +31,6 @@ const en: Dict = {
 	"settings.pull.desc":
 		"One-way for now: local files are never deleted, and anything that differs is kept as a copy alongside. Nothing is overwritten silently.",
 	"settings.pull.button": "Download",
-	"settings.reset.name": "Reset local index",
-	"settings.reset.desc": "The index is rebuilt on the next download. Vault files are left alone.",
-	"settings.reset.button": "Reset",
 
 	"conflict.title": "Files changed on both sides",
 	"conflict.none": "Nothing to decide. Every file is in step.",
@@ -78,10 +75,12 @@ const en: Dict = {
 	"settings.restore.desc": "Nothing is erased. Look at what is still recoverable and bring any of it back.",
 	"settings.restore.button": "Open",
 
+	"settings.encrypt.name": "Encrypt content",
+	"settings.encrypt.desc":
+		"Enter a passphrase and notes are sealed on this device before they leave: the server stores them without being able to read them. Use the same passphrase on every device. Leave it empty to store notes on your server as ordinary files.",
+	"settings.encrypt.placeholder": "passphrase",
+	"cmd.resetIndex": "Reset the local sync index",
 	"settings.section.encryption": "Encryption",
-	"settings.encryption.name": "Encrypt content",
-	"settings.encryption.desc":
-		"Notes and their names are encrypted on this device before they are uploaded. The server keeps bytes it cannot read and names it cannot read either. It still sees the shape of the vault: how many files there are and how deep the folders go.",
 	"settings.passphrase.firstTime": "This passphrase is being set, not entered",
 	"settings.passphrase.oneChance":
 		"It is written into the vault once and cannot be changed afterwards, because everything already stored is sealed with it. It cannot be recovered either. Lose it and your notes are still here, and on every other device that has them, since nothing on a device is encrypted. What becomes unreadable is the copy on the server: its history, and the ability to set up a new device from it.",
@@ -89,14 +88,10 @@ const en: Dict = {
 	"settings.passphrase.medium": "Medium. Four unrelated words would be stronger.",
 	"settings.passphrase.strong": "Strong.",
 
-	"settings.passphrase.name": "Passphrase",
-	"settings.passphrase.desc":
-		"The same passphrase on every device. It never leaves them and is never in a setup link.",
-	"settings.passphrase.button": "Unlock",
 	"encryption.off": "Encryption is off. The server can read your notes.",
 	"encryption.locked": "Enter the passphrase to unlock this vault.",
 	"encryption.vaultIsEncrypted":
-		"This vault is encrypted. Turn on Encrypt content and enter its passphrase. Nothing is downloaded until then, because without the key the files arrive unreadable and under unreadable names.",
+		"This vault is encrypted. Enter its passphrase in the plugin settings. Nothing is downloaded until then, because without the key the files arrive unreadable and under unreadable names.",
 	"encryption.ready": "Unlocked. New uploads are encrypted.",
 	"encryption.readyWithPaths": "Unlocked. Content and file names are both hidden from the server.",
 	"encryption.created": "Encryption set up for this vault. Keep the passphrase safe.",
@@ -107,16 +102,13 @@ const en: Dict = {
 	"encryption.explainHidden":
 		"Uploads are sealed on this device. Your server stores them without being able to read them, and still knows how many files there are and how the folders are arranged.",
 	"encryption.explainNotHidden":
-		"Notes are stored on your server as ordinary files. To seal them before they leave this device, turn on Encrypt content below and choose a passphrase.",
+		"Notes are stored on your server as ordinary files. To seal them before they leave this device, enter a passphrase below.",
 	"encryption.explainLocked": "Syncing is paused until the passphrase is entered below.",
 	"encryption.namesStayVisible":
 		"This vault already holds files, so their names stay visible to the server. Content from now on is encrypted. To hide names as well, set encryption up on an empty vault before putting anything in it.",
 	"encryption.wrong": "Wrong passphrase for this vault.",
 	"encryption.failed": "Could not unlock: {message}",
 
-	"settings.autoSync.name": "Sync automatically",
-	"settings.autoSync.desc":
-		"Keep this vault in step on its own. Without it, syncing only happens when you ask for it.",
 	"settings.sync.name": "Sync now",
 	"settings.sync.desc": "Take what the server has, then send what this device has.",
 	"settings.sync.button": "Sync",
@@ -214,9 +206,6 @@ const ru: Dict = {
 	"settings.pull.desc":
 		"Пока односторонняя операция: локальные файлы не удаляются, а расхождения сохраняются копией рядом. Ничего не перезаписывается молча.",
 	"settings.pull.button": "Скачать",
-	"settings.reset.name": "Сбросить локальный индекс",
-	"settings.reset.desc": "Индекс перестроится при следующем скачивании. Файлы волта не трогаются.",
-	"settings.reset.button": "Сбросить",
 
 	"conflict.title": "Файлы, изменённые с двух сторон",
 	"conflict.none": "Решать нечего. Все файлы идут в ногу.",
@@ -263,10 +252,12 @@ const ru: Dict = {
 	"settings.restore.desc": "Ничего не стирается. Посмотри, что ещё можно вернуть, и верни.",
 	"settings.restore.button": "Открыть",
 
+	"settings.encrypt.name": "Шифровать содержимое",
+	"settings.encrypt.desc":
+		"Введи пароль, и заметки будут запечатываться на этом устройстве до отправки: сервер хранит их, не имея возможности прочитать. Один и тот же пароль на всех устройствах. Пусто — заметки лежат на твоём сервере обычными файлами.",
+	"settings.encrypt.placeholder": "пароль",
+	"cmd.resetIndex": "Сбросить локальный индекс синхронизации",
 	"settings.section.encryption": "Шифрование",
-	"settings.encryption.name": "Шифровать содержимое",
-	"settings.encryption.desc":
-		"Заметки и их имена шифруются на этом устройстве до отправки. Сервер хранит байты, которые не может прочитать, и имена, которые тоже не может прочитать. Ему остаётся видна только форма волта: сколько файлов и насколько глубоко вложены папки.",
 	"settings.passphrase.firstTime": "Этот пароль задаётся, а не вводится",
 	"settings.passphrase.oneChance":
 		"Он записывается в волт один раз и потом не меняется, потому что всё уже сохранённое запечатано именно им. Восстановить его тоже нельзя. Если потеряешь, заметки останутся здесь и на каждом устройстве, где они есть: на устройстве ничего не шифруется. Нечитаемой станет копия на сервере — её история и возможность настроить с неё новое устройство.",
@@ -274,14 +265,10 @@ const ru: Dict = {
 	"settings.passphrase.medium": "Средний. Четыре несвязанных слова были бы крепче.",
 	"settings.passphrase.strong": "Сильный.",
 
-	"settings.passphrase.name": "Пароль",
-	"settings.passphrase.desc":
-		"Один и тот же пароль на всех устройствах. Он никуда не уходит и никогда не попадает в ссылку настройки.",
-	"settings.passphrase.button": "Открыть",
 	"encryption.off": "Шифрование выключено. Сервер видит твои заметки.",
 	"encryption.locked": "Введи пароль, чтобы открыть волт.",
 	"encryption.vaultIsEncrypted":
-		"Этот волт зашифрован. Включи Encrypt content и введи его пароль. До этого ничего не скачивается: без ключа файлы приедут нечитаемыми и под нечитаемыми именами.",
+		"Этот волт зашифрован. Введи его пароль в настройках плагина. До этого ничего не скачивается: без ключа файлы приедут нечитаемыми и под нечитаемыми именами.",
 	"encryption.ready": "Открыто. Новые загрузки шифруются.",
 	"encryption.readyWithPaths": "Открыто. И содержимое, и имена файлов скрыты от сервера.",
 	"encryption.created": "Шифрование настроено для этого волта. Сохрани пароль.",
@@ -292,16 +279,13 @@ const ru: Dict = {
 	"encryption.explainHidden":
 		"Загрузки запечатываются на этом устройстве. Твой сервер хранит их, не имея возможности прочитать, и знает только сколько файлов и как разложены папки.",
 	"encryption.explainNotHidden":
-		"Заметки лежат на твоём сервере обычными файлами. Чтобы запечатывать их до отправки, включи Encrypt content ниже и задай пароль.",
+		"Заметки лежат на твоём сервере обычными файлами. Чтобы запечатывать их до отправки, введи пароль ниже.",
 	"encryption.explainLocked": "Синхронизация на паузе, пока ниже не введён пароль.",
 	"encryption.namesStayVisible":
 		"В волте уже есть файлы, поэтому их имена останутся видны серверу. Содержимое с этого момента шифруется. Чтобы скрыть и имена, включай шифрование на пустом волте, до того как в него что-то попадёт.",
 	"encryption.wrong": "Неверный пароль для этого волта.",
 	"encryption.failed": "Не удалось открыть: {message}",
 
-	"settings.autoSync.name": "Синхронизировать автоматически",
-	"settings.autoSync.desc":
-		"Держать волт в актуальном состоянии самостоятельно. Без этого синхронизация происходит только по твоей команде.",
 	"settings.sync.name": "Синхронизировать сейчас",
 	"settings.sync.desc": "Забрать то, что есть на сервере, затем отправить то, что есть здесь.",
 	"settings.sync.button": "Синхронизировать",

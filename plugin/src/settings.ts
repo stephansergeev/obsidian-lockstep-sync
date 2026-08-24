@@ -137,118 +137,71 @@ export class SyncSettingsTab extends PluginSettingTab {
 				}),
 			);
 
-		new Setting(containerEl)
-			.setName(t("settings.autoSync.name"))
-			.setDesc(t("settings.autoSync.desc"))
-			.addToggle((toggle) =>
-				toggle.setValue(this.plugin.settings.autoSync).onChange(async (v) => {
-					this.plugin.settings.autoSync = v;
-					await this.plugin.saveSettings();
-					this.plugin.restartAutoSync();
-				}),
-			);
-
 		new Setting(containerEl).setName(t("settings.section.encryption")).setHeading();
 
+		// One block, no switch. A passphrase is the intent to encrypt, and a switch
+		// that must agree with a field is a step that exists only to be forgotten.
+		if (this.plugin.vaultNeedsSetup()) {
+			const warn = containerEl.createDiv({ cls: "lockstep-banner is-locked" });
+			const body = warn.createDiv({ cls: "lockstep-banner-text" });
+			body.createDiv({
+				cls: "lockstep-banner-title",
+				text: t("settings.passphrase.firstTime"),
+			});
+			body.createDiv({
+				cls: "lockstep-banner-detail",
+				text: t("settings.passphrase.oneChance"),
+			});
+		}
+
+		const meter = containerEl.createDiv({ cls: "lockstep-meter" });
+		const bar = meter.createDiv({ cls: "lockstep-meter-bar" });
+		const segments = [0, 1, 2].map(() => bar.createDiv({ cls: "lockstep-meter-segment" }));
+		const label = meter.createDiv({ cls: "lockstep-meter-label" });
+
+		const judge = (value: string) => {
+			meter.toggleClass("is-hidden", !value);
+			if (!value) return;
+			const verdict = judgePassphrase(value);
+			const filled = verdict === "weak" ? 1 : verdict === "medium" ? 2 : 3;
+			segments.forEach((seg, i) => {
+				seg.removeClass("is-weak", "is-medium", "is-strong");
+				if (i < filled) seg.addClass(`is-${verdict}`);
+			});
+			label.setText(t(`settings.passphrase.${verdict}`));
+			label.removeClass("is-weak", "is-medium", "is-strong");
+			label.addClass(`is-${verdict}`);
+		};
+
 		new Setting(containerEl)
-			.setName(t("settings.encryption.name"))
-			.setDesc(t("settings.encryption.desc"))
-			.addToggle((toggle) =>
-				toggle.setValue(this.plugin.settings.encryption).onChange(async (v) => {
-					this.plugin.settings.encryption = v;
-					await this.plugin.saveSettings();
-					await this.plugin.applyEncryption();
-					this.display();
-				}),
-			);
-
-		if (this.plugin.settings.encryption) {
-			// Setting a passphrase up and entering an existing one are different acts
-			// with different stakes, and until now they looked identical.
-			if (this.plugin.vaultNeedsSetup()) {
-				const warn = containerEl.createDiv({ cls: "lockstep-banner is-locked" });
-				const body = warn.createDiv({ cls: "lockstep-banner-text" });
-				body.createDiv({
-					cls: "lockstep-banner-title",
-					text: t("settings.passphrase.firstTime"),
-				});
-				body.createDiv({
-					cls: "lockstep-banner-detail",
-					text: t("settings.passphrase.oneChance"),
-				});
-			}
-
-			// A bar rather than a paragraph. The scoring is still honest about what
-			// costs an attacker time, but nobody reads three sentences about entropy
-			// while typing into a password field.
-			const meter = containerEl.createDiv({ cls: "lockstep-meter" });
-			const bar = meter.createDiv({ cls: "lockstep-meter-bar" });
-			const segments = [0, 1, 2].map(() => bar.createDiv({ cls: "lockstep-meter-segment" }));
-			const label = meter.createDiv({ cls: "lockstep-meter-label" });
-
-			const judge = (value: string) => {
-				meter.toggleClass("is-hidden", !value);
-				if (!value) return;
-				const verdict = judgePassphrase(value);
-				const filled = verdict === "weak" ? 1 : verdict === "medium" ? 2 : 3;
-				segments.forEach((seg, i) => {
-					seg.removeClass("is-weak", "is-medium", "is-strong");
-					if (i < filled) seg.addClass(`is-${verdict}`);
-				});
-				label.setText(t(`settings.passphrase.${verdict}`));
-				label.removeClass("is-weak", "is-medium", "is-strong");
-				label.addClass(`is-${verdict}`);
-			};
-
-			new Setting(containerEl)
-				.setName(t("settings.passphrase.name"))
-				.setDesc(t("settings.passphrase.desc"))
-				.addText((text) => {
-					text.inputEl.type = "password";
-					if (this.plugin.takeFocusRequest()) {
-						// The reason this screen was opened. Put the cursor where the one
-						// remaining step is instead of leaving it to be found.
-						window.setTimeout(() => {
-							text.inputEl.focus();
-							text.inputEl.scrollIntoView({ block: "center" });
-						}, 50);
-					}
-					text.setValue(this.plugin.settings.passphrase).onChange(async (v) => {
+			.setName(t("settings.encrypt.name"))
+			.setDesc(t("settings.encrypt.desc"))
+			.addText((text) => {
+				text.inputEl.type = "password";
+				if (this.plugin.takeFocusRequest()) {
+					window.setTimeout(() => {
+						text.inputEl.focus();
+						text.inputEl.scrollIntoView({ block: "center" });
+					}, 50);
+				}
+				text
+					.setPlaceholder(t("settings.encrypt.placeholder"))
+					.setValue(this.plugin.settings.passphrase)
+					.onChange(async (v) => {
 						this.plugin.settings.passphrase = v;
 						await this.plugin.saveSettings();
 						judge(v);
 					});
-					// The button blurs the field first, so both handlers fire on one tap.
-					// The plugin de-duplicates rather than the settings screen guessing
-					// which of the two arrived second.
-					judge(this.plugin.settings.passphrase);
-					// Leaving the field is as good a signal as pressing a button, and
-					// one fewer thing to know about.
-					text.inputEl.addEventListener("blur", async () => {
-						if (!this.plugin.settings.passphrase) return;
-						try {
-							await this.plugin.applyEncryption();
-						} catch {
-							/* already reported */
-						}
-						this.display();
-					});
-				})
-				.addButton((b) =>
-					b.setButtonText(t("settings.passphrase.button")).onClick(async () => {
+				judge(this.plugin.settings.passphrase);
+				text.inputEl.addEventListener("blur", async () => {
+					try {
 						await this.plugin.applyEncryption();
-						this.display();
-					}),
-				);
-
-			// Stated as its own line rather than as a caption: this is the answer to
-			// the only question somebody turning encryption on actually has.
-			new Setting(containerEl).setName(this.plugin.encryptionStatus()).setDesc(
-				this.plugin.encryptionReady()
-					? t("encryption.explainHidden")
-					: t("encryption.explainNotHidden"),
-			);
-		}
+					} catch {
+						/* already reported */
+					}
+					this.display();
+				});
+			});
 
 		new Setting(containerEl).setName(t("settings.section.maintenance")).setHeading();
 
@@ -321,19 +274,6 @@ export class SyncSettingsTab extends PluginSettingTab {
 				b.setButtonText(t("settings.restore.button")).onClick(() => this.plugin.openRestore()),
 			);
 
-		new Setting(containerEl)
-			.setName(t("settings.reset.name"))
-			.setDesc(t("settings.reset.desc"))
-			.addButton((b) =>
-				b
-					.setWarning()
-					.setButtonText(t("settings.reset.button"))
-					.onClick(async () => {
-						await this.plugin.resetIndex();
-						new Notice(t("notice.indexReset"));
-					}),
-			);
-
 		containerEl.createEl("p", {
 			cls: "setting-item-description",
 			text: this.plugin.statusLine(),
@@ -342,7 +282,7 @@ export class SyncSettingsTab extends PluginSettingTab {
 
 	private renderState(containerEl: HTMLElement): void {
 		const encrypting = this.plugin.encryptionReady();
-		const locked = this.plugin.settings.encryption && !encrypting;
+		const locked = this.plugin.isLocked();
 		const banner = containerEl.createDiv({
 			cls: `lockstep-banner ${encrypting ? "is-safe" : locked ? "is-locked" : "is-open"}`,
 		});

@@ -126,6 +126,13 @@ export default class LockstepPlugin extends Plugin {
 			callback: () => this.openRestore(),
 		});
 		this.addCommand({
+			id: "reset-index",
+			name: t("cmd.resetIndex"),
+			callback: () => {
+				void this.resetIndex().then(() => new Notice(t("notice.indexReset")));
+			},
+		});
+		this.addCommand({
 			id: "resolve-conflicts",
 			name: t("cmd.conflicts"),
 			callback: () => this.openConflicts(),
@@ -144,7 +151,7 @@ export default class LockstepPlugin extends Plugin {
 			void this.applyEncryption(true).catch(() => {});
 			this.registerVaultEvents();
 			this.restartAutoSync();
-			if (this.settings.autoSync) void this.syncNow(true);
+			void this.syncNow(true);
 		});
 
 		// Mobile kills the app in the background, so the queue is flushed on the way out.
@@ -240,6 +247,11 @@ export default class LockstepPlugin extends Plugin {
 		return this.vaultHasKey === false;
 	}
 
+	/** True when the vault demands a passphrase this device has not supplied. */
+	isLocked(): boolean {
+		return this.locked;
+	}
+
 	/** True when names are hidden too, not only content. */
 	hidesNames(): boolean {
 		return this.pathCipher !== null;
@@ -247,7 +259,16 @@ export default class LockstepPlugin extends Plugin {
 
 	/** True when the vault is open and uploads are actually being encrypted. */
 	encryptionReady(): boolean {
-		return this.settings.encryption && !this.locked;
+		return this.encryptionWanted() && !this.locked;
+	}
+
+	/**
+	 * Whether this device means to encrypt. A passphrase is the intent; there is no
+	 * switch to also flip, because a switch that must agree with a field is a step
+	 * that exists only to be forgotten.
+	 */
+	encryptionWanted(): boolean {
+		return this.settings.passphrase.length > 0;
 	}
 
 	/**
@@ -281,18 +302,13 @@ export default class LockstepPlugin extends Plugin {
 	}
 
 	private async attemptEncryption(quiet: boolean): Promise<void> {
-		if (!this.settings.encryption) {
+		if (!this.settings.passphrase) {
+			// No passphrase means no encryption, unless the vault itself disagrees,
+			// which the guard discovers by asking the server and locks us for.
 			this.cipher = plaintext;
 			this.pathCipher = null;
 			this.locked = false;
 			this.cipherStatus = t("encryption.off");
-			return;
-		}
-		if (!this.settings.passphrase) {
-			this.cipher = plaintext;
-			this.pathCipher = null;
-			this.locked = true;
-			this.cipherStatus = t("encryption.locked");
 			return;
 		}
 		const client = this.client(false);
@@ -422,10 +438,6 @@ export default class LockstepPlugin extends Plugin {
 				/* cannot tell yet; the next pass will */
 			}
 		}
-		if (needsPassphrase && !this.settings.encryption) {
-			this.settings.encryption = true;
-			await this.saveSettings();
-		}
 
 		new Notice(
 			needsPassphrase
@@ -475,7 +487,7 @@ export default class LockstepPlugin extends Plugin {
 				const device = encodeURIComponent(name);
 				return `obsidian://lockstep-setup?url=${url}&token=${token}&device=${device}`;
 			},
-			this.settings.encryption,
+			this.encryptionWanted(),
 			this.settings.serverUrl,
 		).open();
 	}
@@ -505,7 +517,7 @@ export default class LockstepPlugin extends Plugin {
 		const parts = [`${t("status.prefix")}: ${text}`];
 		// A word rather than a symbol: the state has to be readable at a glance, and
 		// an icon makes somebody guess at what it is trying to say.
-		if (this.settings.encryption) {
+		if (this.encryptionWanted() || this.locked) {
 			parts.push(this.locked ? t("status.lockedShort") : t("status.encrypted"));
 		}
 		if (pending > 0) parts.push(t("conflict.pending", { count: pending }));
@@ -590,7 +602,6 @@ export default class LockstepPlugin extends Plugin {
 	}
 
 	private scheduleSync(): void {
-		if (!this.settings.autoSync) return;
 		if (this.debounce) clearTimeout(this.debounce);
 		this.debounce = setTimeout(() => void this.syncNow(true), DEBOUNCE_MS);
 	}
@@ -600,14 +611,12 @@ export default class LockstepPlugin extends Plugin {
 			window.clearInterval(this.interval);
 			this.interval = null;
 		}
-		if (!this.settings.autoSync) return;
 		this.interval = window.setInterval(() => void this.syncNow(true), SYNC_INTERVAL_MS);
 		this.registerInterval(this.interval);
 	}
 
 	/** Force a pass right now, used when the app is about to be suspended. */
 	private async flush(): Promise<void> {
-		if (!this.settings.autoSync) return;
 		if (this.debounce) {
 			clearTimeout(this.debounce);
 			this.debounce = null;
@@ -691,7 +700,7 @@ export default class LockstepPlugin extends Plugin {
 		// to ask for again: the first attempt may simply have run before the network
 		// was ready, and making somebody press a button to recover from that is
 		// making them do the software's retry by hand.
-		if (this.settings.encryption && this.settings.passphrase && !this.cipher.enabled) {
+		if (this.settings.passphrase && !this.cipher.enabled) {
 			try {
 				// Quiet: this is a retry nobody asked for, and its failure has already
 				// been reported by whoever did ask.
@@ -715,7 +724,7 @@ export default class LockstepPlugin extends Plugin {
 		// The vault has a key and this device has none.
 		this.locked = true;
 		this.cipherStatus = t(
-			this.settings.encryption ? "encryption.locked" : "encryption.vaultIsEncrypted",
+			this.encryptionWanted() ? "encryption.locked" : "encryption.vaultIsEncrypted",
 		);
 		this.setStatus(this.cipherStatus);
 		if (!this.announcedEncryptedVault) {

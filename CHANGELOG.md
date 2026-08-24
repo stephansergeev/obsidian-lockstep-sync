@@ -1,5 +1,23 @@
 # Changelog
 
+## 0.13.0
+
+Three settings became none.
+
+Encryption lost its switch. A passphrase is the intent: enter one and notes are sealed from
+the server, leave it empty and they are stored as ordinary files. A switch that had to agree
+with a field was a step that existed only to be forgotten, and the plugin was already
+flipping it on people's behalf when a setup link arrived, which is what gave it away.
+
+Automatic sync lost its switch. Nobody installs a sync plugin to turn syncing off, and the
+manual case is fully served by the Sync now command.
+
+Reset local index moved from the settings screen to the command palette. It is a service
+lever, not a decision anybody makes about their own vault.
+
+The settings screen is now: connection, passphrase, add a device, deleted files, retention.
+Somebody whose sync works opens it for exactly one reason, to add a device.
+
 ## 0.12.0
 
 The folder duplication is fixed at its root, which was not where it looked. The device
