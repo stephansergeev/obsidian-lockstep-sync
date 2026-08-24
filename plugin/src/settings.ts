@@ -180,12 +180,21 @@ export class SyncSettingsTab extends PluginSettingTab {
 				.setDesc(t("settings.passphrase.desc"))
 				.addText((text) => {
 					text.inputEl.type = "password";
-					text
-						.setValue(this.plugin.settings.passphrase)
-						.onChange(async (v) => {
-							this.plugin.settings.passphrase = v;
-							await this.plugin.saveSettings();
-						});
+					text.setValue(this.plugin.settings.passphrase).onChange(async (v) => {
+						this.plugin.settings.passphrase = v;
+						await this.plugin.saveSettings();
+					});
+					// Leaving the field is as good a signal as pressing a button, and
+					// one fewer thing to know about.
+					text.inputEl.addEventListener("blur", async () => {
+						if (!this.plugin.settings.passphrase) return;
+						try {
+							await this.plugin.applyEncryption();
+						} catch {
+							/* already reported */
+						}
+						this.display();
+					});
 				})
 				.addButton((b) =>
 					b.setButtonText(t("settings.passphrase.button")).onClick(async () => {
@@ -229,6 +238,15 @@ export class SyncSettingsTab extends PluginSettingTab {
 			.addButton((b) =>
 				b.setButtonText(t("settings.pull.button")).onClick(async () => {
 					await this.plugin.pullAll();
+				}),
+			);
+
+		new Setting(containerEl)
+			.setName(t("settings.addDevice.name"))
+			.setDesc(t("settings.addDevice.desc"))
+			.addButton((b) =>
+				b.setCta().setButtonText(t("settings.addDevice.button")).onClick(() => {
+					this.plugin.openAddDevice();
 				}),
 			);
 

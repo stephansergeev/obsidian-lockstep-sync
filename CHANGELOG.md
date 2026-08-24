@@ -1,5 +1,20 @@
 # Changelog
 
+## 0.9.0
+
+Adding a second device is a link now. Press **Add another device**, name it, and open the
+link that comes out on the other device: Obsidian fills in the address and a token minted
+for that device alone. The passphrase is deliberately not in the link, since a link travels
+through messengers and the one secret that keeps the server from reading the vault should
+not travel with it.
+
+A vault that already has its passphrase unlocks by itself. The first attempt can happen
+before the network is up, and pressing a button to recover from that is doing the software's
+retry by hand.
+
+Folders are no longer treated as files. Obsidian raises the same events for both, so every
+folder was queued for upload and failed, once per folder, on every pass.
+
 ## 0.8.6
 
 Two bugs found by joining an encrypted vault from a second device.

@@ -5,6 +5,7 @@ import { ApiError, SyncClient, type ChangeEntry } from "./api";
 import { ConflictModal } from "./conflict-modal";
 import { showConflictNotice } from "./conflict-notice";
 import { RestoreModal } from "./restore-modal";
+import { AddDeviceModal } from "./onboarding";
 import {
 	VaultCipher,
 	WrongPassphrase,
@@ -85,6 +86,17 @@ export default class LockstepPlugin extends Plugin {
 			callback: () => void this.testConnection(),
 		});
 		this.addCommand({ id: "pull-all", name: t("cmd.pull"), callback: () => void this.pullAll() });
+		// A link that sets up another device. Registered before anything else, so a
+		// device that has just been installed can be configured by opening one.
+		this.registerObsidianProtocolHandler("lockstep-setup", (params) => {
+			void this.applySetupLink(params);
+		});
+
+		this.addCommand({
+			id: "add-device",
+			name: t("cmd.addDevice"),
+			callback: () => this.openAddDevice(),
+		});
 		this.addCommand({
 			id: "restore-deleted",
 			name: t("cmd.restore"),
@@ -105,7 +117,8 @@ export default class LockstepPlugin extends Plugin {
 		// whole tree as create events while it starts, and treating those as edits
 		// would mark every file dirty on every launch.
 		this.app.workspace.onLayoutReady(() => {
-			void this.applyEncryption();
+			// If this fails because the network is not up yet, the next pass retries.
+			void this.applyEncryption().catch(() => {});
 			this.registerVaultEvents();
 			this.restartAutoSync();
 			if (this.settings.autoSync) void this.syncNow(true);
@@ -275,6 +288,45 @@ export default class LockstepPlugin extends Plugin {
 	async resolveConflict(path: string, choice: "mine" | "server" | "merged"): Promise<void> {
 		await this.engine.resolveConflict(path, choice);
 		this.setStatus(this.lastStatus);
+	}
+
+	/**
+	 * Configure this device from a link somebody sent it.
+	 *
+	 * Everything except the passphrase, which is deliberately never in the link.
+	 */
+	private async applySetupLink(params: Record<string, string>): Promise<void> {
+		const url = (params["url"] ?? "").trim();
+		const token = (params["token"] ?? "").trim();
+		if (!url || !token) {
+			new Notice(t("add.linkBroken"), 8000);
+			return;
+		}
+		this.settings.serverUrl = url;
+		this.settings.token = token;
+		if (params["device"]) this.settings.deviceName = params["device"].trim();
+		await this.saveSettings();
+		await this.refreshServerVault();
+		new Notice(t("add.linkApplied", { vault: this.serverVault || "?" }), 10000);
+		// If the vault turns out to be encrypted, the next pass says so rather than
+		// downloading anything, and the person is asked for the passphrase.
+		void this.syncNow(true);
+	}
+
+	openAddDevice(): void {
+		new AddDeviceModal(
+			this.app,
+			async (name) => {
+				const client = this.client();
+				if (!client) throw new Error("not configured");
+				const issued = await client.issueToken(name);
+				const url = encodeURIComponent(this.settings.serverUrl);
+				const token = encodeURIComponent(issued.token);
+				const device = encodeURIComponent(name);
+				return `obsidian://lockstep-setup?url=${url}&token=${token}&device=${device}`;
+			},
+			this.settings.encryption,
+		).open();
 	}
 
 	openRestore(): void {
@@ -456,6 +508,17 @@ export default class LockstepPlugin extends Plugin {
 	 * better to notice, refuse, and say which of the two things is missing.
 	 */
 	private async reasonNotToSync(): Promise<string> {
+		// The passphrase is already here. Unlocking is something to do, not something
+		// to ask for again: the first attempt may simply have run before the network
+		// was ready, and making somebody press a button to recover from that is
+		// making them do the software's retry by hand.
+		if (this.settings.encryption && this.settings.passphrase && !this.cipher.enabled) {
+			try {
+				await this.applyEncryption();
+			} catch {
+				// A wrong passphrase, and applyEncryption has already said so.
+			}
+		}
 		if (this.locked) return this.cipherStatus;
 		if (this.cipher.enabled) return "";
 

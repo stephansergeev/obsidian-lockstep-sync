@@ -570,3 +570,32 @@ func TestRetentionDefaultsToThirtyDaysAndCanBeChanged(t *testing.T) {
 		t.Fatalf("zero was not kept: %s", data)
 	}
 }
+
+func TestADeviceCanIssueATokenForAnotherDevice(t *testing.T) {
+	h := newHarness(t)
+	h.put(h.deskTok, "note.md", 0, "shared")
+
+	body := strings.NewReader(`{"name":"tablet"}`)
+	resp, data := h.do(h.deskTok, http.MethodPost, "/v1/tokens", body, nil)
+	if resp.StatusCode != 200 {
+		t.Fatalf("issuing: %d %s", resp.StatusCode, data)
+	}
+	var issued struct {
+		Token string `json:"token"`
+		Vault string `json:"vault"`
+	}
+	if err := json.Unmarshal(data, &issued); err != nil {
+		t.Fatal(err)
+	}
+	if issued.Vault != "main" || !strings.HasPrefix(issued.Token, "obs_") {
+		t.Fatalf("unexpected: %+v", issued)
+	}
+
+	// The new token opens the same vault and nothing else.
+	if code, text := h.get(issued.Token, "note.md", -1); code != 200 || text != "shared" {
+		t.Fatalf("the issued token cannot read its vault: %d %q", code, text)
+	}
+	if resp, _ := h.do(issued.Token, http.MethodPost, "/v1/tokens", strings.NewReader(`{"name":""}`), nil); resp.StatusCode != http.StatusBadRequest {
+		t.Fatalf("an empty name must be refused, got %d", resp.StatusCode)
+	}
+}

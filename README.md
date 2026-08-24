@@ -103,7 +103,12 @@ installer.
 
 The server itself listens on `127.0.0.1` and never faces the internet. Caddy does.
 
-Give every device its own token, so losing one phone means revoking one token:
+Every device gets its own token, so losing one phone means revoking one token. After the
+first device is set up, the rest are added from inside Obsidian: **Add another device**
+makes a link carrying the address and a fresh token, and opening that link on the other
+device fills its settings in. Nothing is typed there.
+
+From the server, if you prefer:
 
 ```bash
 sudo /usr/local/bin/lockstep-sync-server token add --data /var/lib/lockstep --vault main --name phone
@@ -192,7 +197,8 @@ npm install
 npm run build
 ```
 
-Then enable the plugin, paste the server address and the token, and check the device name.
+On the first device, enable the plugin, paste the server address and the token, and check the
+device name.
 It is filled in with what the device is, and whatever you put there instead is what other
 devices will call it when they ask you which version of a file should stand.
 

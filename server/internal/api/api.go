@@ -60,6 +60,7 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("DELETE /v1/file", s.auth(s.deleteFile))
 	mux.HandleFunc("POST /v1/rename", s.auth(s.rename))
 	mux.HandleFunc("GET /v1/deleted", s.auth(s.deleted))
+	mux.HandleFunc("POST /v1/tokens", s.auth(s.issueToken))
 	mux.HandleFunc("GET /v1/retention", s.auth(s.getRetention))
 	mux.HandleFunc("PUT /v1/retention", s.auth(s.putRetention))
 	mux.HandleFunc("GET /v1/vaultkey", s.auth(s.getVaultKey))
@@ -220,6 +221,34 @@ func (s *Server) changes(w http.ResponseWriter, r *http.Request, c ctx) {
 	writeJSON(w, http.StatusOK, map[string]any{
 		"entries": entries, "next_seq": next, "has_more": more,
 	})
+}
+
+// Issue a token for another device on the same vault.
+//
+// Anybody already holding a token for a vault can hand one to a device they own.
+// That is no more access than they already have, and it turns adding a phone from a
+// terminal session into a tap. Each device gets its own, so losing one means
+// revoking one.
+func (s *Server) issueToken(w http.ResponseWriter, r *http.Request, c ctx) {
+	var req struct {
+		Name string `json:"name"`
+	}
+	if err := json.NewDecoder(io.LimitReader(r.Body, 1<<10)).Decode(&req); err != nil {
+		writeErr(w, http.StatusBadRequest, "bad_request", err.Error())
+		return
+	}
+	name := strings.TrimSpace(req.Name)
+	if name == "" || len(name) > 64 {
+		writeErr(w, http.StatusBadRequest, "bad_request", "name must be between 1 and 64 characters")
+		return
+	}
+	token, err := s.Auth.Add(name, c.tok.Vault)
+	if err != nil {
+		writeErr(w, http.StatusInternalServerError, "internal", err.Error())
+		return
+	}
+	s.logger().Info("issued a token", "vault", c.tok.Vault, "name", name, "by", c.tok.Name)
+	writeJSON(w, http.StatusOK, map[string]any{"token": token, "name": name, "vault": c.tok.Vault})
 }
 
 // How long a deleted file stays recoverable before the server erases it.

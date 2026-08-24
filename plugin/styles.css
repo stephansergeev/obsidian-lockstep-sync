@@ -61,3 +61,14 @@
 	font-family: var(--font-monospace);
 	color: var(--text-normal);
 }
+
+.lockstep-setup-link {
+	width: 100%;
+	font-family: var(--font-monospace);
+	font-size: var(--font-ui-smaller);
+	resize: vertical;
+}
+
+.lockstep-warning {
+	color: var(--text-accent);
+}

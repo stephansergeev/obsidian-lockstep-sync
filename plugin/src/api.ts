@@ -191,6 +191,15 @@ export class SyncClient {
 		});
 	}
 
+	/** Mint a token for another device on this same vault. */
+	async issueToken(name: string): Promise<{ token: string; vault: string }> {
+		const resp = await this.call("POST", "/tokens", {
+			body: JSON.stringify({ name }),
+			headers: { "Content-Type": "application/json" },
+		});
+		return { token: String(resp.json?.token ?? ""), vault: String(resp.json?.vault ?? "") };
+	}
+
 	/** How many days a deleted file stays recoverable. Zero means for good. */
 	async getRetention(): Promise<number> {
 		const resp = await this.call("GET", "/retention");

@@ -121,6 +121,27 @@ const en: Dict = {
 	"settings.sync.desc": "Take what the server has, then send what this device has.",
 	"settings.sync.button": "Sync",
 
+	"cmd.addDevice": "Add another device",
+	"settings.addDevice.name": "Add another device",
+	"settings.addDevice.desc":
+		"Creates a link that sets up your phone or laptop in one tap. It carries the address and its own token, so nothing has to be typed there.",
+	"settings.addDevice.button": "Create a link",
+	"add.title": "Add another device",
+	"add.intro":
+		"This makes a link for one device. Open it on that device and Obsidian fills in the settings. Give each device its own, so losing one means revoking one.",
+	"add.name": "What to call it",
+	"add.nameDesc": "Shown when two devices change the same file and one of them has to be chosen.",
+	"add.create": "Create the link",
+	"add.needName": "Give the device a name first",
+	"add.ready":
+		"Send this to the other device and open it there. Obsidian has to be installed already, with a vault open and this plugin in it.",
+	"add.copy": "Copy",
+	"add.copied": "Copied",
+	"add.passphraseSeparately":
+		"The passphrase is not in the link, on purpose. Type it on the other device yourself.",
+	"add.linkBroken": "That setup link is missing the address or the token.",
+	"add.linkApplied": "Set up for vault {vault}. If it is encrypted, enter the passphrase below.",
+
 	"cmd.sync": "Sync now",
 
 	"notice.syncing": "Lockstep: syncing…",
@@ -269,6 +290,27 @@ const ru: Dict = {
 	"settings.sync.name": "Синхронизировать сейчас",
 	"settings.sync.desc": "Забрать то, что есть на сервере, затем отправить то, что есть здесь.",
 	"settings.sync.button": "Синхронизировать",
+
+	"cmd.addDevice": "Добавить устройство",
+	"settings.addDevice.name": "Добавить устройство",
+	"settings.addDevice.desc":
+		"Создаёт ссылку, которая настраивает телефон или ноутбук в одно касание. В ней адрес и собственный токен, поэтому вводить там ничего не придётся.",
+	"settings.addDevice.button": "Создать ссылку",
+	"add.title": "Добавить устройство",
+	"add.intro":
+		"Ссылка делается для одного устройства. Открой её там, и Obsidian сам заполнит настройки. Каждому устройству — своя, чтобы потеря одного означала отзыв одного.",
+	"add.name": "Как его назвать",
+	"add.nameDesc": "Показывается, когда два устройства правят один файл и надо выбрать версию.",
+	"add.create": "Создать ссылку",
+	"add.needName": "Сначала дай устройству имя",
+	"add.ready":
+		"Отправь это на другое устройство и открой там. Obsidian уже должен быть установлен, с открытым волтом и этим плагином.",
+	"add.copy": "Скопировать",
+	"add.copied": "Скопировано",
+	"add.passphraseSeparately":
+		"Пароля в ссылке нет, и это намеренно. Введи его на другом устройстве сам.",
+	"add.linkBroken": "В этой ссылке нет адреса или токена.",
+	"add.linkApplied": "Настроено на волт {vault}. Если он зашифрован, введи пароль ниже.",
 
 	"cmd.sync": "Синхронизировать сейчас",
 
