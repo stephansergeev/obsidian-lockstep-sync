@@ -106,7 +106,7 @@ The server itself listens on `127.0.0.1` and never faces the internet. Caddy doe
 Give every device its own token, so losing one phone means revoking one token:
 
 ```bash
-sudo /usr/local/bin/lockstep-sync-server token add --data /var/lib/lockstep --vault main --name iphone
+sudo /usr/local/bin/lockstep-sync-server token add --data /var/lib/lockstep --vault main --name phone
 ```
 
 Deleted files are erased on their own schedule, as above. The history of files that still
@@ -187,8 +187,9 @@ npm install
 npm run build
 ```
 
-Then enable the plugin, paste the server address and the token, and give the device a name.
-The name shows up in conflict copies, so you can tell which device an edit came from.
+Then enable the plugin, paste the server address and the token, and check the device name.
+It is filled in with what the device is, and whatever you put there instead is what other
+devices will call it when they ask you which version of a file should stand.
 
 After that it runs on its own. A pass fires a couple of seconds after you stop typing, on a
 timer, and when the app goes to the background, which on a phone is the moment before it

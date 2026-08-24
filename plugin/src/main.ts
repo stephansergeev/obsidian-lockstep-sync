@@ -15,7 +15,7 @@ import {
 } from "./crypto";
 import { t } from "./i18n";
 import { LocalIndex } from "./index-store";
-import { conflictName, sha256, toNFC } from "./paths";
+import { conflictName, defaultDeviceName, sha256, toNFC } from "./paths";
 import { SyncEngine, type SyncReport } from "./sync-engine";
 import { DEFAULT_SETTINGS, SyncSettingsTab, type SyncSettings } from "./settings";
 
@@ -120,6 +120,12 @@ export default class LockstepPlugin extends Plugin {
 
 	async loadSettings(): Promise<void> {
 		this.settings = Object.assign({}, DEFAULT_SETTINGS, await this.loadData());
+		// Named for what this device is, so nobody has to correct an assumption about
+		// what they own before they can start. Whatever they type instead wins.
+		if (!this.settings.deviceName) {
+			this.settings.deviceName = defaultDeviceName();
+			await this.saveData(this.settings);
+		}
 	}
 
 	async saveSettings(): Promise<void> {

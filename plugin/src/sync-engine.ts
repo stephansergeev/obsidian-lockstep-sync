@@ -6,7 +6,7 @@ import { ApiError, ConflictError, SyncClient, type ChangeEntry } from "./api";
 export { SyncClient } from "./api";
 import { merge3 } from "./diff3";
 import type { LocalIndex } from "./index-store";
-import { conflictName, sha256, toNFC } from "./paths";
+import { conflictName, defaultDeviceName, sha256, toNFC } from "./paths";
 import type { Cipher } from "./crypto";
 import type { SyncSettings } from "./settings";
 
@@ -639,7 +639,7 @@ export class SyncEngine {
 	}
 
 	deviceName(): string {
-		return this.deps.settings.deviceName || "local";
+		return this.deps.settings.deviceName || defaultDeviceName();
 	}
 
 	/**

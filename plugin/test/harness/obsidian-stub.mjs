@@ -36,3 +36,6 @@ export class Notice {
 export function normalizePath(p) {
 	return p;
 }
+
+// Node is not a phone. Tests that care about the name set it explicitly anyway.
+export const Platform = { isPhone: false, isTablet: false, isDesktop: true, isMobile: false };

@@ -149,7 +149,7 @@ const en: Dict = {
 	"error.pull": "Download",
 	"error.corruptDownload": "corrupt download of {path}: expected {want}, got {got}",
 
-	"conflict.label": "local",
+	"conflict.label": "this device",
 };
 
 const ru: Dict = {
@@ -290,7 +290,7 @@ const ru: Dict = {
 	"error.pull": "Скачивание",
 	"error.corruptDownload": "битая загрузка {path}: ожидали {want}, получили {got}",
 
-	"conflict.label": "локальная",
+	"conflict.label": "это устройство",
 };
 
 const locales: Record<string, Dict> = { ru };

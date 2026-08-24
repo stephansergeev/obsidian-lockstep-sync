@@ -3,6 +3,7 @@
 import { App, Notice, PluginSettingTab, Setting } from "obsidian";
 import { otherSideLabel } from "./conflict-notice";
 import { t } from "./i18n";
+import { defaultDeviceName } from "./paths";
 import type LockstepPlugin from "./main";
 
 export interface SyncSettings {
@@ -95,7 +96,7 @@ export class SyncSettingsTab extends PluginSettingTab {
 			.setDesc(t("settings.device.desc"))
 			.addText((text) =>
 				text
-					.setPlaceholder("iphone")
+					.setPlaceholder(defaultDeviceName())
 					.setValue(this.plugin.settings.deviceName)
 					.onChange(async (v) => {
 						this.plugin.settings.deviceName = v.trim();

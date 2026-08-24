@@ -1,5 +1,7 @@
 // SPDX-License-Identifier: MIT
 
+import { Platform } from "obsidian";
+
 /**
  * Vault paths. The single place that decides how a path looks on the wire.
  *
@@ -40,4 +42,18 @@ export async function sha256(data: ArrayBuffer): Promise<string> {
 	return Array.from(new Uint8Array(digest))
 		.map((b) => b.toString(16).padStart(2, "0"))
 		.join("");
+}
+
+/**
+ * What to call this device before anybody names it.
+ *
+ * Named after what the device is rather than what it is likely to be. A default of
+ * "iphone" is wrong on every Android in the world, and a person setting up sync on
+ * one of them should not have to correct the software's assumption about them
+ * before they can use it.
+ */
+export function defaultDeviceName(): string {
+	if (Platform.isPhone) return "phone";
+	if (Platform.isTablet) return "tablet";
+	return "desktop";
 }
