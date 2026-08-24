@@ -40,6 +40,8 @@ export default class LockstepPlugin extends Plugin {
 	 * would do it quietly.
 	 */
 	private locked = false;
+	/** Said once, not on every pass. */
+	private announcedEncryptedVault = false;
 	private interval: number | null = null;
 
 	override async onload(): Promise<void> {
@@ -55,6 +57,7 @@ export default class LockstepPlugin extends Plugin {
 			settings: this.settings,
 			client: () => this.client(false),
 			cipher: () => this.cipher,
+			guard: () => this.reasonNotToSync(),
 			onConflict: (path) => {
 				// Ask right here rather than sending anybody to a settings screen. The
 				// same conflict also stays in the list, so ignoring the notice costs
@@ -182,6 +185,7 @@ export default class LockstepPlugin extends Plugin {
 				this.cipher = cipher;
 				this.pathCipher = stored.paths === "encrypted" ? await cipher.pathCipher() : null;
 				this.locked = false;
+				this.announcedEncryptedVault = false;
 				this.cipherStatus = t(
 					this.pathCipher ? "encryption.readyWithPaths" : "encryption.ready",
 				);
@@ -203,6 +207,7 @@ export default class LockstepPlugin extends Plugin {
 				this.cipher = cipher;
 				this.pathCipher = params.paths === "encrypted" ? await cipher.pathCipher() : null;
 				this.locked = false;
+				this.announcedEncryptedVault = false;
 				this.cipherStatus = t("encryption.created");
 				new Notice(t("encryption.created"), 10000);
 				if (occupied) new Notice(t("encryption.namesStayVisible"), 15000);
@@ -405,6 +410,38 @@ export default class LockstepPlugin extends Plugin {
 		for (const err of report.errors.slice(0, 3)) {
 			new Notice(t("notice.error", { what: t("error.sync"), message: err }), 8000);
 		}
+	}
+
+	/**
+	 * Why syncing must not happen, or empty when it may.
+	 *
+	 * The important case is a vault that is encrypted while this device is not set up
+	 * for it. Reading it anyway produces filenames that are ciphertext and content
+	 * that is noise, and the device then tries to create files with those names. Far
+	 * better to notice, refuse, and say which of the two things is missing.
+	 */
+	private async reasonNotToSync(): Promise<string> {
+		if (this.locked) return this.cipherStatus;
+		if (this.cipher.enabled) return "";
+
+		const client = this.client(false);
+		if (!client) return "";
+		try {
+			if (!(await client.getVaultKey())) return "";
+		} catch {
+			return ""; // cannot tell, and refusing on a network hiccup helps nobody
+		}
+		// The vault has a key and this device has none.
+		this.locked = true;
+		this.cipherStatus = t(
+			this.settings.encryption ? "encryption.locked" : "encryption.vaultIsEncrypted",
+		);
+		this.setStatus(this.cipherStatus);
+		if (!this.announcedEncryptedVault) {
+			this.announcedEncryptedVault = true;
+			new Notice(`Lockstep: ${this.cipherStatus}`, 15000);
+		}
+		return this.cipherStatus;
 	}
 
 	/** True when encryption is on and the vault is not open. Nothing may move. */

@@ -72,6 +72,8 @@ interface IndexFile {
 	 */
 	renames: PendingRename[];
 	conflicts: PendingConflict[];
+	/** Whether the last pull was read with a key. A change means starting over. */
+	read_encrypted?: boolean;
 }
 
 const EMPTY: IndexFile = {
@@ -119,6 +121,19 @@ export class LocalIndex {
 
 	get lastSeq(): number {
 		return this.data.last_seq;
+	}
+
+	/** Back to the beginning, without forgetting what is already on disk. */
+	resetCursor(): void {
+		this.data.last_seq = 0;
+	}
+
+	get readEncrypted(): boolean {
+		return this.data.read_encrypted ?? false;
+	}
+
+	setReadEncrypted(value: boolean): void {
+		this.data.read_encrypted = value;
 	}
 	setLastSeq(seq: number): void {
 		if (seq > this.data.last_seq) this.data.last_seq = seq;

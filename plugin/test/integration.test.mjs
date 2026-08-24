@@ -648,3 +648,56 @@ test("names are only hidden in a vault that starts empty", async (t) => {
 	assert.ok(stats.files > 0, "the vault has to be occupied for this to mean anything");
 	// The plugin reads exactly this before deciding, which is what the guard hangs on.
 });
+
+test("a failed change does not move the cursor past itself", async (t) => {
+	const { a, b, cleanup } = await twoDevices();
+	t.after(cleanup);
+
+	await a.edit("first.md", "one\n");
+	await a.edit("second.md", "two\n");
+	await a.sync();
+
+	// Make writing the first arrival fail, the way an unwritable name does on a phone.
+	const realWrite = b.vault.adapter.writeBinary;
+	let failed = false;
+	b.vault.adapter.writeBinary = async (path, data) => {
+		if (!failed && path === "first.md") {
+			failed = true;
+			throw new Error("could not be opened");
+		}
+		return realWrite.call(b.vault, path, data);
+	};
+
+	const bad = await b.sync();
+	assert.ok(bad.errors.length > 0, "the failure has to be reported");
+	assert.equal(b.index.lastSeq, 0, "and the cursor must not have moved past it");
+
+	// The next pass, with writing working again, has to pick up what was missed.
+	const good = await b.sync();
+	assert.equal(good.errors.length, 0);
+	assert.equal(await b.vault.read("first.md"), "one\n");
+	assert.equal(await b.vault.read("second.md"), "two\n");
+	// Before this, a pass that failed marked the change handled and nothing ever
+	// asked for it again: the edit was gone from that device for good.
+});
+
+test("reading a vault with a key after reading it without starts over", async (t) => {
+	const server = await startServer();
+	const a = await makeDevice(server, "mac", server.tokens.a);
+	t.after(async () => {
+		await a.cleanup();
+		await server.stop();
+	});
+
+	await a.edit("note.md", "body\n");
+	await a.sync(); // uploads; a device does not advance its cursor on its own writes
+	await a.sync(); // reads its own change back and moves the cursor past it
+	assert.ok(a.index.lastSeq > 0, "the cursor should have moved by now");
+
+	const { cipher } = await VaultCipher.create("passphrase", { iterations: 1, memory_kib: 64 });
+	a.setCipher(cipher);
+	await a.sync();
+
+	// Whatever was read without the key was read wrongly, so the cursor goes back.
+	assert.equal(a.index.readEncrypted, true);
+});

@@ -115,6 +115,7 @@ export async function makeDevice(server, name, token, options = {}) {
 		client: () =>
 			new SyncClient(server.url, token, settings.deviceName, options.pathCipher ?? null),
 		cipher: () => cipher,
+		guard: async () => "",
 		onConflict: (path, copy) => conflicts.push({ path, copy }),
 		log: (message, error) => logs.push(`${message}: ${error ?? ""}`),
 	});

@@ -55,6 +55,11 @@ export interface EngineDeps {
 	client: () => SyncClient | null;
 	/** Encryption in force right now, or the pass-through when it is off. */
 	cipher: () => Cipher;
+	/**
+	 * A reason not to sync at all, or empty when there is none. Checked before
+	 * anything is read or written.
+	 */
+	guard: () => Promise<string>;
 	onConflict: (path: string, copy: string) => void;
 	log: (message: string, error?: unknown) => void;
 }
@@ -66,6 +71,21 @@ export class SyncEngine {
 	private queued = false;
 
 	constructor(private deps: EngineDeps) {}
+
+	/**
+	 * Start over when the key situation has changed since the last pull.
+	 *
+	 * A vault read without its key, or read with one after being read without, was
+	 * read wrongly. The cursor has to go back to the beginning, or the entries that
+	 * were misread are never offered again.
+	 */
+	private async resetCursorIfCipherChanged(): Promise<void> {
+		const now = this.deps.cipher().enabled;
+		if (this.deps.index.readEncrypted === now) return;
+		this.deps.index.setReadEncrypted(now);
+		this.deps.index.resetCursor();
+		await this.deps.index.save();
+	}
 
 	/** Settings are edited in place by the settings tab, so the engine re-reads them. */
 	updateSettings(settings: SyncSettings): void {
@@ -125,6 +145,14 @@ export class SyncEngine {
 			await this.pruneConflicts();
 			const client = this.deps.client();
 			if (!client) return report;
+			// Reading an encrypted vault without the key produces filenames that are
+			// ciphertext and content that is noise. Better to do nothing and say why.
+			const barrier = await this.deps.guard();
+			if (barrier) {
+				report.errors.push(barrier);
+				return report;
+			}
+			await this.resetCursorIfCipherChanged();
 			await this.pull(client, report);
 			await this.push(client, report);
 		} finally {
@@ -171,13 +199,20 @@ export class SyncEngine {
 				if (this.isExcluded(path)) {
 					report.skipped++;
 					this.deps.index.setLastSeq(entry.seq);
+					await this.deps.index.save();
 					continue;
 				}
 				try {
 					await this.applyRemote(client, entry, path, report);
 				} catch (e) {
+					// The cursor stops here. Moving past a change that failed to apply
+					// would mark it handled forever: it is never in a later delta, and
+					// nothing ever asks for it again. A pass that stops and says so can
+					// be retried; one that skips ahead has quietly lost an edit.
 					report.errors.push(`${path}: ${describe(e)}`);
 					this.deps.log(`pull ${path}`, e);
+					await this.deps.index.save();
+					return;
 				}
 				// Checkpoint after every entry: the app can be killed right here.
 				this.deps.index.setLastSeq(entry.seq);

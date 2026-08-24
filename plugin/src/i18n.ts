@@ -87,6 +87,8 @@ const en: Dict = {
 	"settings.passphrase.button": "Unlock",
 	"encryption.off": "Encryption is off. The server can read your notes.",
 	"encryption.locked": "Enter the passphrase to unlock this vault.",
+	"encryption.vaultIsEncrypted":
+		"This vault is encrypted. Turn on Encrypt content and enter its passphrase. Nothing is downloaded until then, because without the key the files arrive unreadable and under unreadable names.",
 	"encryption.ready": "Unlocked. New uploads are encrypted.",
 	"encryption.readyWithPaths": "Unlocked. Content and file names are both hidden from the server.",
 	"encryption.created": "Encryption set up for this vault. Keep the passphrase safe.",
@@ -230,6 +232,8 @@ const ru: Dict = {
 	"settings.passphrase.button": "Открыть",
 	"encryption.off": "Шифрование выключено. Сервер видит твои заметки.",
 	"encryption.locked": "Введи пароль, чтобы открыть волт.",
+	"encryption.vaultIsEncrypted":
+		"Этот волт зашифрован. Включи Encrypt content и введи его пароль. До этого ничего не скачивается: без ключа файлы приедут нечитаемыми и под нечитаемыми именами.",
 	"encryption.ready": "Открыто. Новые загрузки шифруются.",
 	"encryption.readyWithPaths": "Открыто. И содержимое, и имена файлов скрыты от сервера.",
 	"encryption.created": "Шифрование настроено для этого волта. Сохрани пароль.",

@@ -1,5 +1,22 @@
 # Changelog
 
+## 0.8.6
+
+Two bugs found by joining an encrypted vault from a second device.
+
+A device with no key downloaded the vault anyway, and tried to create files named
+after ciphertext. The phone refused, once per file, filling the screen. It now checks
+whether the vault has a key before touching anything and says which of the two things
+is missing.
+
+Worse, and the reason nothing synced afterwards: a change that failed to apply still
+moved the cursor past itself. It was never in a later delta and nothing ever asked
+for it again, so every failure lost an edit permanently. The cursor now stops where
+the failure was, which turns a lost edit into a retried one.
+
+Reading a vault with a key after reading it without now starts the delta over, since
+everything read the first way was read wrongly.
+
 ## 0.8.0
 
 Deleted notes are now erased for good after thirty days, and the window is a setting in the
