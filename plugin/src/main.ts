@@ -23,6 +23,16 @@ import { DEFAULT_SETTINGS, SyncSettingsTab, type SyncSettings } from "./settings
 /** How long to wait after the last edit before syncing. Obsidian fires on every keystroke. */
 const DEBOUNCE_MS = 2500;
 
+/**
+ * How often to ask the server for changes. Fixed rather than a setting: a check
+ * that finds nothing is one indexed query and forty bytes, Obsidian on a phone
+ * does not run in the background, and nobody has a reason to want it slower.
+ */
+const SYNC_INTERVAL_MS = 15_000;
+
+/** How many journal lines to keep. Enough to cover a bad afternoon, not a month. */
+const JOURNAL_LINES = 400;
+
 export default class LockstepPlugin extends Plugin {
 	override settings: SyncSettings = { ...DEFAULT_SETTINGS };
 	index!: LocalIndex;
@@ -55,6 +65,9 @@ export default class LockstepPlugin extends Plugin {
 	/** Which vault on the server this device is bound to, as the server names it. */
 	private serverVault = "";
 	private interval: number | null = null;
+	/** Decision journal, flushed to disk after every pass. */
+	private journal: string[] = [];
+	private journalDirty = false;
 
 	override async onload(): Promise<void> {
 		await this.loadSettings();
@@ -70,6 +83,7 @@ export default class LockstepPlugin extends Plugin {
 			client: () => this.client(false),
 			cipher: () => this.cipher,
 			guard: () => this.reasonNotToSync(),
+			trace: (line) => this.traceLine(line),
 			onProgress: (done, path) => {
 				// Movement while a long first sync runs. Somebody watching an empty
 				// vault needs to see it filling, not a word that never changes.
@@ -162,6 +176,31 @@ export default class LockstepPlugin extends Plugin {
 
 	statusLine(): string {
 		return this.lastStatus;
+	}
+
+	/**
+	 * The journal answers the only question that matters when something synced
+	 * wrongly: which branch took this entry, on this device, at that moment. It
+	 * lives beside the plugin so a bug report can carry it.
+	 */
+	private traceLine(line: string): void {
+		const stamp = new Date().toISOString().slice(11, 19);
+		this.journal.push(`${stamp} ${line}`);
+		if (this.journal.length > JOURNAL_LINES) {
+			this.journal.splice(0, this.journal.length - JOURNAL_LINES);
+		}
+		this.journalDirty = true;
+	}
+
+	private async flushJournal(): Promise<void> {
+		if (!this.journalDirty) return;
+		this.journalDirty = false;
+		try {
+			const dir = normalizePath(`${this.app.vault.configDir}/plugins/${this.manifest.id}`);
+			await this.app.vault.adapter.write(`${dir}/sync-log.txt`, this.journal.join("\n") + "\n");
+		} catch {
+			/* a journal that cannot be written is not worth failing a sync over */
+		}
 	}
 
 	/**
@@ -516,9 +555,14 @@ export default class LockstepPlugin extends Plugin {
 		// spend every pass telling the server to delete a file it never had.
 		if (!known && !this.app.vault.getAbstractFileByPath(path)) return;
 
+		// The base revision did not change because the file was edited, so what the
+		// index knows about it is kept. Rebuilding the entry from nothing here used to
+		// drop the plaintext hash, and everything downstream that leaned on it then
+		// mistook ordinary files for local edits.
 		this.index.set(path, {
 			base_rev: known?.base_rev ?? 0,
 			base_hash: known?.base_hash ?? "",
+			plain_hash: known?.plain_hash,
 			local_hash: known?.local_hash ?? "",
 			mtime: Date.now(),
 			dirty: true,
@@ -557,8 +601,7 @@ export default class LockstepPlugin extends Plugin {
 			this.interval = null;
 		}
 		if (!this.settings.autoSync) return;
-		const ms = Math.max(15, this.settings.intervalSeconds) * 1000;
-		this.interval = window.setInterval(() => void this.syncNow(true), ms);
+		this.interval = window.setInterval(() => void this.syncNow(true), SYNC_INTERVAL_MS);
 		this.registerInterval(this.interval);
 	}
 
@@ -588,6 +631,8 @@ export default class LockstepPlugin extends Plugin {
 			if (this.engine.takeQueued()) this.scheduleSync();
 		} catch (e) {
 			this.reportError(t("error.sync"), e);
+		} finally {
+			await this.flushJournal();
 		}
 	}
 

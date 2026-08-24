@@ -1,5 +1,25 @@
 # Changelog
 
+## 0.12.0
+
+The folder duplication is fixed at its root, which was not where it looked. The device
+that renamed the folder was undoing itself: a pass started by pulling, at a moment when the
+server still believed the old paths, so it downloaded its own just-moved files straight
+back, then fought the arriving tombstones, kept the resurrected copies as local edits and
+pushed them to every other device. Renames are now told to the server before anything is
+read from it, and a path queued to move away is never touched by a pull.
+
+Every comparison between disk and server now happens in ciphertext, the only currency both
+sides hold. Deterministic encryption makes that possible: sealing the same bytes always
+yields the same hash the server has. Earlier comparisons leaned on optional index fields
+that were lost in enough places to matter, and a wounded record was misread as a local edit.
+
+The engine keeps a decision journal in sync-log.txt beside the plugin, one line per branch
+taken, so the next report of something syncing wrongly can carry the answer with it.
+
+The check interval is fixed at fifteen seconds and the setting is gone. A check that finds
+nothing costs one indexed query, and nobody has a reason to want it slower.
+
 ## 0.11.1
 
 Renaming a folder in an encrypted vault duplicated it instead of moving it. Deciding whether

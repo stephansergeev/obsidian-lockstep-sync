@@ -14,6 +14,7 @@ export interface SyncSettings {
 	/** Paths that never leave this device, whatever else is configured. */
 	excludes: string[];
 	autoSync: boolean;
+	/** Kept for old settings files; the interval itself is fixed in code now. */
 	/** Encrypt content before it leaves the device. */
 	encryption: boolean;
 	/**
@@ -146,24 +147,6 @@ export class SyncSettingsTab extends PluginSettingTab {
 					this.plugin.restartAutoSync();
 				}),
 			);
-
-		new Setting(containerEl)
-			.setName(t("settings.interval.name"))
-			.setDesc(t("settings.interval.desc"))
-			.addText((text) => {
-				text.inputEl.type = "number";
-				text.inputEl.min = "15";
-				text.inputEl.setAttribute("aria-label", t("settings.interval.unit"));
-				text
-					.setValue(String(this.plugin.settings.intervalSeconds))
-					.onChange(async (v) => {
-						const n = Number(v);
-						if (!Number.isFinite(n)) return;
-						this.plugin.settings.intervalSeconds = Math.max(15, Math.round(n));
-						await this.plugin.saveSettings();
-						this.plugin.restartAutoSync();
-					});
-			});
 
 		new Setting(containerEl).setName(t("settings.section.encryption")).setHeading();
 

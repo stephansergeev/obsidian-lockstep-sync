@@ -118,6 +118,7 @@ export async function makeDevice(server, name, token, options = {}) {
 		guard: async () => "",
 		onConflict: (path, copy) => conflicts.push({ path, copy }),
 		log: (message, error) => logs.push(`${message}: ${error ?? ""}`),
+		trace: (line) => logs.push(`[${name}] ${line}`),
 	});
 
 	return {

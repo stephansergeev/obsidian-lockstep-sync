@@ -776,3 +776,79 @@ test("a folder rename in an encrypted vault moves rather than duplicates", async
 	assert.equal(await b.vault.exists("Finance"), false, "the old folder stayed behind");
 	assert.equal(await b.vault.exists("Finance/passwords.md"), false, "and so did its files");
 });
+
+test("a rename lands even when the index has forgotten what it knew", async (t) => {
+	// Index entries lose fields in the wild: older versions rebuilt them in several
+	// places and dropped the plaintext hash. The decision to move a file must not
+	// depend on the index being in perfect health, because on real devices it is not.
+	const server = await startServer();
+	const { cipher } = await VaultCipher.create("shared passphrase", {
+		iterations: 1,
+		memory_kib: 64,
+	});
+	const opts = { cipher, pathCipher: await cipher.pathCipher() };
+	const a = await makeDevice(server, "phone", server.tokens.a, opts);
+	const b = await makeDevice(server, "mac", server.tokens.b, opts);
+	t.after(async () => {
+		await a.cleanup();
+		await b.cleanup();
+		await server.stop();
+	});
+
+	await a.edit("Finance/passwords.md", "secrets\n");
+	await a.sync();
+	await b.sync();
+
+	// Wound the index the way old versions did.
+	const entry = b.index.get("Finance/passwords.md");
+	delete entry.plain_hash;
+	b.index.set("Finance/passwords.md", entry);
+
+	await a.rename("Finance/passwords.md", "Money/passwords.md");
+	await a.sync();
+	const report = await b.sync();
+
+	assert.equal(report.renamed, 1, "the move must still be recognised as a move");
+	assert.equal(await b.vault.exists("Finance/passwords.md"), false, "no duplicate left behind");
+	assert.equal(await b.vault.read("Money/passwords.md"), "secrets\n");
+
+	// And nothing resurrects on the next exchange in either direction.
+	await b.sync();
+	await a.sync();
+	assert.equal(await a.vault.exists("Finance/passwords.md"), false, "nothing came back");
+});
+
+test("a deletion lands even when the index has forgotten what it knew", async (t) => {
+	const server = await startServer();
+	const { cipher } = await VaultCipher.create("shared passphrase", {
+		iterations: 1,
+		memory_kib: 64,
+	});
+	const opts = { cipher, pathCipher: await cipher.pathCipher() };
+	const a = await makeDevice(server, "phone", server.tokens.a, opts);
+	const b = await makeDevice(server, "mac", server.tokens.b, opts);
+	t.after(async () => {
+		await a.cleanup();
+		await b.cleanup();
+		await server.stop();
+	});
+
+	await a.edit("note.md", "body\n");
+	await a.sync();
+	await b.sync();
+
+	const entry = b.index.get("note.md");
+	delete entry.plain_hash;
+	b.index.set("note.md", entry);
+
+	await a.delete("note.md");
+	await a.sync();
+	await b.sync();
+
+	// The file was not edited on b, so the deletion must apply rather than being
+	// mistaken for an edit and resurrected onto every device.
+	assert.equal(await b.vault.exists("note.md"), false, "the deletion was resisted");
+	await b.sync();
+	await a.sync();
+	assert.equal(await a.vault.exists("note.md"), false, "and nothing resurrected");
+});

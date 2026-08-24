@@ -63,6 +63,12 @@ export interface EngineDeps {
 	onConflict: (path: string, copy: string) => void;
 	/** Called as each file lands, so a long first sync shows movement rather than a pause. */
 	onProgress?: (done: number, path: string) => void;
+	/**
+	 * One line per decision, kept in a ring on disk. When something syncs wrongly the
+	 * question is always "which branch took this entry", and the answer has to come
+	 * from the device where it happened, not from a guess at a distance.
+	 */
+	trace?: (line: string) => void;
 	log: (message: string, error?: unknown) => void;
 }
 
@@ -152,6 +158,27 @@ export class SyncEngine {
 		}
 	}
 
+	/**
+	 * Whether these plaintext bytes are what the server stores under that hash.
+	 *
+	 * The server only ever knows ciphertext hashes, and the disk only ever holds
+	 * plaintext, so the two sides could not be compared directly and every earlier
+	 * comparison leaned on optional index fields that were lost in enough places to
+	 * matter. Deterministic encryption closes the gap: sealing the same bytes always
+	 * yields the same ciphertext, so sealing what is on disk and hashing it gives
+	 * exactly the number the server would have. One more reason the nonce is derived
+	 * rather than random.
+	 */
+	private async matchesRemote(plain: ArrayBuffer, remoteHash: string | undefined): Promise<boolean> {
+		if (!remoteHash) return false;
+		const sealed = await this.deps.cipher().encrypt(plain);
+		return (await sha256(sealed)) === remoteHash;
+	}
+
+	private trace(line: string): void {
+		this.deps.trace?.(line);
+	}
+
 	/** True when this path is a folder in the vault rather than a file. */
 	private isFolder(path: string): boolean {
 		const known = this.deps.app.vault.getAbstractFileByPath?.(path);
@@ -190,6 +217,13 @@ export class SyncEngine {
 				return report;
 			}
 			await this.resetCursorIfCipherChanged();
+			// Renames go to the server before anything is read from it. A pass used to
+			// start by pulling, and at that moment the server still believed the old
+			// paths: they were missing locally, unknown to the index, and so were
+			// downloaded straight back. The device then fought its own rename, kept
+			// the resurrected file as a local edit, and pushed it to every other
+			// device. Telling the server where things live first closes the window.
+			await this.flushRenames(client, report);
 			await this.pull(client, report);
 			await this.push(client, report);
 		} finally {
@@ -233,6 +267,15 @@ export class SyncEngine {
 			const page = await client.changes(this.deps.index.lastSeq, 200);
 			for (const entry of page.entries) {
 				const path = toNFC(entry.path);
+				// A path that is queued to move away is already spoken for. Touching it
+				// here would recreate it moments before our own rename deletes it.
+				if (this.deps.index.renames.some((r) => r.from === path)) {
+					this.trace(`pull skipped ${path}: queued to move away`);
+					report.skipped++;
+					this.deps.index.setLastSeq(entry.seq);
+					await this.deps.index.save();
+					continue;
+				}
 				if (this.isExcluded(path)) {
 					report.skipped++;
 					this.deps.index.setLastSeq(entry.seq);
@@ -307,21 +350,14 @@ export class SyncEngine {
 			// the old one forever.
 			const caseOnly = from !== path && from.toLowerCase() === path.toLowerCase();
 			const destTaken = !caseOnly && (await adapter.exists(path));
-			if (!this.isExcluded(from) && (await adapter.exists(from)) && !destTaken) {
+			const fromExists = await adapter.exists(from);
+			if (!this.isExcluded(from) && fromExists && !destTaken) {
 				const local = await adapter.readBinary(from);
-				// The comparison has to happen on the hashes the server uses. With
-				// encryption on it stores the hash of the ciphertext, and hashing the
-				// file on disk gives the hash of the plaintext, so the two never match
-				// and every rename fell through to downloading a second copy while the
-				// first stayed where it was.
-				const knownFrom = this.deps.index.get(from);
-				const unchangedHere =
-					knownFrom !== undefined &&
-					knownFrom.plain_hash !== undefined &&
-					knownFrom.plain_hash === (await sha256(local));
-				const sameContent = unchangedHere
-					? knownFrom.base_hash === entry.hash
-					: (await sha256(local)) === entry.hash;
+				// Compared as ciphertext, which is the only currency both sides hold.
+				// Every earlier version compared through optional index fields, and a
+				// record that had lost one fell through to downloading a second copy
+				// while the first stayed where it was and later came back everywhere.
+				const sameContent = await this.matchesRemote(local, entry.hash);
 				if (sameContent) {
 					this.suppressed.add(from);
 					this.suppressed.add(path);
@@ -346,7 +382,7 @@ export class SyncEngine {
 					// hash as the local one leaves the entry describing bytes that are
 					// not on disk, and the next thing that happens to this path, a
 					// deletion most often, is read as an edit made here.
-					const plainHash = knownFrom?.plain_hash ?? (await sha256(local));
+					const plainHash = await sha256(local);
 					this.deps.index.set(path, {
 						base_rev: entry.rev,
 						base_hash: entry.hash ?? "",
@@ -355,9 +391,20 @@ export class SyncEngine {
 						mtime: entry.mtime,
 					});
 					await this.pruneEmptyParents(from);
+					this.trace(`rename moved ${from} -> ${path}`);
 					report.renamed++;
 					return;
 				}
+				this.trace(`rename fell through ${from} -> ${path}: content differs from server`);
+			} else {
+				this.trace(
+					`rename fell through ${from} -> ${path}: ` +
+						(this.isExcluded(from)
+							? "source excluded"
+							: !fromExists
+								? "source not on disk"
+								: "destination taken"),
+				);
 			}
 		}
 
@@ -376,7 +423,9 @@ export class SyncEngine {
 
 		const local = await adapter.readBinary(path);
 		const localHash = await sha256(local);
-		if (known && entry.hash === known.base_hash && localHash === known.plain_hash) {
+		if (await this.matchesRemote(local, entry.hash)) {
+			// What is on disk is exactly what the server holds, whatever the index
+			// thought it knew about either of them.
 			this.deps.index.set(path, {
 				base_rev: entry.rev,
 				base_hash: entry.hash ?? "",
@@ -384,6 +433,7 @@ export class SyncEngine {
 				local_hash: localHash,
 				mtime: entry.mtime,
 			});
+			this.trace(`same content, indexed ${path} at rev ${entry.rev}`);
 			report.skipped++;
 			return;
 		}
@@ -416,16 +466,26 @@ export class SyncEngine {
 		}
 		const local = await adapter.readBinary(path);
 		const localHash = await sha256(local);
-		if (known && known.plain_hash === localHash) {
+		const matchesBase = known !== undefined && (await this.matchesRemote(local, known.base_hash));
+		const matchesPlain = known !== undefined && known.plain_hash === localHash;
+		this.trace(
+			`deletion check ${path}: base=${known?.base_hash?.slice(0, 8) ?? "none"} ` +
+				`plain=${known?.plain_hash?.slice(0, 8) ?? "none"} disk=${localHash.slice(0, 8)} ` +
+				`matchesBase=${matchesBase} matchesPlain=${matchesPlain}`,
+		);
+		const untouched = matchesBase || matchesPlain;
+		if (untouched) {
 			// Untouched here since we last saw it, so the deletion is safe to apply.
 			this.suppressed.add(path);
 			await adapter.remove(path);
 			setTimeout(() => this.suppressed.delete(path), 1500);
 			this.deps.index.remove(path);
 			await this.pruneEmptyParents(path);
+			this.trace(`deletion applied ${path}`);
 			report.deleted++;
 			return;
 		}
+		this.trace(`deletion resisted ${path}: local content differs, keeping it`);
 		// Edited here, deleted there. The edit wins and goes back up as a new revision.
 		this.deps.index.set(path, {
 			base_rev: entry.rev,
@@ -493,11 +553,9 @@ export class SyncEngine {
 
 	// --- push -----------------------------------------------------------------
 
-	private async push(client: SyncClient, report: SyncReport): Promise<void> {
-		const adapter = this.deps.app.vault.adapter;
-
-		// Renames go first. Sending them as a move keeps the file's history instead of
-		// showing up on other devices as a deletion followed by an unfamiliar new file.
+	private async flushRenames(client: SyncClient, report: SyncReport): Promise<void> {
+		// Sent as moves so the file keeps its history, instead of showing up on other
+		// devices as a deletion followed by an unfamiliar new file.
 		for (const rename of [...this.deps.index.renames]) {
 			try {
 				const res = await client.rename(rename.from, rename.to, rename.base_rev);
@@ -505,11 +563,13 @@ export class SyncEngine {
 				const moved = this.deps.index.get(rename.to);
 				this.deps.index.set(rename.to, {
 					base_rev: res.rev,
-					base_hash: moved?.base_hash ?? res.hash,
-					local_hash: moved?.local_hash ?? res.hash,
+					base_hash: res.hash || (moved?.base_hash ?? ""),
+					plain_hash: moved?.plain_hash,
+					local_hash: moved?.local_hash ?? "",
 					mtime: Date.now(),
 					dirty: moved?.dirty ?? false,
 				});
+				this.trace(`rename sent ${rename.from} -> ${rename.to}`);
 				this.deps.index.remove(rename.from);
 				report.renamed++;
 			} catch (e) {
@@ -519,6 +579,10 @@ export class SyncEngine {
 				this.deps.log(`rename ${rename.from} -> ${rename.to}`, e);
 			}
 		}
+	}
+
+	private async push(client: SyncClient, report: SyncReport): Promise<void> {
+		const adapter = this.deps.app.vault.adapter;
 
 		for (const path of this.deps.index.paths()) {
 			const entry = this.deps.index.get(path);
