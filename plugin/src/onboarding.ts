@@ -89,21 +89,38 @@ export class AddDeviceModal extends Modal {
 			frame.detach(); // the link below still works
 		}
 
+		contentEl.createEl("p", { cls: "setting-item-description", text: t("add.orLink") });
+
 		const box = contentEl.createEl("textarea", { cls: "lockstep-setup-link" });
 		box.value = this.link;
 		box.readOnly = true;
 		box.rows = 3;
 		box.addEventListener("focus", () => box.select());
+		box.addEventListener("click", () => box.select());
 
-		new Setting(contentEl).addButton((b) =>
-			b
-				.setCta()
-				.setButtonText(t("add.copy"))
-				.onClick(async () => {
-					await navigator.clipboard.writeText(this.link);
-					new Notice(t("add.copied"));
+		new Setting(contentEl)
+			.addButton((b) =>
+				b
+					.setCta()
+					.setButtonText(t("add.copy"))
+					.onClick(async () => {
+						try {
+							await navigator.clipboard.writeText(this.link);
+							new Notice(t("add.copied"));
+						} catch {
+							// Some contexts refuse the clipboard. Selecting it leaves the
+							// person one keystroke away rather than stuck.
+							box.focus();
+							box.select();
+							new Notice(t("add.copyManually"), 8000);
+						}
+					}),
+			)
+			.addButton((b) =>
+				b.setButtonText(t("add.openHere")).setTooltip(t("add.openHereTip")).onClick(() => {
+					window.open(this.link);
 				}),
-		);
+			);
 
 		if (this.encrypted) {
 			contentEl.createEl("p", {

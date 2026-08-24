@@ -64,6 +64,7 @@
 
 .lockstep-setup-link {
 	width: 100%;
+	cursor: text;
 	font-family: var(--font-monospace);
 	font-size: var(--font-ui-smaller);
 	resize: vertical;

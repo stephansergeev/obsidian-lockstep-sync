@@ -136,7 +136,12 @@ const en: Dict = {
 	"add.ready":
 		"Obsidian has to be installed on the other device already, with a vault open and this plugin in it.",
 	"add.scan": "Point the other device's camera at this. Nothing is sent anywhere.",
-	"add.copy": "Copy the link instead",
+	"add.orLink":
+		"Or take the link. Paste it into a browser or a message on the other device and opening it starts Obsidian already configured.",
+	"add.copy": "Copy link",
+	"add.copyManually": "Could not reach the clipboard. The link is selected, copy it by hand.",
+	"add.openHere": "Open on this device",
+	"add.openHereTip": "Applies these settings to the vault open right here, which is mostly useful for checking the link works.",
 	"add.copied": "Copied",
 	"add.passphraseSeparately":
 		"The passphrase is not in the link, on purpose. Type it on the other device yourself.",
@@ -307,7 +312,12 @@ const ru: Dict = {
 	"add.ready":
 		"На другом устройстве уже должен стоять Obsidian, с открытым волтом и этим плагином.",
 	"add.scan": "Наведи камеру другого устройства. Ничего никуда не отправляется.",
-	"add.copy": "Или скопировать ссылку",
+	"add.orLink":
+		"Или возьми ссылку. Вставь её в браузер или в сообщение на другом устройстве: при открытии запустится Obsidian уже настроенным.",
+	"add.copy": "Скопировать ссылку",
+	"add.copyManually": "Не получилось обратиться к буферу обмена. Ссылка выделена, скопируй руками.",
+	"add.openHere": "Открыть здесь",
+	"add.openHereTip": "Применит эти настройки к волту, открытому прямо здесь. Нужно в основном чтобы проверить, что ссылка работает.",
 	"add.copied": "Скопировано",
 	"add.passphraseSeparately":
 		"Пароля в ссылке нет, и это намеренно. Введи его на другом устройстве сам.",
