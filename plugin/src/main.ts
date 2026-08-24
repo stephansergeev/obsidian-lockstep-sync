@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: MIT
 
-import { Notice, Plugin, TAbstractFile, normalizePath } from "obsidian";
+import { Notice, Plugin, TAbstractFile, TFile, normalizePath } from "obsidian";
 import { ApiError, SyncClient, type ChangeEntry } from "./api";
 import { ConflictModal } from "./conflict-modal";
 import { showConflictNotice } from "./conflict-notice";
@@ -325,12 +325,20 @@ export default class LockstepPlugin extends Plugin {
 	// --- watching the vault ---------------------------------------------------
 
 	private registerVaultEvents(): void {
-		const mark = (file: TAbstractFile) => this.markDirty(file.path);
+		// Folders are not sent. Obsidian raises the same events for them as for files,
+		// and treating one as a file means trying to read a directory and upload it,
+		// which fails once per folder and says so. Parents are created on the way in
+		// when a file inside them arrives, so nothing is lost by ignoring them.
+		const mark = (file: TAbstractFile) => {
+			if (file instanceof TFile) this.markDirty(file.path);
+		};
 		this.registerEvent(this.app.vault.on("create", mark));
 		this.registerEvent(this.app.vault.on("modify", mark));
 		this.registerEvent(this.app.vault.on("delete", mark));
 		this.registerEvent(
-			this.app.vault.on("rename", (file, oldPath) => this.onRename(file.path, oldPath)),
+			this.app.vault.on("rename", (file, oldPath) => {
+				if (file instanceof TFile) this.onRename(file.path, oldPath);
+			}),
 		);
 	}
 

@@ -26,6 +26,9 @@ export async function requestUrl(options) {
 	return { status: resp.status, headers: lower, arrayBuffer: buf, text, json };
 }
 
+export class TFile {}
+export class TFolder {}
+
 export class Notice {
 	constructor(message) {
 		this.message = message;

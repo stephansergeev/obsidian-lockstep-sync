@@ -19,7 +19,7 @@ const en: Dict = {
 		"Issued by sync-server token add --name <device>. Shown once, on the server.",
 	"settings.serverVault.name": "Syncing with vault",
 	"settings.serverVault.desc":
-		"The vault on the server this token opens. What this vault is called in Obsidian is local to this device and has no effect on syncing.",
+		"The name this vault has on the server, which is set when its first token is issued. It is unrelated to what the vault is called in Obsidian: that name never leaves the device.",
 	"settings.serverVault.unknown": "not connected",
 	"settings.device.name": "Device name",
 	"settings.device.desc":
@@ -113,7 +113,7 @@ const en: Dict = {
 	"settings.autoSync.name": "Sync automatically",
 	"settings.autoSync.desc":
 		"Keep this vault in step on its own. Without it, syncing only happens when you ask for it.",
-	"settings.interval.name": "Check the server every",
+	"settings.interval.name": "Check the server every, seconds",
 	"settings.interval.desc":
 		"How often this device asks the server whether anything changed elsewhere, in seconds. Your own edits do not wait for it: they go a couple of seconds after you stop typing, and again when the app goes to the background. Minimum 15.",
 	"settings.interval.unit": "seconds",
@@ -168,7 +168,7 @@ const ru: Dict = {
 		"Выдаётся командой sync-server token add --name <устройство>. Показывается один раз.",
 	"settings.serverVault.name": "Синхронизируется с волтом",
 	"settings.serverVault.desc":
-		"Волт на сервере, который открывает этот токен. Как волт назван в Obsidian — дело этого устройства и на синхронизацию не влияет.",
+		"Имя этого волта на сервере, оно задаётся при выдаче первого токена. С именем волта в Obsidian не связано никак: то имя устройство никуда не отправляет.",
 	"settings.serverVault.unknown": "нет соединения",
 	"settings.device.name": "Имя устройства",
 	"settings.device.desc":
@@ -262,7 +262,7 @@ const ru: Dict = {
 	"settings.autoSync.name": "Синхронизировать автоматически",
 	"settings.autoSync.desc":
 		"Держать волт в актуальном состоянии самостоятельно. Без этого синхронизация происходит только по твоей команде.",
-	"settings.interval.name": "Проверять сервер каждые",
+	"settings.interval.name": "Проверять сервер каждые, секунд",
 	"settings.interval.desc":
 		"Как часто это устройство спрашивает сервер, не изменилось ли что-то в другом месте, в секундах. Твои собственные правки этого не ждут: они уходят через пару секунд после того, как ты перестал печатать, и ещё раз при сворачивании приложения. Минимум 15.",
 	"settings.interval.unit": "секунд",

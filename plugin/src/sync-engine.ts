@@ -122,6 +122,13 @@ export class SyncEngine {
 		}
 	}
 
+	/** True when this path is a folder in the vault rather than a file. */
+	private isFolder(path: string): boolean {
+		const known = this.deps.app.vault.getAbstractFileByPath?.(path);
+		if (!known) return false;
+		return !("stat" in known);
+	}
+
 	isExcluded(path: string): boolean {
 		return this.deps.settings.excludes.some((p) => path === p || path.startsWith(p));
 	}
@@ -462,6 +469,13 @@ export class SyncEngine {
 			const entry = this.deps.index.get(path);
 			if (!entry || entry.folder || !entry.dirty || this.isExcluded(path)) continue;
 			try {
+				// A directory that an earlier version recorded as a file. Reading it
+				// fails every pass and says so, once per folder, forever.
+				if (this.isFolder(path)) {
+					this.deps.index.remove(path);
+					report.skipped++;
+					continue;
+				}
 				if (!(await adapter.exists(path))) {
 					// Never uploaded, now gone. The server has nothing to forget.
 					if (entry.base_rev === 0) {
