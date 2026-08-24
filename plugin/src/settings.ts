@@ -180,6 +180,14 @@ export class SyncSettingsTab extends PluginSettingTab {
 				.setDesc(t("settings.passphrase.desc"))
 				.addText((text) => {
 					text.inputEl.type = "password";
+					if (this.plugin.takeFocusRequest()) {
+						// The reason this screen was opened. Put the cursor where the one
+						// remaining step is instead of leaving it to be found.
+						window.setTimeout(() => {
+							text.inputEl.focus();
+							text.inputEl.scrollIntoView({ block: "center" });
+						}, 50);
+					}
 					text.setValue(this.plugin.settings.passphrase).onChange(async (v) => {
 						this.plugin.settings.passphrase = v;
 						await this.plugin.saveSettings();

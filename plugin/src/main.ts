@@ -45,6 +45,7 @@ export default class LockstepPlugin extends Plugin {
 	private announcedEncryptedVault = false;
 	/** A server that cannot be reached says so once, not once a minute. */
 	private announcedUnreachable = false;
+	private focusPassphrase = false;
 	/** Which vault on the server this device is bound to, as the server names it. */
 	private serverVault = "";
 	private interval: number | null = null;
@@ -310,10 +311,59 @@ export default class LockstepPlugin extends Plugin {
 		if (params["device"]) this.settings.deviceName = params["device"].trim();
 		await this.saveSettings();
 		await this.refreshServerVault();
-		new Notice(t("add.linkApplied", { vault: this.serverVault || "?" }), 10000);
-		// If the vault turns out to be encrypted, the next pass says so rather than
-		// downloading anything, and the person is asked for the passphrase.
-		void this.syncNow(true);
+
+		// An encrypted vault needs a passphrase before anything can happen, so the
+		// switch is turned on for them and the cursor is put in the field. Telling
+		// somebody to enter it "below" while they are looking at a note is not an
+		// instruction, it is a riddle.
+		let needsPassphrase = false;
+		const client = this.client(false);
+		if (client) {
+			try {
+				needsPassphrase = (await client.getVaultKey()) !== null;
+			} catch {
+				/* cannot tell yet; the next pass will */
+			}
+		}
+		if (needsPassphrase && !this.settings.encryption) {
+			this.settings.encryption = true;
+			await this.saveSettings();
+		}
+
+		new Notice(
+			needsPassphrase
+				? t("add.linkAppliedEncrypted", { vault: this.serverVault || "?" })
+				: t("add.linkApplied", { vault: this.serverVault || "?" }),
+			10000,
+		);
+		this.openSettings(needsPassphrase);
+		if (!needsPassphrase) void this.syncNow(true);
+	}
+
+	/**
+	 * Open this plugin's own settings, optionally with the passphrase field focused.
+	 *
+	 * app.setting is not in the public typings, so it is reached through a narrow
+	 * shape rather than a blanket cast, and nothing breaks if it is ever missing.
+	 */
+	private openSettings(focusPassphrase: boolean): void {
+		this.focusPassphrase = focusPassphrase;
+		const host = this.app as unknown as {
+			setting?: { open?: () => void; openTabById?: (id: string) => void };
+		};
+		try {
+			host.setting?.open?.();
+			host.setting?.openTabById?.(this.manifest.id);
+		} catch {
+			/* an older or different host; the notice already said what to do */
+		}
+	}
+
+	/** Set when the settings screen should put the cursor in the passphrase field. */
+	takeFocusRequest(): boolean {
+		const wanted = this.focusPassphrase;
+		this.focusPassphrase = false;
+		return wanted;
 	}
 
 	openAddDevice(): void {

@@ -146,7 +146,9 @@ const en: Dict = {
 	"add.passphraseSeparately":
 		"The passphrase is not in the link, on purpose. Type it on the other device yourself.",
 	"add.linkBroken": "That setup link is missing the address or the token.",
-	"add.linkApplied": "Set up for vault {vault}. If it is encrypted, enter the passphrase below.",
+	"add.linkApplied": "Set up for vault {vault}. Syncing now.",
+	"add.linkAppliedEncrypted":
+		"Set up for vault {vault}, which is encrypted. Enter its passphrase to start syncing.",
 
 	"cmd.sync": "Sync now",
 
@@ -326,7 +328,9 @@ const ru: Dict = {
 	"add.passphraseSeparately":
 		"Пароля в ссылке нет, и это намеренно. Введи его на другом устройстве сам.",
 	"add.linkBroken": "В этой ссылке нет адреса или токена.",
-	"add.linkApplied": "Настроено на волт {vault}. Если он зашифрован, введи пароль ниже.",
+	"add.linkApplied": "Настроено на волт {vault}. Синхронизирую.",
+	"add.linkAppliedEncrypted":
+		"Настроено на волт {vault}, он зашифрован. Введи пароль, чтобы началась синхронизация.",
 
 	"cmd.sync": "Синхронизировать сейчас",
 
