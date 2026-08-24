@@ -3,6 +3,7 @@
 import { App, Modal, Notice, Setting } from "obsidian";
 import { t } from "./i18n";
 import { renderQr } from "./qr";
+import { suggestedOtherDevice } from "./paths";
 
 /**
  * Adding a second device.
@@ -17,7 +18,7 @@ import { renderQr } from "./qr";
  * one secret that makes the server unable to read the vault should not.
  */
 export class AddDeviceModal extends Modal {
-	private name = "";
+	private name = suggestedOtherDevice();
 	private link = "";
 
 	constructor(
@@ -30,7 +31,7 @@ export class AddDeviceModal extends Modal {
 	}
 
 	override onOpen(): void {
-		this.name = "";
+		this.name = suggestedOtherDevice();
 		this.link = "";
 		this.render();
 	}
@@ -46,19 +47,21 @@ export class AddDeviceModal extends Modal {
 				.setName(t("add.name"))
 				.setDesc(t("add.nameDesc"))
 				.addText((text) =>
-					text.setPlaceholder("phone").onChange((v) => {
-						this.name = v.trim();
-					}),
+					text
+						.setPlaceholder(suggestedOtherDevice())
+						.setValue(this.name)
+						.onChange((v) => {
+							this.name = v.trim();
+						}),
 				)
 				.addButton((b) =>
 					b
 						.setCta()
 						.setButtonText(t("add.create"))
 						.onClick(async () => {
-							if (!this.name) {
-								new Notice(t("add.needName"));
-								return;
-							}
+							// An empty field is not a mistake to report back, it is a
+							// person accepting what was already suggested.
+							if (!this.name) this.name = suggestedOtherDevice();
 							b.setDisabled(true);
 							try {
 								this.link = await this.issue(this.name);

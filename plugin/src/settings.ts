@@ -191,15 +191,26 @@ export class SyncSettingsTab extends PluginSettingTab {
 				});
 			}
 
-			const judgement = containerEl.createDiv({ cls: "setting-item-description" });
+			// A bar rather than a paragraph. The scoring is still honest about what
+			// costs an attacker time, but nobody reads three sentences about entropy
+			// while typing into a password field.
+			const meter = containerEl.createDiv({ cls: "lockstep-meter" });
+			const bar = meter.createDiv({ cls: "lockstep-meter-bar" });
+			const segments = [0, 1, 2].map(() => bar.createDiv({ cls: "lockstep-meter-segment" }));
+			const label = meter.createDiv({ cls: "lockstep-meter-label" });
+
 			const judge = (value: string) => {
-				if (!value) {
-					judgement.setText("");
-					return;
-				}
+				meter.toggleClass("is-hidden", !value);
+				if (!value) return;
 				const verdict = judgePassphrase(value);
-				judgement.setText(t(`settings.passphrase.${verdict}`));
-				judgement.toggleClass("lockstep-warning", verdict !== "good");
+				const filled = verdict === "weak" ? 1 : verdict === "medium" ? 2 : 3;
+				segments.forEach((seg, i) => {
+					seg.removeClass("is-weak", "is-medium", "is-strong");
+					if (i < filled) seg.addClass(`is-${verdict}`);
+				});
+				label.setText(t(`settings.passphrase.${verdict}`));
+				label.removeClass("is-weak", "is-medium", "is-strong");
+				label.addClass(`is-${verdict}`);
 			};
 
 			new Setting(containerEl)

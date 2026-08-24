@@ -109,3 +109,53 @@
 	margin: 0;
 	padding-left: var(--size-4-4);
 }
+
+.lockstep-meter {
+	margin: var(--size-2-3) 0 var(--size-4-3);
+}
+
+.lockstep-meter.is-hidden {
+	display: none;
+}
+
+.lockstep-meter-bar {
+	display: flex;
+	gap: var(--size-2-2);
+}
+
+.lockstep-meter-segment {
+	flex: 1;
+	height: 4px;
+	border-radius: 2px;
+	background: var(--background-modifier-border);
+}
+
+.lockstep-meter-segment.is-weak {
+	background: var(--color-red);
+}
+
+.lockstep-meter-segment.is-medium {
+	background: var(--color-yellow);
+}
+
+.lockstep-meter-segment.is-strong {
+	background: var(--color-green);
+}
+
+.lockstep-meter-label {
+	margin-top: var(--size-2-2);
+	font-size: var(--font-ui-smaller);
+	color: var(--text-muted);
+}
+
+.lockstep-meter-label.is-weak {
+	color: var(--color-red);
+}
+
+.lockstep-meter-label.is-medium {
+	color: var(--color-yellow);
+}
+
+.lockstep-meter-label.is-strong {
+	color: var(--color-green);
+}

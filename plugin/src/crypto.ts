@@ -55,11 +55,14 @@ export const SHORT_PASSPHRASE = 8;
  * short one anyway has made a decision about their own notes, and a gate at that
  * point is the software overruling them rather than informing them.
  */
-export function judgePassphrase(value: string): "short" | "thin" | "good" {
+export function judgePassphrase(value: string): "weak" | "medium" | "strong" {
 	const words = value.trim().split(/\s+/).filter((w) => w.length > 2);
-	if (value.length < SHORT_PASSPHRASE) return "short";
-	if (words.length >= 4 || value.length >= 12) return "good";
-	return "thin";
+	// Words count for more than characters because that is how attacks actually
+	// work: four unrelated words are a larger space to search than fourteen
+	// characters somebody had to think hard about and will therefore reuse.
+	if (words.length >= 4 || value.length >= 14) return "strong";
+	if (value.length < SHORT_PASSPHRASE) return "weak";
+	return "medium";
 }
 
 export interface VaultKeyParams {

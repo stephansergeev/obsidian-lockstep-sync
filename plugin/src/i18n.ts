@@ -88,11 +88,9 @@ const en: Dict = {
 	"settings.passphrase.firstTime": "This passphrase is being set, not entered",
 	"settings.passphrase.oneChance":
 		"It is written into the vault once and cannot be changed afterwards, because everything already stored is sealed with it. It cannot be recovered either. Lose it and your notes are still here, and on every other device that has them, since nothing on a device is encrypted. What becomes unreadable is the copy on the server: its history, and the ability to set up a new device from it.",
-	"settings.passphrase.short":
-		"Short enough that a dictionary would reach it quickly, and this cannot be changed later. Four unrelated words are stronger than eight awkward characters and quicker to type on a phone.",
-	"settings.passphrase.thin":
-		"This will do, but a dictionary reaches a short passphrase long before brute force does. Four unrelated words are stronger than twelve difficult characters, and quicker to type on a phone.",
-	"settings.passphrase.good": "Long enough to be worth attacking properly.",
+	"settings.passphrase.weak": "Weak. Short passphrases are easy to crack.",
+	"settings.passphrase.medium": "Medium. Four unrelated words would be stronger.",
+	"settings.passphrase.strong": "Strong.",
 
 	"settings.passphrase.name": "Passphrase",
 	"settings.passphrase.desc":
@@ -139,9 +137,9 @@ const en: Dict = {
 	"add.intro":
 		"This makes a link for one device. Open it on that device and Obsidian fills in the settings. Give each device its own, so losing one means revoking one.",
 	"add.name": "What to call it",
-	"add.nameDesc": "Shown when two devices change the same file and one of them has to be chosen.",
+	"add.nameDesc":
+		"Filled in with the likely answer. Shown when two devices change the same file and one of them has to be chosen.",
 	"add.create": "Create the link",
-	"add.needName": "Give the device a name first",
 	"add.ready":
 		"Obsidian has to be installed on the other device already, with a vault open and this plugin in it.",
 	"add.scan":
@@ -285,11 +283,9 @@ const ru: Dict = {
 	"settings.passphrase.firstTime": "Этот пароль задаётся, а не вводится",
 	"settings.passphrase.oneChance":
 		"Он записывается в волт один раз и потом не меняется, потому что всё уже сохранённое запечатано именно им. Восстановить его тоже нельзя. Если потеряешь, заметки останутся здесь и на каждом устройстве, где они есть: на устройстве ничего не шифруется. Нечитаемой станет копия на сервере — её история и возможность настроить с неё новое устройство.",
-	"settings.passphrase.short":
-		"Настолько короткий, что словарь доберётся до него быстро, а поменять потом нельзя. Четыре несвязанных слова крепче восьми неудобных знаков и набираются на телефоне быстрее.",
-	"settings.passphrase.thin":
-		"Сойдёт, но до короткого пароля словарь добирается сильно раньше, чем полный перебор. Четыре несвязанных слова крепче двенадцати сложных символов и набираются на телефоне вчетверо быстрее.",
-	"settings.passphrase.good": "Достаточно длинный, чтобы его пришлось ломать всерьёз.",
+	"settings.passphrase.weak": "Слабый. Короткий пароль легко взломать.",
+	"settings.passphrase.medium": "Средний. Четыре несвязанных слова были бы крепче.",
+	"settings.passphrase.strong": "Сильный.",
 
 	"settings.passphrase.name": "Пароль",
 	"settings.passphrase.desc":
@@ -336,9 +332,9 @@ const ru: Dict = {
 	"add.intro":
 		"Ссылка делается для одного устройства. Открой её там, и Obsidian сам заполнит настройки. Каждому устройству — своя, чтобы потеря одного означала отзыв одного.",
 	"add.name": "Как его назвать",
-	"add.nameDesc": "Показывается, когда два устройства правят один файл и надо выбрать версию.",
+	"add.nameDesc":
+		"Заполнено наиболее вероятным вариантом. Показывается, когда два устройства правят один файл и надо выбрать версию.",
 	"add.create": "Создать ссылку",
-	"add.needName": "Сначала дай устройству имя",
 	"add.ready":
 		"На другом устройстве уже должен стоять Obsidian, с открытым волтом и этим плагином.",
 	"add.scan":

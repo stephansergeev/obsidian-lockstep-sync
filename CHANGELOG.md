@@ -1,5 +1,35 @@
 # Changelog
 
+## 0.10.0
+
+Setting a passphrase and entering an existing one are different acts, and only one of them
+is permanent. Where a vault has no key yet the field says so before anything is typed: it is
+written once, cannot be changed because everything stored is sealed with it, and cannot be
+recovered.
+
+What losing it costs is now stated accurately. Nothing on a device is encrypted, so every
+device holding the vault keeps its notes. What becomes unreadable is the copy on the server,
+along with its history and any device set up from it later.
+
+Passphrase strength is a three-segment bar rather than three sentences. Words count for more
+than characters, because four unrelated words are a larger space to search than fourteen
+characters somebody had to think hard about. Nothing is refused: a short passphrase is
+reported and then accepted, since the decision belongs to whoever owns the notes.
+
+Adding a device suggests what that device probably is, phone from a desktop and desktop from
+a phone, and an empty field is taken as agreement rather than reported as a mistake.
+
+An unreachable server says so once, with the address it tried, instead of once a minute. It
+also says the thing somebody in that moment needs to hear: edits wait on the device and go
+when the server comes back.
+
+A setup link finishes where the last step is. It opens this plugin's settings, and when the
+vault turns out to be encrypted the switch is turned on and the passphrase field is focused.
+
+The QR code lists its own contents in words beside it, and SECURITY.md explains why being
+asked to scan something unreadable is a habit worth distrusting and what makes this one
+different.
+
 ## 0.9.0
 
 Adding a second device is a link now. Press **Add another device**, name it, and open the

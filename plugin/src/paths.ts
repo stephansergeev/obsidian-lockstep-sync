@@ -57,3 +57,14 @@ export function defaultDeviceName(): string {
 	if (Platform.isTablet) return "tablet";
 	return "desktop";
 }
+
+/**
+ * What the device being added is probably called.
+ *
+ * Somebody adding a device from a desktop is almost always adding a phone, and the
+ * other way round. Guessing right most of the time is better than an empty field,
+ * and guessing wrong costs one edit.
+ */
+export function suggestedOtherDevice(): string {
+	return Platform.isPhone || Platform.isTablet ? "desktop" : "phone";
+}
