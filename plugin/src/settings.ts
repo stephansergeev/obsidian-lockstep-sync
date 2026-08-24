@@ -231,6 +231,9 @@ export class SyncSettingsTab extends PluginSettingTab {
 						await this.plugin.saveSettings();
 						judge(v);
 					});
+					// The button blurs the field first, so both handlers fire on one tap.
+					// The plugin de-duplicates rather than the settings screen guessing
+					// which of the two arrived second.
 					judge(this.plugin.settings.passphrase);
 					// Leaving the field is as good a signal as pressing a button, and
 					// one fewer thing to know about.

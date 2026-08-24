@@ -48,6 +48,10 @@ export default class LockstepPlugin extends Plugin {
 	private focusPassphrase = false;
 	/** Whether the vault already has key parameters. Null until asked. */
 	private vaultHasKey: boolean | null = null;
+	/** In flight, so two callers do not both do it and both report it. */
+	private unlocking: Promise<void> | null = null;
+	/** The passphrase whose outcome is already known and already announced. */
+	private settledPassphrase: string | null = null;
 	/** Which vault on the server this device is bound to, as the server names it. */
 	private serverVault = "";
 	private interval: number | null = null;
@@ -123,7 +127,7 @@ export default class LockstepPlugin extends Plugin {
 		// would mark every file dirty on every launch.
 		this.app.workspace.onLayoutReady(() => {
 			// If this fails because the network is not up yet, the next pass retries.
-			void this.applyEncryption().catch(() => {});
+			void this.applyEncryption(true).catch(() => {});
 			this.registerVaultEvents();
 			this.restartAutoSync();
 			if (this.settings.autoSync) void this.syncNow(true);
@@ -214,7 +218,30 @@ export default class LockstepPlugin extends Plugin {
 	 * writes them and every other device reads them and checks the passphrase against
 	 * them. That is what makes a second device able to join knowing only the words.
 	 */
-	async applyEncryption(): Promise<void> {
+	/**
+	 * Bring encryption into the state the settings ask for.
+	 *
+	 * Several things call this: loading, leaving the passphrase field, pressing the
+	 * button, and every pass that finds the vault locked. On a phone the button press
+	 * blurs the field first, so two of them arrive together, and a wrong passphrase
+	 * used to be announced again by every pass that followed.
+	 *
+	 * So: one attempt at a time, and nothing said twice about the same passphrase
+	 * once its outcome is known. Quiet callers, the ones that are retrying rather
+	 * than being asked, say nothing at all.
+	 */
+	async applyEncryption(quiet = false): Promise<void> {
+		if (this.unlocking) return this.unlocking;
+		if (this.settledPassphrase === this.settings.passphrase && (this.cipher.enabled || this.locked)) {
+			return;
+		}
+		this.unlocking = this.attemptEncryption(quiet).finally(() => {
+			this.unlocking = null;
+		});
+		return this.unlocking;
+	}
+
+	private async attemptEncryption(quiet: boolean): Promise<void> {
 		if (!this.settings.encryption) {
 			this.cipher = plaintext;
 			this.pathCipher = null;
@@ -243,10 +270,11 @@ export default class LockstepPlugin extends Plugin {
 				this.cipherStatus = t(
 					this.pathCipher ? "encryption.readyWithPaths" : "encryption.ready",
 				);
+				this.settledPassphrase = this.settings.passphrase;
 				// Whether a vault is actually hidden is the one thing somebody turning
 				// this on wants confirmed. A grey caption under a text field is not a
 				// confirmation.
-				new Notice(`Lockstep: ${this.cipherStatus}`, 8000);
+				if (!quiet) new Notice(`Lockstep: ${this.cipherStatus}`, 8000);
 			} else {
 				// Names can only be hidden in a vault that starts empty. Everything
 				// already on the server is stored under a readable path, and a vault
@@ -264,8 +292,11 @@ export default class LockstepPlugin extends Plugin {
 				this.locked = false;
 				this.announcedEncryptedVault = false;
 				this.cipherStatus = t("encryption.created");
-				new Notice(t("encryption.created"), 10000);
-				if (occupied) new Notice(t("encryption.namesStayVisible"), 15000);
+				this.settledPassphrase = this.settings.passphrase;
+				if (!quiet) {
+					new Notice(t("encryption.created"), 10000);
+					if (occupied) new Notice(t("encryption.namesStayVisible"), 15000);
+				}
 			}
 		} catch (e) {
 			// A wrong passphrase must never fall back to writing plaintext: that would
@@ -273,11 +304,21 @@ export default class LockstepPlugin extends Plugin {
 			this.cipher = plaintext;
 			this.pathCipher = null;
 			this.locked = true;
-			this.cipherStatus =
-				e instanceof WrongPassphrase
-					? t("encryption.wrong")
-					: t("encryption.failed", { message: e instanceof Error ? e.message : String(e) });
-			new Notice(`Lockstep: ${this.cipherStatus}`, 10000);
+			// A wrong passphrase is a settled answer and is said once. Anything else,
+			// a server that was not there yet, stays unsettled so the next pass tries
+			// again without a word.
+			if (e instanceof WrongPassphrase) {
+				this.cipherStatus = t("encryption.wrong");
+				this.settledPassphrase = this.settings.passphrase;
+				if (!quiet) new Notice(`Lockstep: ${this.cipherStatus}`, 10000);
+			} else {
+				this.cipherStatus = t("encryption.failed", {
+					message: e instanceof Error ? e.message : String(e),
+				});
+				if (!quiet && !this.isUnreachable(this.cipherStatus)) {
+					new Notice(`Lockstep: ${this.cipherStatus}`, 10000);
+				}
+			}
 			throw e;
 		}
 	}
@@ -603,7 +644,9 @@ export default class LockstepPlugin extends Plugin {
 		// making them do the software's retry by hand.
 		if (this.settings.encryption && this.settings.passphrase && !this.cipher.enabled) {
 			try {
-				await this.applyEncryption();
+				// Quiet: this is a retry nobody asked for, and its failure has already
+				// been reported by whoever did ask.
+				await this.applyEncryption(true);
 			} catch {
 				// A wrong passphrase, and applyEncryption has already said so.
 			}
