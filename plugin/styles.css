@@ -72,3 +72,19 @@
 .lockstep-warning {
 	color: var(--text-accent);
 }
+
+.lockstep-qr-frame {
+	display: flex;
+	flex-direction: column;
+	align-items: center;
+	gap: var(--size-4-2);
+	margin: var(--size-4-4) 0;
+}
+
+/* White surround as well as white background: a scanner needs the quiet zone to
+   stay light, and a dark theme would otherwise crowd it. */
+.lockstep-qr {
+	background: #ffffff;
+	border-radius: var(--radius-s);
+	padding: var(--size-4-2);
+}

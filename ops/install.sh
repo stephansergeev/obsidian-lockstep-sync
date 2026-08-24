@@ -187,6 +187,11 @@ say "issuing a token for your first device"
 TOKEN="$("$BIN" token add --data "$DATA_DIR" --vault main --name "$(hostname)-first" | grep -o 'obs_[A-Za-z0-9_-]*')"
 chown -R "$USER_NAME:$USER_NAME" "$DATA_DIR"
 
+# The same link the plugin makes for later devices, so the first one is no harder
+# than the rest. Opening it in Obsidian fills the settings in.
+urlencode() { python3 -c 'import sys,urllib.parse;print(urllib.parse.quote(sys.argv[1],safe=""))' "$1" 2>/dev/null || echo "$1"; }
+SETUP="obsidian://lockstep-setup?url=$(urlencode "https://$DOMAIN")&token=$(urlencode "$TOKEN")&device=desktop"
+
 cat <<DONE
 
 Done.
@@ -194,8 +199,24 @@ Done.
   Server URL   https://$DOMAIN
   Token        $TOKEN
 
-Put both into the plugin on your first device. For every other device, issue its
-own token so you can revoke one without touching the rest:
+Open this on the machine where you use Obsidian and it will set the plugin up:
+
+  $SETUP
+
+DONE
+
+if command -v qrencode >/dev/null 2>&1; then
+	echo "Or point a phone at this:"
+	echo
+	qrencode -t ANSIUTF8 -m 2 "$SETUP"
+	echo
+fi
+
+cat <<DONE
+Once one device is set up, the rest are added from inside Obsidian: Add another
+device makes a link and a code for them, and nothing has to be typed there.
+
+To issue a token by hand instead:
 
   sudo $BIN token add --data $DATA_DIR --vault main --name phone
 

@@ -2,6 +2,7 @@
 
 import { App, Modal, Notice, Setting } from "obsidian";
 import { t } from "./i18n";
+import { renderQr } from "./qr";
 
 /**
  * Adding a second device.
@@ -77,6 +78,16 @@ export class AddDeviceModal extends Modal {
 		}
 
 		contentEl.createEl("p", { cls: "setting-item-description", text: t("add.ready") });
+
+		// The code first, because pointing a camera at it is the shortest path there
+		// is: no messenger, no clipboard, and the token never leaves this room.
+		const frame = contentEl.createDiv({ cls: "lockstep-qr-frame" });
+		try {
+			renderQr(frame, this.link);
+			frame.createDiv({ cls: "setting-item-description", text: t("add.scan") });
+		} catch {
+			frame.detach(); // the link below still works
+		}
 
 		const box = contentEl.createEl("textarea", { cls: "lockstep-setup-link" });
 		box.value = this.link;

@@ -134,8 +134,9 @@ const en: Dict = {
 	"add.create": "Create the link",
 	"add.needName": "Give the device a name first",
 	"add.ready":
-		"Send this to the other device and open it there. Obsidian has to be installed already, with a vault open and this plugin in it.",
-	"add.copy": "Copy",
+		"Obsidian has to be installed on the other device already, with a vault open and this plugin in it.",
+	"add.scan": "Point the other device's camera at this. Nothing is sent anywhere.",
+	"add.copy": "Copy the link instead",
 	"add.copied": "Copied",
 	"add.passphraseSeparately":
 		"The passphrase is not in the link, on purpose. Type it on the other device yourself.",
@@ -304,8 +305,9 @@ const ru: Dict = {
 	"add.create": "Создать ссылку",
 	"add.needName": "Сначала дай устройству имя",
 	"add.ready":
-		"Отправь это на другое устройство и открой там. Obsidian уже должен быть установлен, с открытым волтом и этим плагином.",
-	"add.copy": "Скопировать",
+		"На другом устройстве уже должен стоять Obsidian, с открытым волтом и этим плагином.",
+	"add.scan": "Наведи камеру другого устройства. Ничего никуда не отправляется.",
+	"add.copy": "Или скопировать ссылку",
 	"add.copied": "Скопировано",
 	"add.passphraseSeparately":
 		"Пароля в ссылке нет, и это намеренно. Введи его на другом устройстве сам.",

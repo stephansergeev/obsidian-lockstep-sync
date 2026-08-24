@@ -103,10 +103,14 @@ installer.
 
 The server itself listens on `127.0.0.1` and never faces the internet. Caddy does.
 
-Every device gets its own token, so losing one phone means revoking one token. After the
-first device is set up, the rest are added from inside Obsidian: **Add another device**
-makes a link carrying the address and a fresh token, and opening that link on the other
-device fills its settings in. Nothing is typed there.
+The installer finishes by printing a link that sets up your first device, and a QR code
+beside it if `qrencode` is installed. Open the link where you use Obsidian and the plugin
+configures itself.
+
+Every device after that is added from inside Obsidian. **Add another device** mints a token
+for it and draws a code: point the new device's camera at the screen and it opens configured.
+Nothing is typed, and the token never passes through a messenger. Each device has its own,
+so losing one phone means revoking one token.
 
 From the server, if you prefer:
 
