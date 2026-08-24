@@ -1,5 +1,22 @@
 # Changelog
 
+## 0.11.0
+
+Renaming a folder no longer leaves the old one behind. A folder rename reaches another device
+as its files moving one at a time; they landed correctly and the folder they came from stayed,
+empty, looking exactly like a duplicate of the folder that had been renamed. Folders our own
+move or deletion has emptied are now removed, and only those.
+
+A vault starts syncing the moment it is unlocked instead of waiting for the next timer, which
+meant a minute of nothing happening on a device that had just been told everything was fine.
+The status bar counts files as they land, so a long first sync shows movement.
+
+Test connection is gone. Everything it reported is on the settings screen already.
+
+Nothing about a passphrase is said twice. Pressing unlock on a phone blurs the field first, so
+two attempts arrived on one tap and both reported; a wrong passphrase was then announced again
+by every pass that followed.
+
 ## 0.10.0
 
 Setting a passphrase and entering an existing one are different acts, and only one of them

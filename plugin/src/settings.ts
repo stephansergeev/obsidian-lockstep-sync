@@ -275,15 +275,6 @@ export class SyncSettingsTab extends PluginSettingTab {
 			);
 
 		new Setting(containerEl)
-			.setName(t("settings.test.name"))
-			.setDesc(t("settings.test.desc"))
-			.addButton((b) =>
-				b.setButtonText(t("settings.test.button")).onClick(async () => {
-					await this.plugin.testConnection();
-				}),
-			);
-
-		new Setting(containerEl)
 			.setName(t("settings.pull.name"))
 			.setDesc(t("settings.pull.desc"))
 			.addButton((b) =>

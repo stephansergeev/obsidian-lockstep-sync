@@ -27,9 +27,6 @@ const en: Dict = {
 	"settings.excludes.name": "Exclusions",
 	"settings.excludes.desc": "One path or prefix per line. These files never leave this device.",
 	"settings.section.maintenance": "Check and maintenance",
-	"settings.test.name": "Test connection",
-	"settings.test.desc": "Calls /health and /stats — tells you at once if the token and vault are right.",
-	"settings.test.button": "Test",
 	"settings.pull.name": "Download everything from the server",
 	"settings.pull.desc":
 		"One-way for now: local files are never deleted, and anything that differs is kept as a copy alongside. Nothing is overwritten silently.",
@@ -169,17 +166,16 @@ const en: Dict = {
 	"notice.syncDone": "Lockstep: {summary}",
 
 	"status.syncing": "syncing…",
+	"status.progress": "{done} in, {path}",
 	"status.syncSummary":
 		"in {secs}s: {downloaded} down, {uploaded} up, {merged} merged, {conflicts} conflicts",
 	"status.upToDate": "up to date, seq {seq}",
 
 	"error.sync": "Sync",
 
-	"cmd.test": "Test connection to the server",
 	"cmd.pull": "Download everything from the server",
 
 	"notice.noConfig": "Lockstep: server URL or token is missing",
-	"notice.connected": "Lockstep: connected — {info}",
 	"notice.pullStarted": "Lockstep: downloading…",
 	"notice.pullDone": "Lockstep: {summary}",
 	"notice.indexReset": "Index reset",
@@ -194,10 +190,8 @@ const en: Dict = {
 	"status.index": "index: {files} files, seq {seq}",
 	"status.indexReset": "index reset",
 	"status.error": "error: {message}",
-	"status.stats": "vault {vault}, {files} files, seq {seq}",
 	"status.pullSummary": "downloaded {downloaded}, skipped {skipped}, copies kept {kept} in {secs}s",
 
-	"error.testConnection": "Connection test",
 	"error.pull": "Download",
 	"error.corruptDownload": "corrupt download of {path}: expected {want}, got {got}",
 
@@ -220,9 +214,6 @@ const ru: Dict = {
 	"settings.excludes.name": "Исключения",
 	"settings.excludes.desc": "По строке на путь или префикс. Эти файлы не уезжают с устройства.",
 	"settings.section.maintenance": "Проверка и обслуживание",
-	"settings.test.name": "Проверить соединение",
-	"settings.test.desc": "Дёргает /health и /stats — сразу видно, тот ли токен и тот ли волт.",
-	"settings.test.button": "Проверить",
 	"settings.pull.name": "Скачать всё с сервера",
 	"settings.pull.desc":
 		"Пока односторонняя операция: локальные файлы не удаляются, а расхождения сохраняются копией рядом. Ничего не перезаписывается молча.",
@@ -364,17 +355,16 @@ const ru: Dict = {
 	"notice.syncDone": "Lockstep: {summary}",
 
 	"status.syncing": "синхронизирую…",
+	"status.progress": "принято {done}, {path}",
 	"status.syncSummary":
 		"за {secs}с: скачано {downloaded}, отправлено {uploaded}, слито {merged}, конфликтов {conflicts}",
 	"status.upToDate": "всё синхронно, seq {seq}",
 
 	"error.sync": "Синхронизация",
 
-	"cmd.test": "Проверить соединение с сервером",
 	"cmd.pull": "Скачать всё с сервера",
 
 	"notice.noConfig": "Lockstep: не заданы адрес сервера или токен",
-	"notice.connected": "Lockstep: соединение есть — {info}",
 	"notice.pullStarted": "Lockstep: скачиваю…",
 	"notice.pullDone": "Lockstep: {summary}",
 	"notice.indexReset": "Индекс сброшен",
@@ -387,10 +377,8 @@ const ru: Dict = {
 	"status.index": "индекс: {files} файлов, seq {seq}",
 	"status.indexReset": "индекс сброшен",
 	"status.error": "ошибка: {message}",
-	"status.stats": "волт {vault}, файлов {files}, seq {seq}",
 	"status.pullSummary": "скачано {downloaded}, пропущено {skipped}, копий сохранено {kept} за {secs}с",
 
-	"error.testConnection": "Проверка соединения",
 	"error.pull": "Скачивание",
 	"error.corruptDownload": "битая загрузка {path}: ожидали {want}, получили {got}",
 

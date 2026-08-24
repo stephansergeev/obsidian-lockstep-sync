@@ -61,6 +61,8 @@ export interface EngineDeps {
 	 */
 	guard: () => Promise<string>;
 	onConflict: (path: string, copy: string) => void;
+	/** Called as each file lands, so a long first sync shows movement rather than a pause. */
+	onProgress?: (done: number, path: string) => void;
 	log: (message: string, error?: unknown) => void;
 }
 
@@ -110,6 +112,34 @@ export class SyncEngine {
 			// Obsidian delivers the change event after the write returns, so the guard
 			// is held a moment longer than the write itself.
 			setTimeout(() => this.suppressed.delete(path), 1500);
+		}
+	}
+
+	/**
+	 * Remove folders our own move or deletion has just emptied.
+	 *
+	 * Renaming a folder arrives here as its files moving one by one. The files land
+	 * in the right place, and the folder they came from stays behind, empty, looking
+	 * exactly like a duplicate of the folder that was renamed.
+	 *
+	 * Only the parents of the path we just touched are considered, and only while
+	 * they are empty, so a folder somebody made deliberately is never swept up by a
+	 * deletion that happened to be its last file.
+	 */
+	private async pruneEmptyParents(path: string): Promise<void> {
+		const adapter = this.deps.app.vault.adapter;
+		let dir = path.slice(0, path.lastIndexOf("/"));
+		while (dir && dir !== "/" && !dir.startsWith(".")) {
+			try {
+				const listing = await adapter.list(dir);
+				if (listing.files.length > 0 || listing.folders.length > 0) return;
+				this.suppressed.add(dir);
+				await adapter.rmdir(dir, false);
+				setTimeout(() => this.suppressed.delete(dir), 1500);
+			} catch {
+				return; // not empty, not there, or not ours to remove
+			}
+			dir = dir.slice(0, dir.lastIndexOf("/"));
 		}
 	}
 
@@ -224,6 +254,10 @@ export class SyncEngine {
 				// Checkpoint after every entry: the app can be killed right here.
 				this.deps.index.setLastSeq(entry.seq);
 				await this.deps.index.save();
+				this.deps.onProgress?.(
+					report.downloaded + report.renamed + report.merged + report.deleted,
+					path,
+				);
 			}
 			this.deps.index.setLastSeq(page.next_seq);
 			if (!page.has_more) break;
@@ -301,6 +335,7 @@ export class SyncEngine {
 						local_hash: entry.hash ?? "",
 						mtime: entry.mtime,
 					});
+					await this.pruneEmptyParents(from);
 					report.renamed++;
 					return;
 				}
@@ -368,6 +403,7 @@ export class SyncEngine {
 			await adapter.remove(path);
 			setTimeout(() => this.suppressed.delete(path), 1500);
 			this.deps.index.remove(path);
+			await this.pruneEmptyParents(path);
 			report.deleted++;
 			return;
 		}

@@ -701,3 +701,43 @@ test("reading a vault with a key after reading it without starts over", async (t
 	// Whatever was read without the key was read wrongly, so the cursor goes back.
 	assert.equal(a.index.readEncrypted, true);
 });
+
+test("renaming a folder does not leave the old one behind", async (t) => {
+	const { a, b, cleanup } = await twoDevices();
+	t.after(cleanup);
+
+	await a.edit("Finance/2026/budget.md", "numbers\n");
+	await a.edit("Finance/passwords.md", "secrets\n");
+	await a.sync();
+	await b.sync();
+	assert.equal(await b.vault.exists("Finance/passwords.md"), true);
+
+	// A folder rename reaches the other device as its files moving one by one. The
+	// folder they came from used to stay behind, empty, looking exactly like a
+	// duplicate of the folder that was renamed.
+	await a.rename("Finance/2026/budget.md", "Money/2026/budget.md");
+	await a.rename("Finance/passwords.md", "Money/passwords.md");
+	await a.sync();
+	await b.sync();
+
+	assert.equal(await b.vault.read("Money/passwords.md"), "secrets\n");
+	assert.equal(await b.vault.read("Money/2026/budget.md"), "numbers\n");
+	assert.equal(await b.vault.exists("Finance"), false, "the emptied folder stayed behind");
+});
+
+test("a folder somebody else still uses is left alone", async (t) => {
+	const { a, b, cleanup } = await twoDevices();
+	t.after(cleanup);
+
+	await a.edit("Shared/one.md", "first\n");
+	await a.edit("Shared/two.md", "second\n");
+	await a.sync();
+	await b.sync();
+
+	await a.delete("Shared/one.md");
+	await a.sync();
+	await b.sync();
+
+	assert.equal(await b.vault.exists("Shared/two.md"), true);
+	assert.equal(await b.vault.exists("Shared"), true, "a folder with files in it was removed");
+});

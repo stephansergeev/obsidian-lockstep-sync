@@ -22,6 +22,8 @@ export class FakeVault {
 			mkdir: (p) => this.mkdir(p),
 			remove: (p) => this.remove(p),
 			rename: (from, to) => this.rename(from, to),
+			list: (p) => this.list(p),
+			rmdir: (p) => this.rmdir(p),
 		};
 	}
 
@@ -68,6 +70,18 @@ export class FakeVault {
 	async rename(from, to) {
 		await fs.mkdir(path.dirname(this.full(to)), { recursive: true });
 		await fs.rename(this.full(from), this.full(to));
+	}
+
+	async list(p) {
+		const entries = await fs.readdir(this.full(p), { withFileTypes: true });
+		return {
+			files: entries.filter((e) => !e.isDirectory()).map((e) => `${p}/${e.name}`),
+			folders: entries.filter((e) => e.isDirectory()).map((e) => `${p}/${e.name}`),
+		};
+	}
+
+	async rmdir(p) {
+		await fs.rmdir(this.full(p));
 	}
 
 	/** Everything in the vault, as a map of path to text. Used for assertions. */

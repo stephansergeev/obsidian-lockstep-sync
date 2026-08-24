@@ -70,6 +70,11 @@ export default class LockstepPlugin extends Plugin {
 			client: () => this.client(false),
 			cipher: () => this.cipher,
 			guard: () => this.reasonNotToSync(),
+			onProgress: (done, path) => {
+				// Movement while a long first sync runs. Somebody watching an empty
+				// vault needs to see it filling, not a word that never changes.
+				this.setStatus(t("status.progress", { done, path: path.split("/").pop() ?? path }));
+			},
 			onConflict: (path) => {
 				// Ask right here rather than sending anybody to a settings screen. The
 				// same conflict also stays in the list, so ignoring the notice costs
@@ -89,11 +94,6 @@ export default class LockstepPlugin extends Plugin {
 		this.setStatus(t("status.index", { files: this.index.size, seq: this.index.lastSeq }));
 
 		this.addCommand({ id: "sync-now", name: t("cmd.sync"), callback: () => void this.syncNow() });
-		this.addCommand({
-			id: "test-connection",
-			name: t("cmd.test"),
-			callback: () => void this.testConnection(),
-		});
 		this.addCommand({ id: "pull-all", name: t("cmd.pull"), callback: () => void this.pullAll() });
 		// A link that sets up another device. Registered before anything else, so a
 		// device that has just been installed can be configured by opening one.
@@ -275,6 +275,9 @@ export default class LockstepPlugin extends Plugin {
 				// this on wants confirmed. A grey caption under a text field is not a
 				// confirmation.
 				if (!quiet) new Notice(`Lockstep: ${this.cipherStatus}`, 8000);
+				// And start at once. Waiting for the timer meant a minute of nothing
+				// happening on a device that had just been told everything was fine.
+				void this.syncNow(true);
 			} else {
 				// Names can only be hidden in a vault that starts empty. Everything
 				// already on the server is stored under a readable path, and a vault
@@ -297,6 +300,7 @@ export default class LockstepPlugin extends Plugin {
 					new Notice(t("encryption.created"), 10000);
 					if (occupied) new Notice(t("encryption.namesStayVisible"), 15000);
 				}
+				void this.syncNow(true);
 			}
 		} catch (e) {
 			// A wrong passphrase must never fall back to writing plaintext: that would
@@ -682,25 +686,6 @@ export default class LockstepPlugin extends Plugin {
 		this.setStatus(this.cipherStatus);
 		if (!quiet) new Notice(`Lockstep: ${this.cipherStatus}`, 8000);
 		return true;
-	}
-
-	async testConnection(): Promise<void> {
-		const client = this.client();
-		if (!client) return;
-		try {
-			await client.health();
-			const stats = await client.stats();
-			this.serverVault = String(stats["vault"] ?? "");
-			const line = t("status.stats", {
-				vault: String(stats["vault"]),
-				files: String(stats["files"]),
-				seq: String(stats["seq"]),
-			});
-			this.setStatus(line);
-			new Notice(t("notice.connected", { info: line }));
-		} catch (e) {
-			this.reportError(t("error.testConnection"), e);
-		}
 	}
 
 	async resetIndex(): Promise<void> {
