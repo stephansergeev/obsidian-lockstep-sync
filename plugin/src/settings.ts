@@ -4,6 +4,7 @@ import { App, Notice, PluginSettingTab, Setting } from "obsidian";
 import { otherSideLabel } from "./conflict-notice";
 import { t } from "./i18n";
 import { defaultDeviceName } from "./paths";
+import { MIN_PASSPHRASE, judgePassphrase } from "./crypto";
 import type LockstepPlugin from "./main";
 
 export interface SyncSettings {
@@ -175,6 +176,32 @@ export class SyncSettingsTab extends PluginSettingTab {
 			);
 
 		if (this.plugin.settings.encryption) {
+			// Setting a passphrase up and entering an existing one are different acts
+			// with different stakes, and until now they looked identical.
+			if (this.plugin.vaultNeedsSetup()) {
+				const warn = containerEl.createDiv({ cls: "lockstep-banner is-locked" });
+				const body = warn.createDiv({ cls: "lockstep-banner-text" });
+				body.createDiv({
+					cls: "lockstep-banner-title",
+					text: t("settings.passphrase.firstTime"),
+				});
+				body.createDiv({
+					cls: "lockstep-banner-detail",
+					text: t("settings.passphrase.oneChance"),
+				});
+			}
+
+			const judgement = containerEl.createDiv({ cls: "setting-item-description" });
+			const judge = (value: string) => {
+				if (!value) {
+					judgement.setText("");
+					return;
+				}
+				const verdict = judgePassphrase(value);
+				judgement.setText(t(`settings.passphrase.${verdict}`));
+				judgement.toggleClass("lockstep-warning", verdict !== "good");
+			};
+
 			new Setting(containerEl)
 				.setName(t("settings.passphrase.name"))
 				.setDesc(t("settings.passphrase.desc"))
@@ -191,11 +218,23 @@ export class SyncSettingsTab extends PluginSettingTab {
 					text.setValue(this.plugin.settings.passphrase).onChange(async (v) => {
 						this.plugin.settings.passphrase = v;
 						await this.plugin.saveSettings();
+						judge(v);
 					});
+					judge(this.plugin.settings.passphrase);
 					// Leaving the field is as good a signal as pressing a button, and
 					// one fewer thing to know about.
 					text.inputEl.addEventListener("blur", async () => {
 						if (!this.plugin.settings.passphrase) return;
+						// Only refused where it would be written into a vault for good.
+						// Somebody entering an existing short one is not the person who
+						// chose it, and blocking them helps nobody.
+						if (
+							this.plugin.vaultNeedsSetup() &&
+							this.plugin.settings.passphrase.length < MIN_PASSPHRASE
+						) {
+							new Notice(t("settings.passphrase.tooShort", { min: MIN_PASSPHRASE }), 10000);
+							return;
+						}
 						try {
 							await this.plugin.applyEncryption();
 						} catch {

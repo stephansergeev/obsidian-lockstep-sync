@@ -85,9 +85,20 @@ const en: Dict = {
 	"settings.encryption.name": "Encrypt content",
 	"settings.encryption.desc":
 		"Notes and their names are encrypted on this device before they are uploaded. The server keeps bytes it cannot read and names it cannot read either. It still sees the shape of the vault: how many files there are and how deep the folders go.",
+	"settings.passphrase.firstTime": "This passphrase is being set, not entered",
+	"settings.passphrase.oneChance":
+		"It is written into the vault once and cannot be changed afterwards: everything already stored is sealed with it. It also cannot be recovered. Lose it and the notes are gone, and there is nobody to ask.",
+	"settings.passphrase.short":
+		"Too short to set. At least {min} characters, and four unrelated words are better than eight awkward ones.",
+	"settings.passphrase.thin":
+		"This will do, but a dictionary reaches a short passphrase long before brute force does. Four unrelated words are stronger than twelve difficult characters, and quicker to type on a phone.",
+	"settings.passphrase.good": "Long enough to be worth attacking properly.",
+	"settings.passphrase.tooShort":
+		"At least {min} characters before this can be set for good. Four unrelated words are the easiest way to get there.",
+
 	"settings.passphrase.name": "Passphrase",
 	"settings.passphrase.desc":
-		"The same passphrase on every device. It never leaves them. Lose it and the notes are gone, there is nobody to ask.",
+		"The same passphrase on every device. It never leaves them and is never in a setup link.",
 	"settings.passphrase.button": "Unlock",
 	"encryption.off": "Encryption is off. The server can read your notes.",
 	"encryption.locked": "Enter the passphrase to unlock this vault.",
@@ -273,9 +284,20 @@ const ru: Dict = {
 	"settings.encryption.name": "Шифровать содержимое",
 	"settings.encryption.desc":
 		"Заметки и их имена шифруются на этом устройстве до отправки. Сервер хранит байты, которые не может прочитать, и имена, которые тоже не может прочитать. Ему остаётся видна только форма волта: сколько файлов и насколько глубоко вложены папки.",
+	"settings.passphrase.firstTime": "Этот пароль задаётся, а не вводится",
+	"settings.passphrase.oneChance":
+		"Он записывается в волт один раз и потом не меняется: всё уже сохранённое запечатано именно им. Восстановить его тоже нельзя. Потеряешь — заметки потеряны, спросить не у кого.",
+	"settings.passphrase.short":
+		"Слишком короткий, чтобы его задать. Минимум {min} символов, а четыре несвязанных слова лучше восьми неудобных знаков.",
+	"settings.passphrase.thin":
+		"Сойдёт, но до короткого пароля словарь добирается сильно раньше, чем полный перебор. Четыре несвязанных слова крепче двенадцати сложных символов и набираются на телефоне вчетверо быстрее.",
+	"settings.passphrase.good": "Достаточно длинный, чтобы его пришлось ломать всерьёз.",
+	"settings.passphrase.tooShort":
+		"Минимум {min} символов, чтобы задать его насовсем. Четыре несвязанных слова — самый простой способ дотянуть.",
+
 	"settings.passphrase.name": "Пароль",
 	"settings.passphrase.desc":
-		"Один и тот же пароль на всех устройствах. Он никуда не уходит. Потеряешь его — заметки потеряны, спросить не у кого.",
+		"Один и тот же пароль на всех устройствах. Он никуда не уходит и никогда не попадает в ссылку настройки.",
 	"settings.passphrase.button": "Открыть",
 	"encryption.off": "Шифрование выключено. Сервер видит твои заметки.",
 	"encryption.locked": "Введи пароль, чтобы открыть волт.",

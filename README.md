@@ -298,7 +298,16 @@ though not what that content is.
 If the passphrase is wrong or missing, syncing stops. It never falls back to plaintext,
 because falling back would quietly upload exactly what the setting exists to hide.
 
-Lose the passphrase and the notes are gone. There is nobody to ask.
+**The passphrase is set once and cannot be changed.** Everything stored is sealed with it, so
+changing it would mean re-encrypting the whole vault; the server refuses rather than leaving
+somebody with a vault their own devices cannot read. Choose it as though it is permanent,
+because it is.
+
+**Four unrelated words beat eight awkward characters.** Eight is the floor and it is refused
+below that, but a short passphrase falls to a dictionary long before anyone has to brute
+force it, and a passphrase that is painful to type on a phone gets replaced with a short one.
+
+Lose it and the notes are gone. There is nobody to ask.
 
 ## Dependencies
 

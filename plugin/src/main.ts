@@ -46,6 +46,8 @@ export default class LockstepPlugin extends Plugin {
 	/** A server that cannot be reached says so once, not once a minute. */
 	private announcedUnreachable = false;
 	private focusPassphrase = false;
+	/** Whether the vault already has key parameters. Null until asked. */
+	private vaultHasKey: boolean | null = null;
 	/** Which vault on the server this device is bound to, as the server names it. */
 	private serverVault = "";
 	private interval: number | null = null;
@@ -187,6 +189,14 @@ export default class LockstepPlugin extends Plugin {
 		return this.cipherStatus || t("encryption.locked");
 	}
 
+	/**
+	 * True when this vault has no key yet, so a passphrase typed here is being
+	 * chosen rather than recalled, and cannot be changed afterwards.
+	 */
+	vaultNeedsSetup(): boolean {
+		return this.vaultHasKey === false;
+	}
+
 	/** True when names are hidden too, not only content. */
 	hidesNames(): boolean {
 		return this.pathCipher !== null;
@@ -223,6 +233,7 @@ export default class LockstepPlugin extends Plugin {
 		if (!client) return;
 		try {
 			const stored = (await client.getVaultKey()) as VaultKeyParams | null;
+			this.vaultHasKey = stored !== null;
 			if (stored) {
 				const cipher = await VaultCipher.unlock(this.settings.passphrase, stored);
 				this.cipher = cipher;
@@ -246,6 +257,7 @@ export default class LockstepPlugin extends Plugin {
 				const { cipher, params } = await VaultCipher.create(this.settings.passphrase, {
 					paths: occupied ? "plain" : "encrypted",
 				});
+				this.vaultHasKey = true;
 				await client.putVaultKey(params);
 				this.cipher = cipher;
 				this.pathCipher = params.paths === "encrypted" ? await cipher.pathCipher() : null;
@@ -321,6 +333,7 @@ export default class LockstepPlugin extends Plugin {
 		if (client) {
 			try {
 				needsPassphrase = (await client.getVaultKey()) !== null;
+				this.vaultHasKey = needsPassphrase;
 			} catch {
 				/* cannot tell yet; the next pass will */
 			}
@@ -601,7 +614,9 @@ export default class LockstepPlugin extends Plugin {
 		const client = this.client(false);
 		if (!client) return "";
 		try {
-			if (!(await client.getVaultKey())) return "";
+			const key = await client.getVaultKey();
+			this.vaultHasKey = key !== null;
+			if (!key) return "";
 		} catch {
 			return ""; // cannot tell, and refusing on a network hiccup helps nobody
 		}

@@ -37,6 +37,15 @@ already lives on. If somebody has your laptop, they have your notes regardless.
 
 **Losing the passphrase loses the notes.** There is no recovery and no escrow.
 
+**The passphrase cannot be changed on an existing vault.** Key parameters are written once,
+and everything stored is sealed with what they derive. Changing them without re-encrypting
+every file would leave a vault its own devices cannot read, so the server refuses the write
+rather than allowing it.
+
+**Eight characters is the floor, not the advice.** Setting a shorter one is refused. A short
+passphrase falls to a dictionary long before brute force becomes relevant, whatever the key
+derivation costs, so the guidance is four or more unrelated words.
+
 ## About the QR code
 
 Adding a device shows a QR code, and a code is unreadable by eye. Being asked to scan

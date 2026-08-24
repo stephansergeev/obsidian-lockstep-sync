@@ -40,6 +40,24 @@ export const DEFAULT_ITERATIONS = 600_000;
 export const ARGON2_MEMORY_KIB = 64 * 1024;
 export const ARGON2_PASSES = 3;
 
+/** Below this a vault is not worth encrypting, so setting one up is refused. */
+export const MIN_PASSPHRASE = 8;
+
+/**
+ * How much of a passphrase there is to attack.
+ *
+ * Not a strength meter: those score keyboard patterns highly and four ordinary
+ * words poorly, which is backwards. This counts what an attacker has to get
+ * through, and the honest answer for a short one is that a dictionary gets there
+ * long before brute force does.
+ */
+export function judgePassphrase(value: string): "short" | "thin" | "good" {
+	const words = value.trim().split(/\s+/).filter((w) => w.length > 2);
+	if (value.length < MIN_PASSPHRASE) return "short";
+	if (words.length >= 4 || value.length >= 12) return "good";
+	return "thin";
+}
+
 export interface VaultKeyParams {
 	v: 1;
 	kdf: "PBKDF2-SHA256" | "Argon2id";
