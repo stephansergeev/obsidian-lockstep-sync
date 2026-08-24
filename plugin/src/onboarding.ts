@@ -24,6 +24,7 @@ export class AddDeviceModal extends Modal {
 		app: App,
 		private issue: (name: string) => Promise<string>,
 		private encrypted: boolean,
+		private serverUrl: string,
 	) {
 		super(app);
 	}
@@ -88,6 +89,18 @@ export class AddDeviceModal extends Modal {
 		} catch {
 			frame.detach(); // the link below still works
 		}
+
+		// What is in the code, in words, beside the code itself. A QR is unreadable by
+		// eye, and asking somebody to scan something they cannot read is the shape of
+		// every phishing attempt they have been taught to refuse. The answer is not to
+		// drop the code, it is to make it inspectable: this is the same link printed
+		// below, and here is everything inside it.
+		const what = contentEl.createDiv({ cls: "lockstep-contents" });
+		what.createDiv({ cls: "lockstep-contents-title", text: t("add.contents") });
+		const list = what.createEl("ul");
+		list.createEl("li", { text: t("add.contentsUrl", { url: this.serverUrl }) });
+		list.createEl("li", { text: t("add.contentsToken", { device: this.name }) });
+		list.createEl("li", { text: t("add.contentsNothingElse") });
 
 		contentEl.createEl("p", { cls: "setting-item-description", text: t("add.orLink") });
 

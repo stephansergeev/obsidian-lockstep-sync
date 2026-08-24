@@ -37,6 +37,31 @@ already lives on. If somebody has your laptop, they have your notes regardless.
 
 **Losing the passphrase loses the notes.** There is no recovery and no escrow.
 
+## About the QR code
+
+Adding a device shows a QR code, and a code is unreadable by eye. Being asked to scan
+something you cannot read is the shape of every phishing attempt anybody has been taught to
+refuse, so the suspicion is the right instinct. Here is why this particular one is not that,
+and how to check rather than take it on trust.
+
+**It is your own screen.** This flow never asks anybody to scan a code they received from
+somewhere. It is drawn by your own device, from data that device already has, for a device
+you are holding.
+
+**The same link is printed underneath it.** The code is a convenience, not a secret. Read the
+link, compare it, or ignore the code entirely and copy the link instead.
+
+**What is inside is listed beside it, in words:** the address of your server, a token minted
+seconds earlier for that one device, and the name you gave it. Nothing else. Not the
+passphrase, which never travels by any route, and nothing that executes.
+
+**The receiving device says what it did.** After the link is opened it names the vault it was
+configured for, so the result can be checked rather than assumed.
+
+**A token is revocable and scoped.** If a code is ever seen by somebody it should not have
+been, revoke that one device: `sync-server token revoke --name <device>`. Nothing else is
+affected.
+
 ## Verifying what you downloaded
 
 Release artefacts are built by GitHub Actions from the tagged commit, and every release

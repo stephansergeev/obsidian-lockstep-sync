@@ -379,6 +379,7 @@ export default class LockstepPlugin extends Plugin {
 				return `obsidian://lockstep-setup?url=${url}&token=${token}&device=${device}`;
 			},
 			this.settings.encryption,
+			this.settings.serverUrl,
 		).open();
 	}
 

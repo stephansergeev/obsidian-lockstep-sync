@@ -135,7 +135,13 @@ const en: Dict = {
 	"add.needName": "Give the device a name first",
 	"add.ready":
 		"Obsidian has to be installed on the other device already, with a vault open and this plugin in it.",
-	"add.scan": "Point the other device's camera at this. Nothing is sent anywhere.",
+	"add.scan":
+		"Point the other device's camera at this screen. Nothing is sent anywhere: the code holds the same link printed below it.",
+	"add.contents": "Everything the code contains",
+	"add.contentsUrl": "The address of your server: {url}",
+	"add.contentsToken": "A token issued a moment ago for the device called {device}, and for nothing else",
+	"add.contentsNothingElse":
+		"Nothing further. Not your passphrase, not your notes, and nothing that runs on its own.",
 	"add.orLink":
 		"Or take the link. Paste it into a browser or a message on the other device and opening it starts Obsidian already configured.",
 	"add.copy": "Copy link",
@@ -317,7 +323,13 @@ const ru: Dict = {
 	"add.needName": "Сначала дай устройству имя",
 	"add.ready":
 		"На другом устройстве уже должен стоять Obsidian, с открытым волтом и этим плагином.",
-	"add.scan": "Наведи камеру другого устройства. Ничего никуда не отправляется.",
+	"add.scan":
+		"Наведи камеру другого устройства на этот экран. Ничего никуда не отправляется: в коде та же ссылка, что напечатана ниже.",
+	"add.contents": "Что именно в этом коде",
+	"add.contentsUrl": "Адрес твоего сервера: {url}",
+	"add.contentsToken": "Токен, выпущенный минуту назад для устройства «{device}» и ни для чего больше",
+	"add.contentsNothingElse":
+		"Больше ничего. Ни пароля, ни заметок, ни чего-либо, что выполняется само.",
 	"add.orLink":
 		"Или возьми ссылку. Вставь её в браузер или в сообщение на другом устройстве: при открытии запустится Obsidian уже настроенным.",
 	"add.copy": "Скопировать ссылку",

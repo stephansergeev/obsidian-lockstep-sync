@@ -109,8 +109,13 @@ configures itself.
 
 Every device after that is added from inside Obsidian. **Add another device** mints a token
 for it and draws a code: point the new device's camera at the screen and it opens configured.
-Nothing is typed, and the token never passes through a messenger. Each device has its own,
-so losing one phone means revoking one token.
+Nothing is typed, and the token never passes through a messenger. Each device has its own, so
+losing one phone means revoking one token.
+
+The code is drawn by your own screen and holds the same link printed beneath it, with its
+contents listed in words beside both. Scanning something unreadable is a habit worth
+distrusting, so there is nothing here that has to be taken on trust. See
+[SECURITY.md](SECURITY.md).
 
 From the server, if you prefer:
 
