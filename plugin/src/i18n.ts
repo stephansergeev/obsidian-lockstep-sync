@@ -168,6 +168,8 @@ const en: Dict = {
 	"notice.pullStarted": "Lockstep: downloading…",
 	"notice.pullDone": "Lockstep: {summary}",
 	"notice.indexReset": "Index reset",
+	"notice.unreachable":
+		"Lockstep: no answer from {url}. Check the address in the settings, and that the server is running. Nothing is lost while it is away: edits wait here and go when it comes back.",
 	"notice.error": "Lockstep — {what}: {message}",
 
 	"status.prefix": "Lockstep",
@@ -237,6 +239,8 @@ const ru: Dict = {
 	"conflict.pending": "решить: {count}",
 	"cmd.conflicts": "Разобрать файлы, изменённые с двух сторон",
 	"notice.conflictQueued": "Lockstep: {path} правили с двух сторон. Обе версии сохранены.",
+	"notice.unreachable":
+		"Lockstep: {url} не отвечает. Проверь адрес в настройках и что сервер запущен. Пока его нет, ничего не теряется: правки ждут здесь и уедут, когда он вернётся.",
 
 	"settings.retention.name": "Стирать удалённое через",
 	"settings.retention.desc":

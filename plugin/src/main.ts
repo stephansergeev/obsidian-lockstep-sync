@@ -43,6 +43,8 @@ export default class LockstepPlugin extends Plugin {
 	private locked = false;
 	/** Said once, not on every pass. */
 	private announcedEncryptedVault = false;
+	/** A server that cannot be reached says so once, not once a minute. */
+	private announcedUnreachable = false;
 	/** Which vault on the server this device is bound to, as the server names it. */
 	private serverVault = "";
 	private interval: number | null = null;
@@ -304,6 +306,7 @@ export default class LockstepPlugin extends Plugin {
 		}
 		this.settings.serverUrl = url;
 		this.settings.token = token;
+		this.announcedUnreachable = false;
 		if (params["device"]) this.settings.deviceName = params["device"].trim();
 		await this.saveSettings();
 		await this.refreshServerVault();
@@ -479,6 +482,19 @@ export default class LockstepPlugin extends Plugin {
 		}
 	}
 
+	/**
+	 * True when this looks like the server simply not being there.
+	 *
+	 * Worth separating from other failures: it is the one that repeats on every pass
+	 * until something changes in the world, and repeating it every minute buries
+	 * everything else the plugin has to say.
+	 */
+	private isUnreachable(message: string): boolean {
+		return /could not connect|failed to fetch|network|ERR_|ENOTFOUND|ECONNREFUSED|timed out/i.test(
+			message,
+		);
+	}
+
 	private report(report: SyncReport, secs: string, quiet: boolean): void {
 		const touched =
 			report.downloaded + report.uploaded + report.merged + report.conflicts + report.deleted;
@@ -494,6 +510,15 @@ export default class LockstepPlugin extends Plugin {
 					});
 		this.setStatus(line);
 		if (!quiet || report.conflicts > 0) new Notice(t("notice.syncDone", { summary: line }));
+		const unreachable = report.errors.filter((e) => this.isUnreachable(e));
+		if (unreachable.length > 0) {
+			if (!this.announcedUnreachable) {
+				this.announcedUnreachable = true;
+				new Notice(t("notice.unreachable", { url: this.settings.serverUrl }), 12000);
+			}
+			return;
+		}
+		this.announcedUnreachable = false;
 		for (const err of report.errors.slice(0, 3)) {
 			new Notice(t("notice.error", { what: t("error.sync"), message: err }), 8000);
 		}
@@ -706,6 +731,12 @@ export default class LockstepPlugin extends Plugin {
 					: String(e);
 		console.error(`[lockstep-sync] ${what}:`, e);
 		this.setStatus(t("status.error", { message: msg }));
+		if (this.isUnreachable(msg)) {
+			if (this.announcedUnreachable) return;
+			this.announcedUnreachable = true;
+			new Notice(t("notice.unreachable", { url: this.settings.serverUrl }), 12000);
+			return;
+		}
 		new Notice(t("notice.error", { what, message: msg }), 8000);
 	}
 }
