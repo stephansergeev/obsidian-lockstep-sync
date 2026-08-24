@@ -246,8 +246,13 @@ same passphrase with HKDF but are separate from the content keys, so a leak of o
 leak of the other.
 
 Names are encrypted deterministically, for the same reason content is: two devices have to
-agree on where a file lives. Whether a vault hides names is fixed when encryption is first
-set up, because the two kinds cannot be mixed in one vault.
+agree on where a file lives.
+
+Names can only be hidden in a vault that starts empty, and whether they are is fixed the
+first time encryption is set up. A vault cannot hold both kinds: turning name hiding on where
+files already exist would upload every one of them a second time under its hidden name and
+leave the readable copy behind. Set encryption up before putting anything in, and the server
+never learns a single name.
 
 The derivation parameters are stored on the server as an opaque record, so a second device
 joins the vault knowing only the passphrase. They are write-once: changing them without

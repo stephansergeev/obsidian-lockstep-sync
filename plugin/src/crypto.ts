@@ -56,9 +56,10 @@ export interface VaultKeyParams {
 	/**
 	 * Whether file and folder names are encrypted as well as content.
 	 *
-	 * Write-once, like everything else in this record. Switching it on an existing
-	 * vault would leave every path on the server unreadable to the client that
-	 * wrote it, so a vault is one or the other for its whole life.
+	 * Write-once, like everything else in this record, and only ever "encrypted" for a
+	 * vault that starts empty. A vault cannot hold both kinds: turning it on where
+	 * files already exist would upload every one of them a second time under its
+	 * hidden name and leave the readable copy behind.
 	 */
 	paths?: "plain" | "encrypted";
 }

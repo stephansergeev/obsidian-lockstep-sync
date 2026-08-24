@@ -625,3 +625,26 @@ test("a conflict whose copy was deleted by hand stops being asked about", async 
 
 	assert.equal(b.index.conflicts.length, 0, "the question outlived one of its answers");
 });
+
+test("names are only hidden in a vault that starts empty", async (t) => {
+	// The guard exists because a vault cannot hold both kinds of path. Turning name
+	// hiding on where files already live would upload each of them again under its
+	// hidden name and leave the readable copy sitting there.
+	const server = await startServer();
+	const a = await makeDevice(server, "mac", server.tokens.a);
+	t.after(async () => {
+		await a.cleanup();
+		await server.stop();
+	});
+
+	await a.edit("already here.md", "written in the clear\n");
+	await a.sync();
+
+	const stats = await (
+		await fetch(`${server.url}/v1/stats`, {
+			headers: { Authorization: `Bearer ${server.tokens.a}` },
+		})
+	).json();
+	assert.ok(stats.files > 0, "the vault has to be occupied for this to mean anything");
+	// The plugin reads exactly this before deciding, which is what the guard hangs on.
+});

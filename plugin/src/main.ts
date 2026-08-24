@@ -170,13 +170,22 @@ export default class LockstepPlugin extends Plugin {
 					this.pathCipher ? "encryption.readyWithPaths" : "encryption.ready",
 				);
 			} else {
-				const { cipher, params } = await VaultCipher.create(this.settings.passphrase);
+				// Names can only be hidden in a vault that starts empty. Everything
+				// already on the server is stored under a readable path, and a vault
+				// cannot hold both kinds: the client would upload every existing file a
+				// second time under its hidden name and leave the first copy behind.
+				const stats = await client.stats();
+				const occupied = Number(stats["files"] ?? 0) + Number(stats["folders"] ?? 0) > 0;
+				const { cipher, params } = await VaultCipher.create(this.settings.passphrase, {
+					paths: occupied ? "plain" : "encrypted",
+				});
 				await client.putVaultKey(params);
 				this.cipher = cipher;
 				this.pathCipher = params.paths === "encrypted" ? await cipher.pathCipher() : null;
 				this.locked = false;
 				this.cipherStatus = t("encryption.created");
 				new Notice(t("encryption.created"), 10000);
+				if (occupied) new Notice(t("encryption.namesStayVisible"), 15000);
 			}
 		} catch (e) {
 			// A wrong passphrase must never fall back to writing plaintext: that would
