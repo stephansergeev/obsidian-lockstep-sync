@@ -741,3 +741,38 @@ test("a folder somebody else still uses is left alone", async (t) => {
 	assert.equal(await b.vault.exists("Shared/two.md"), true);
 	assert.equal(await b.vault.exists("Shared"), true, "a folder with files in it was removed");
 });
+
+test("a folder rename in an encrypted vault moves rather than duplicates", async (t) => {
+	// The plain-text version of this test passed while the bug was live: the server
+	// stores the hash of the ciphertext and the device hashes the plaintext, so the
+	// two only agree when nothing is encrypted.
+	const server = await startServer();
+	const { cipher } = await VaultCipher.create("shared passphrase", {
+		iterations: 1,
+		memory_kib: 64,
+	});
+	const opts = { cipher, pathCipher: await cipher.pathCipher() };
+	const a = await makeDevice(server, "phone", server.tokens.a, opts);
+	const b = await makeDevice(server, "mac", server.tokens.b, opts);
+	t.after(async () => {
+		await a.cleanup();
+		await b.cleanup();
+		await server.stop();
+	});
+
+	await a.edit("Finance/2026/budget.md", "numbers\n");
+	await a.edit("Finance/passwords.md", "secrets\n");
+	await a.sync();
+	await b.sync();
+
+	await a.rename("Finance/2026/budget.md", "Money/2026/budget.md");
+	await a.rename("Finance/passwords.md", "Money/passwords.md");
+	await a.sync();
+	const report = await b.sync();
+
+	assert.equal(report.renamed, 2, "both files should have arrived as moves");
+	assert.equal(await b.vault.read("Money/passwords.md"), "secrets\n");
+	assert.equal(await b.vault.read("Money/2026/budget.md"), "numbers\n");
+	assert.equal(await b.vault.exists("Finance"), false, "the old folder stayed behind");
+	assert.equal(await b.vault.exists("Finance/passwords.md"), false, "and so did its files");
+});

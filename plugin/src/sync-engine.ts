@@ -309,7 +309,20 @@ export class SyncEngine {
 			const destTaken = !caseOnly && (await adapter.exists(path));
 			if (!this.isExcluded(from) && (await adapter.exists(from)) && !destTaken) {
 				const local = await adapter.readBinary(from);
-				if ((await sha256(local)) === entry.hash) {
+				// The comparison has to happen on the hashes the server uses. With
+				// encryption on it stores the hash of the ciphertext, and hashing the
+				// file on disk gives the hash of the plaintext, so the two never match
+				// and every rename fell through to downloading a second copy while the
+				// first stayed where it was.
+				const knownFrom = this.deps.index.get(from);
+				const unchangedHere =
+					knownFrom !== undefined &&
+					knownFrom.plain_hash !== undefined &&
+					knownFrom.plain_hash === (await sha256(local));
+				const sameContent = unchangedHere
+					? knownFrom.base_hash === entry.hash
+					: (await sha256(local)) === entry.hash;
+				if (sameContent) {
 					this.suppressed.add(from);
 					this.suppressed.add(path);
 					await this.ensureParent(path);
@@ -329,10 +342,16 @@ export class SyncEngine {
 						this.suppressed.delete(path);
 					}, 1500);
 					this.deps.index.remove(from);
+					// The plaintext hash travels with the file. Recording the server's
+					// hash as the local one leaves the entry describing bytes that are
+					// not on disk, and the next thing that happens to this path, a
+					// deletion most often, is read as an edit made here.
+					const plainHash = knownFrom?.plain_hash ?? (await sha256(local));
 					this.deps.index.set(path, {
 						base_rev: entry.rev,
 						base_hash: entry.hash ?? "",
-						local_hash: entry.hash ?? "",
+						plain_hash: plainHash,
+						local_hash: plainHash,
 						mtime: entry.mtime,
 					});
 					await this.pruneEmptyParents(from);

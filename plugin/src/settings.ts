@@ -37,7 +37,11 @@ export const DEFAULT_SETTINGS: SyncSettings = {
 	autoSync: true,
 	encryption: false,
 	passphrase: "",
-	intervalSeconds: 60,
+	// Fifteen because it costs almost nothing and makes another device feel live.
+	// A poll that finds nothing is one indexed query and forty bytes, and Obsidian on
+	// a phone does not run in the background, so this only happens while somebody is
+	// looking at the screen anyway.
+	intervalSeconds: 15,
 };
 
 export class SyncSettingsTab extends PluginSettingTab {

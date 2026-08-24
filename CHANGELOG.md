@@ -1,5 +1,21 @@
 # Changelog
 
+## 0.11.1
+
+Renaming a folder in an encrypted vault duplicated it instead of moving it. Deciding whether
+a file can be moved rather than downloaded compared the hash of the file on disk against the
+hash the server holds. With encryption on those describe different bytes, plaintext against
+ciphertext, so they never matched: every rename fell through to downloading a second copy
+while the first stayed where it was, and the device that still had the old copy uploaded it
+back, putting the duplicate on both devices.
+
+The same confusion recorded the server's hash as the local one after a move, which made the
+next deletion of that file look like an edit made here, so it was kept.
+
+The default check interval is fifteen seconds. A check that finds nothing is one small
+request, and Obsidian on a phone does not run in the background, so it only happens while
+somebody is looking at the screen.
+
 ## 0.11.0
 
 Renaming a folder no longer leaves the old one behind. A folder rename reaches another device
