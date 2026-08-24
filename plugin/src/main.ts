@@ -193,6 +193,12 @@ export default class LockstepPlugin extends Plugin {
 		}
 	}
 
+	/** Drop questions that no longer have two answers. */
+	async pruneConflicts(): Promise<void> {
+		await this.engine.pruneConflicts();
+		this.setStatus(this.lastStatus);
+	}
+
 	/** Apply a decision about a conflict and refresh what the status bar shows. */
 	async resolveConflict(path: string, choice: "mine" | "server" | "merged"): Promise<void> {
 		await this.engine.resolveConflict(path, choice);
@@ -210,6 +216,7 @@ export default class LockstepPlugin extends Plugin {
 	}
 
 	openConflicts(): void {
+		void this.engine.pruneConflicts();
 		new ConflictModal(
 			this.app,
 			() => this.index.conflicts,

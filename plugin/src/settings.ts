@@ -229,6 +229,7 @@ export class SyncSettingsTab extends PluginSettingTab {
 	}
 
 	private renderConflicts(containerEl: HTMLElement): void {
+		void this.plugin.pruneConflicts();
 		const conflicts = this.plugin.index?.conflicts ?? [];
 		if (conflicts.length === 0) return;
 

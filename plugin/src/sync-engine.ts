@@ -122,6 +122,7 @@ export class SyncEngine {
 		this.running = true;
 		const report = emptyReport();
 		try {
+			await this.pruneConflicts();
 			const client = this.deps.client();
 			if (!client) return report;
 			await this.pull(client, report);
@@ -131,6 +132,26 @@ export class SyncEngine {
 			await this.deps.index.save();
 		}
 		return report;
+	}
+
+	/**
+	 * Forget conflicts whose copy is no longer on disk.
+	 *
+	 * Deleting the copy by hand is a perfectly ordinary way of saying the question
+	 * does not need answering. Leaving the entry behind means offering a choice
+	 * between two versions when one of them is gone, and the offer fails when taken.
+	 */
+	async pruneConflicts(): Promise<boolean> {
+		const adapter = this.deps.app.vault.adapter;
+		let changed = false;
+		for (const conflict of [...this.deps.index.conflicts]) {
+			if (await adapter.exists(conflict.copy)) continue;
+			this.deps.index.clearConflict(conflict.path);
+			changed = true;
+			this.deps.log(`forgot a conflict whose copy was deleted: ${conflict.path}`);
+		}
+		if (changed) await this.deps.index.save();
+		return changed;
 	}
 
 	/** True when another change arrived while the last pass was running. */
@@ -641,6 +662,12 @@ export class SyncEngine {
 			return;
 		}
 
+		if (!(await adapter.exists(pending.copy))) {
+			// Gone since the question was asked. Nothing to choose between any more.
+			this.deps.index.clearConflict(path);
+			await this.deps.index.save();
+			throw new Error("that version was deleted, so there is nothing left to keep");
+		}
 		const mine = await adapter.readBinary(pending.copy);
 		let data = mine;
 

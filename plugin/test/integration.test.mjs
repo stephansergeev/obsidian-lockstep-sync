@@ -603,3 +603,25 @@ test("deleted files stay recoverable with paths hidden", async (t) => {
 	await a.engine.restore(gone[0].path, gone[0].rev, gone[0].content_rev);
 	assert.equal(await a.vault.read("Private/note.md"), "hidden even by name\n");
 });
+
+test("a conflict whose copy was deleted by hand stops being asked about", async (t) => {
+	const { a, b, cleanup } = await twoDevices();
+	t.after(cleanup);
+
+	await a.edit("note.md", "shared\n");
+	await a.sync();
+	await b.sync();
+	await a.edit("note.md", "from the mac\n");
+	await b.edit("note.md", "from the phone\n");
+	await a.sync();
+	await b.sync();
+
+	const pending = b.index.conflicts[0];
+	assert.ok(pending);
+
+	// Deleting the copy is an ordinary way of saying the question needs no answer.
+	await b.vault.remove(pending.copy);
+	await b.sync();
+
+	assert.equal(b.index.conflicts.length, 0, "the question outlived one of its answers");
+});
