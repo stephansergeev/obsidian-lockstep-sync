@@ -132,6 +132,10 @@ CADDY
 		;;
 	nginx)
 		say "nginx already serves this machine, adding a site for $DOMAIN"
+		# The certificate is obtained without letting certbot edit nginx. Its plugin
+		# rewrites whatever block it finds, which turned a redirect meant for port 80
+		# into a redirect served on 443, and the site answered itself forever.
+		mkdir -p /var/www/html
 		cat > "/etc/nginx/sites-available/lockstep-$DOMAIN" <<NGINX
 server {
 	listen 80;
@@ -142,33 +146,62 @@ server {
 NGINX
 		ln -sf "/etc/nginx/sites-available/lockstep-$DOMAIN" "/etc/nginx/sites-enabled/lockstep-$DOMAIN"
 		nginx -t >/dev/null 2>&1 && systemctl reload nginx
-		if command -v certbot >/dev/null 2>&1 || apt-get install -y -qq certbot python3-certbot-nginx >/dev/null 2>&1; then
-			say "obtaining a certificate"
-			certbot --nginx -d "$DOMAIN" --non-interactive --agree-tos --register-unsafely-without-email --redirect >/dev/null 2>&1 || true
-		fi
-		# certbot rewrites the site for TLS; the proxy still has to be added.
-		if ! grep -q "proxy_pass" "/etc/nginx/sites-available/lockstep-$DOMAIN"; then
-			cat >> "/etc/nginx/sites-available/lockstep-$DOMAIN" <<NGINX
+
+		command -v certbot >/dev/null 2>&1 || apt-get install -y -qq certbot >/dev/null 2>&1
+		say "obtaining a certificate"
+		certbot certonly --webroot -w /var/www/html -d "$DOMAIN" \
+			--non-interactive --agree-tos --register-unsafely-without-email >/dev/null 2>&1 || true
+
+		if [ ! -f "/etc/letsencrypt/live/$DOMAIN/fullchain.pem" ]; then
+			say "no certificate was issued; leaving the site on port 80 only"
+			PROXY_DONE=0
+		else
+			# Whatever already answered on this machine keeps being the default server.
+			# A named site added later must not inherit that role and start catching
+			# requests meant for something else.
+			for existing in /etc/nginx/sites-enabled/*; do
+				case "$existing" in *"lockstep-$DOMAIN") continue ;; esac
+				grep -q "default_server" "$existing" 2>/dev/null && DEFAULT_SET=1
+			done
+			if [ -z "${DEFAULT_SET:-}" ]; then
+				for existing in /etc/nginx/sites-enabled/*; do
+					case "$existing" in *"lockstep-$DOMAIN") continue ;; esac
+					sed -i "s/^\(\s*\)listen 80;/\1listen 80 default_server;/; s/^\(\s*\)listen 443 ssl;/\1listen 443 ssl default_server;/" "$(readlink -f "$existing")" 2>/dev/null || true
+				done
+			fi
+
+			cat > "/etc/nginx/sites-available/lockstep-$DOMAIN" <<NGINX
+server {
+	listen 80;
+	server_name $DOMAIN;
+	location /.well-known/acme-challenge/ { root /var/www/html; }
+	location / { return 301 https://\$host\$request_uri; }
+}
 
 server {
 	listen 443 ssl;
 	server_name $DOMAIN;
+
 	ssl_certificate     /etc/letsencrypt/live/$DOMAIN/fullchain.pem;
 	ssl_certificate_key /etc/letsencrypt/live/$DOMAIN/privkey.pem;
+
 	client_max_body_size 512M;
+
 	location / {
 		proxy_pass         http://127.0.0.1:$PORT;
 		proxy_http_version 1.1;
 		proxy_set_header   Host \$host;
+		proxy_set_header   X-Real-IP \$remote_addr;
+		proxy_set_header   X-Forwarded-For \$proxy_add_x_forwarded_for;
 		proxy_set_header   X-Forwarded-Proto https;
 		proxy_read_timeout 30m;
 		proxy_send_timeout 30m;
+		proxy_request_buffering off;
 	}
 }
 NGINX
+			nginx -t >/dev/null 2>&1 && systemctl reload nginx && PROXY_DONE=1
 		fi
-		nginx -t >/dev/null 2>&1 && systemctl reload nginx && PROXY_DONE=1 || \
-			say "nginx did not accept the config; check it by hand: nginx -t"
 		;;
 	*)
 		say "$EXISTING already holds port 443, so TLS was left alone"
@@ -224,6 +257,5 @@ If you already have a vault, load it in one go:
 
   sudo -u $USER_NAME $BIN import --data $DATA_DIR --vault main --from /path/to/vault
 
-TLS is handled by Caddy and renews itself. The server itself listens on loopback
-only and never sees the outside world.
+TLS renews itself. The server listens on loopback only and never faces the internet.
 DONE
