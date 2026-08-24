@@ -307,7 +307,10 @@ because it is.
 below that, but a short passphrase falls to a dictionary long before anyone has to brute
 force it, and a passphrase that is painful to type on a phone gets replaced with a short one.
 
-Lose it and the notes are gone. There is nobody to ask.
+Losing it is not losing the vault. Nothing on a device is encrypted, so every device that
+has the notes still has them, readable as ever. What becomes unreadable is the copy on the
+server, and with it the history and the ability to set a new device up from it. The way back
+is a fresh vault on the server, filled from a device that still has the files.
 
 ## Dependencies
 

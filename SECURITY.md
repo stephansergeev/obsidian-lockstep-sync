@@ -35,7 +35,12 @@ content encryption compensates for that.
 This is deliberate: the threat being answered is the server, not the device the vault
 already lives on. If somebody has your laptop, they have your notes regardless.
 
-**Losing the passphrase loses the notes.** There is no recovery and no escrow.
+**Losing the passphrase costs the server copy, not the notes.** There is no recovery and no
+escrow, and nothing derives the key but the passphrase. What that costs is precise: files on
+a device are stored as ordinary files and stay readable, so every device that has the vault
+keeps it. The copy on the server becomes bytes nobody can open, taking the revision history
+and any future device set up from it. Recovering means starting a new vault on the server and
+filling it from a device that still has the files.
 
 **The passphrase cannot be changed on an existing vault.** Key parameters are written once,
 and everything stored is sealed with what they derive. Changing them without re-encrypting

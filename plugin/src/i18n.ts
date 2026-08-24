@@ -87,7 +87,7 @@ const en: Dict = {
 		"Notes and their names are encrypted on this device before they are uploaded. The server keeps bytes it cannot read and names it cannot read either. It still sees the shape of the vault: how many files there are and how deep the folders go.",
 	"settings.passphrase.firstTime": "This passphrase is being set, not entered",
 	"settings.passphrase.oneChance":
-		"It is written into the vault once and cannot be changed afterwards: everything already stored is sealed with it. It also cannot be recovered. Lose it and the notes are gone, and there is nobody to ask.",
+		"It is written into the vault once and cannot be changed afterwards, because everything already stored is sealed with it. It cannot be recovered either. Lose it and your notes are still here, and on every other device that has them, since nothing on a device is encrypted. What becomes unreadable is the copy on the server: its history, and the ability to set up a new device from it.",
 	"settings.passphrase.short":
 		"Too short to set. At least {min} characters, and four unrelated words are better than eight awkward ones.",
 	"settings.passphrase.thin":
@@ -286,7 +286,7 @@ const ru: Dict = {
 		"Заметки и их имена шифруются на этом устройстве до отправки. Сервер хранит байты, которые не может прочитать, и имена, которые тоже не может прочитать. Ему остаётся видна только форма волта: сколько файлов и насколько глубоко вложены папки.",
 	"settings.passphrase.firstTime": "Этот пароль задаётся, а не вводится",
 	"settings.passphrase.oneChance":
-		"Он записывается в волт один раз и потом не меняется: всё уже сохранённое запечатано именно им. Восстановить его тоже нельзя. Потеряешь — заметки потеряны, спросить не у кого.",
+		"Он записывается в волт один раз и потом не меняется, потому что всё уже сохранённое запечатано именно им. Восстановить его тоже нельзя. Если потеряешь, заметки останутся здесь и на каждом устройстве, где они есть: на устройстве ничего не шифруется. Нечитаемой станет копия на сервере — её история и возможность настроить с неё новое устройство.",
 	"settings.passphrase.short":
 		"Слишком короткий, чтобы его задать. Минимум {min} символов, а четыре несвязанных слова лучше восьми неудобных знаков.",
 	"settings.passphrase.thin":
