@@ -207,6 +207,7 @@ export class SyncSettingsTab extends PluginSettingTab {
 			})
 			.addButton((b) =>
 				b
+					.setCta()
 					.setButtonText(t("settings.encrypt.set"))
 					.setTooltip(t("settings.encrypt.setTip"))
 					.onClick(async () => {

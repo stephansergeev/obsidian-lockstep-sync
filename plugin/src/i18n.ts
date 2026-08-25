@@ -76,21 +76,18 @@ const en: Dict = {
 	"settings.restore.button": "Open",
 
 	"settings.encrypt.name": "Encrypt content",
-	"settings.encrypt.desc":
-		"Enter a passphrase and notes are sealed on this device before they leave: the server stores them without being able to read them. Use the same passphrase on every device. Leave it empty to store notes on your server as ordinary files.",
+	"settings.encrypt.desc": "Seals your notes before they leave this device, so the server stores them without being able to read them. Same passphrase on every device. Leave empty to keep notes on your server as ordinary files.",
 	"settings.encrypt.placeholder": "passphrase",
-	"settings.encrypt.set": "Set",
+	"settings.encrypt.set": "Set passphrase",
 	"settings.encrypt.setTip":
 		"Seals this vault with the passphrase as it is right now. Until this is pressed, nothing is created and nothing syncs.",
 	"encryption.firstSyncChoice":
 		"First sync: {count} files will go to your server as they are. Press Sync now if that is the plan. To encrypt them, set a passphrase first. Encryption can also be turned on later.",
-	"encryption.pressSet":
-		"Passphrase typed but not set. Press Set when it is complete: it seals the vault permanently, so it should not happen on a half-typed one.",
+	"encryption.pressSet": "Passphrase typed but not set yet. Press Set passphrase when it is complete.",
 	"cmd.resetIndex": "Reset the local sync index",
 	"settings.section.encryption": "Encryption",
-	"settings.passphrase.firstTime": "This passphrase is being set, not entered",
-	"settings.passphrase.oneChance":
-		"It is written into the vault once and cannot be changed afterwards, because everything already stored is sealed with it. It cannot be recovered either. Lose it and your notes are still here, and on every other device that has them, since nothing on a device is encrypted. What becomes unreadable is the copy on the server: its history, and the ability to set up a new device from it.",
+	"settings.passphrase.firstTime": "Pick a passphrase you can keep",
+	"settings.passphrase.oneChance": "It cannot be changed or recovered later. Your notes stay on your devices as they are; only the copy on the server is sealed with it.",
 	"settings.passphrase.weak": "Weak. Short passphrases are easy to crack.",
 	"settings.passphrase.medium": "Medium. Four unrelated words would be stronger.",
 	"settings.passphrase.strong": "Strong.",
@@ -260,21 +257,18 @@ const ru: Dict = {
 	"settings.restore.button": "Открыть",
 
 	"settings.encrypt.name": "Шифровать содержимое",
-	"settings.encrypt.desc":
-		"Введи пароль, и заметки будут запечатываться на этом устройстве до отправки: сервер хранит их, не имея возможности прочитать. Один и тот же пароль на всех устройствах. Пусто — заметки лежат на твоём сервере обычными файлами.",
+	"settings.encrypt.desc": "Запечатывает заметки до отправки, и сервер хранит их, не имея возможности прочитать. Один пароль на всех устройствах. Пусто: заметки лежат на твоём сервере обычными файлами.",
 	"settings.encrypt.placeholder": "пароль",
-	"settings.encrypt.set": "Задать",
+	"settings.encrypt.set": "Задать пароль",
 	"settings.encrypt.setTip":
 		"Запечатывает волт паролем ровно в его текущем виде. Пока кнопка не нажата, ничего не создаётся и не синкается.",
 	"encryption.firstSyncChoice":
 		"Первый синк: {count} файлов уйдут на твой сервер как есть. Нажми Sync now, если так и задумано. Чтобы шифровать, сначала задай пароль. Включить шифрование можно и позже.",
-	"encryption.pressSet":
-		"Пароль набран, но не задан. Нажми Задать, когда он дописан: волт запечатывается насовсем, и это не должно случиться на половине фразы.",
+	"encryption.pressSet": "Пароль набран, но ещё не задан. Нажми Задать пароль, когда допишешь.",
 	"cmd.resetIndex": "Сбросить локальный индекс синхронизации",
 	"settings.section.encryption": "Шифрование",
-	"settings.passphrase.firstTime": "Этот пароль задаётся, а не вводится",
-	"settings.passphrase.oneChance":
-		"Он записывается в волт один раз и потом не меняется, потому что всё уже сохранённое запечатано именно им. Восстановить его тоже нельзя. Если потеряешь, заметки останутся здесь и на каждом устройстве, где они есть: на устройстве ничего не шифруется. Нечитаемой станет копия на сервере — её история и возможность настроить с неё новое устройство.",
+	"settings.passphrase.firstTime": "Выбери пароль, который не потеряешь",
+	"settings.passphrase.oneChance": "Потом его нельзя ни сменить, ни восстановить. Заметки на твоих устройствах остаются как есть; им запечатывается только копия на сервере.",
 	"settings.passphrase.weak": "Слабый. Короткий пароль легко взломать.",
 	"settings.passphrase.medium": "Средний. Четыре несвязанных слова были бы крепче.",
 	"settings.passphrase.strong": "Сильный.",
