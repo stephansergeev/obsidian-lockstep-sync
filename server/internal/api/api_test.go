@@ -615,7 +615,9 @@ func TestPurgeErasesDeletedFilesNow(t *testing.T) {
 	if resp.StatusCode != 200 {
 		t.Fatalf("purge: %d %s", resp.StatusCode, body)
 	}
-	var out struct{ Files int64 `json:"files"` }
+	var out struct {
+		Files int64 `json:"files"`
+	}
 	_ = json.Unmarshal(body, &out)
 	if out.Files != 1 {
 		t.Fatalf("purge should report the one erased file, got %d", out.Files)
@@ -676,5 +678,73 @@ func TestMigrationMarkerLocksOutOtherDevices(t *testing.T) {
 	_, body = h.do(h.phoneTok, "GET", "/v1/vaultkey", nil, nil)
 	if strings.Contains(string(body), "migration") {
 		t.Fatalf("marker should be gone: %s", body)
+	}
+}
+
+// --- the join page ---------------------------------------------------------------
+
+func TestJoinPageLeadsToATokenOnce(t *testing.T) {
+	h := newHarness(t)
+	resp, body := h.do(h.deskTok, "POST", "/v1/join", strings.NewReader(`{"name":"phone"}`), map[string]string{"Content-Type": "application/json"})
+	if resp.StatusCode != 200 {
+		t.Fatalf("create join: %d %s", resp.StatusCode, body)
+	}
+	var made struct {
+		Code string `json:"code"`
+		URL  string `json:"url"`
+	}
+	_ = json.Unmarshal(body, &made)
+	if made.Code == "" || !strings.HasSuffix(made.URL, "/join/"+made.Code) {
+		t.Fatalf("unexpected join response: %s", body)
+	}
+
+	// The page, without any token: steps in order, the connect link, no secret.
+	resp, body = h.do("", "GET", "/join/"+made.Code, nil, nil)
+	page := string(body)
+	if resp.StatusCode != 200 {
+		t.Fatalf("join page: %d %s", resp.StatusCode, page)
+	}
+	for _, want := range []string{"obsidian://lockstep-setup?", "code=" + made.Code, "device=phone", "Install", "Connect"} {
+		if !strings.Contains(page, want) {
+			t.Fatalf("join page lacks %q:\n%s", want, page)
+		}
+	}
+	if strings.Contains(page, "obs_") {
+		t.Fatalf("join page must not carry a token:\n%s", page)
+	}
+	if csp := resp.Header.Get("Content-Security-Policy"); !strings.HasPrefix(csp, "default-src 'none'") {
+		t.Fatalf("join page must forbid every outbound request, got CSP %q", csp)
+	}
+	if strings.Contains(page, "src=\"http") || strings.Contains(page, "href=\"http") && !strings.Contains(page, "obsidian.md/download") {
+		t.Fatalf("join page must not load anything from elsewhere:\n%s", page)
+	}
+
+	// Redeeming turns the code into a token that opens the vault.
+	resp, body = h.do("", "POST", "/v1/join/redeem", strings.NewReader(`{"code":"`+made.Code+`"}`), map[string]string{"Content-Type": "application/json"})
+	if resp.StatusCode != 200 {
+		t.Fatalf("redeem: %d %s", resp.StatusCode, body)
+	}
+	var got struct {
+		Token  string `json:"token"`
+		Vault  string `json:"vault"`
+		Device string `json:"device"`
+	}
+	_ = json.Unmarshal(body, &got)
+	if !strings.HasPrefix(got.Token, "obs_") || got.Vault != "main" || got.Device != "phone" {
+		t.Fatalf("unexpected redeem response: %s", body)
+	}
+	if r := h.put(got.Token, "from-phone.md", 0, "hello"); r.Status != 200 {
+		t.Fatalf("the new token should write to the vault, got %d", r.Status)
+	}
+
+	// Once. The page and the redeem both say so afterwards.
+	if resp, _ := h.do("", "POST", "/v1/join/redeem", strings.NewReader(`{"code":"`+made.Code+`"}`), map[string]string{"Content-Type": "application/json"}); resp.StatusCode != 410 {
+		t.Fatalf("second redeem should be 410, got %d", resp.StatusCode)
+	}
+	if resp, body := h.do("", "GET", "/join/"+made.Code, nil, nil); resp.StatusCode != 410 || !strings.Contains(string(body), "expired or was already used") {
+		t.Fatalf("spent page should be 410 with the explanation, got %d %s", resp.StatusCode, body)
+	}
+	if resp, _ := h.do("", "GET", "/join/nonsense", nil, nil); resp.StatusCode != 410 {
+		t.Fatalf("unknown code should be 410, got %d", resp.StatusCode)
 	}
 }

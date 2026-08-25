@@ -947,7 +947,8 @@ test("a first sync sends notes before attachments", async (t) => {
 	await a.sync();
 
 	const order = a.logs.filter((l) => l.includes(" sent ")).map((l) => l.split(" sent ")[1].split(" in ")[0]);
-	assert.equal(order.length, 22);
+	const failed = a.logs.filter((l) => l.startsWith("push "));
+	assert.equal(order.length, 22, `uploads failed: ${failed.join(" | ")}`);
 	// With four in flight, an attachment can only start after at least sixteen
 	// notes have finished, so the first sixteen completions are all notes.
 	assert.ok(order.slice(0, 16).every((p) => p.endsWith(".md")), `notes did not go first: ${order.join(", ")}`);

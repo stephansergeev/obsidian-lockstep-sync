@@ -81,7 +81,10 @@ export class AddDeviceModal extends Modal {
 			return;
 		}
 
-		contentEl.createEl("p", { cls: "setting-item-description", text: t("add.ready") });
+		contentEl.createEl("p", {
+			cls: "setting-item-description",
+			text: t(this.link.startsWith("obsidian://") ? "add.readyDirect" : "add.ready"),
+		});
 
 		// The code first, because pointing a camera at it is the shortest path there
 		// is: no messenger, no clipboard, and the token never leaves this room.
@@ -102,7 +105,13 @@ export class AddDeviceModal extends Modal {
 		what.createDiv({ cls: "lockstep-contents-title", text: t("add.contents") });
 		const list = what.createEl("ul");
 		list.createEl("li", { text: t("add.contentsUrl", { url: this.serverUrl }) });
-		list.createEl("li", { text: t("add.contentsToken", { device: this.name }) });
+		// A page link carries a code that turns into a token only on the other
+		// device; the older direct link carries the token itself.
+		list.createEl("li", {
+			text: t(this.link.startsWith("obsidian://") ? "add.contentsToken" : "add.contentsCode", {
+				device: this.name,
+			}),
+		});
 		list.createEl("li", { text: t("add.contentsNothingElse") });
 
 		contentEl.createEl("p", { cls: "setting-item-description", text: t("add.orLink") });

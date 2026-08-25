@@ -46,6 +46,15 @@ CREATE TABLE IF NOT EXISTS tokens (
   last_seen  INTEGER NOT NULL DEFAULT 0
 );
 CREATE INDEX IF NOT EXISTS idx_tokens_vault ON tokens(vault);
+CREATE TABLE IF NOT EXISTS join_codes (
+  hash       TEXT PRIMARY KEY,
+  vault      TEXT NOT NULL,
+  device     TEXT NOT NULL,
+  issued_by  TEXT NOT NULL,
+  created_at INTEGER NOT NULL,
+  expires_at INTEGER NOT NULL,
+  used_at    INTEGER NOT NULL DEFAULT 0
+);
 `
 
 func Open(path string) (*Store, error) {
@@ -141,4 +150,85 @@ func (s *Store) Revoke(name string) (int64, error) {
 		return 0, err
 	}
 	return res.RowsAffected()
+}
+
+// A join code stands in for a token on the way to a new device.
+//
+// The setup link used to carry the token itself, so a photographed screen or a
+// forwarded message was the vault. A code is short-lived and single-use, and turns
+// into a token only when the other device presses Connect; the link a camera saw
+// five minutes ago is by then just a picture.
+type Join struct {
+	Vault     string
+	Device    string
+	IssuedBy  string
+	ExpiresAt time.Time
+}
+
+// ErrJoinInvalid covers missing, expired and already used codes alike: telling the
+// three apart helps nobody who is holding the wrong link.
+var ErrJoinInvalid = errors.New("join code is invalid, expired or already used")
+
+// CreateJoin mints a code for one device. Expired codes are swept on the way, so the
+// table never grows past what was issued recently.
+func (s *Store) CreateJoin(vault, device, issuedBy string, ttl time.Duration) (string, error) {
+	if !ValidVault(vault) {
+		return "", fmt.Errorf("invalid vault name %q", vault)
+	}
+	raw := make([]byte, 16)
+	if _, err := rand.Read(raw); err != nil {
+		return "", err
+	}
+	code := base64.RawURLEncoding.EncodeToString(raw)
+	now := time.Now()
+	_, _ = s.db.Exec(`DELETE FROM join_codes WHERE expires_at < ? OR used_at > 0`, now.Add(-24*time.Hour).Unix())
+	_, err := s.db.Exec(`INSERT INTO join_codes(hash,vault,device,issued_by,created_at,expires_at)
+		VALUES(?,?,?,?,?,?)`, hashToken(code), vault, device, issuedBy, now.Unix(), now.Add(ttl).Unix())
+	if err != nil {
+		return "", err
+	}
+	return code, nil
+}
+
+// PeekJoin says what a code is for without spending it: the page that shows the
+// steps needs the device name, and showing the page is not yet joining.
+func (s *Store) PeekJoin(code string) (Join, error) {
+	var j Join
+	var expires, used int64
+	err := s.db.QueryRow(`SELECT vault,device,issued_by,expires_at,used_at FROM join_codes WHERE hash=?`,
+		hashToken(code)).Scan(&j.Vault, &j.Device, &j.IssuedBy, &expires, &used)
+	if errors.Is(err, sql.ErrNoRows) {
+		return Join{}, ErrJoinInvalid
+	}
+	if err != nil {
+		return Join{}, err
+	}
+	j.ExpiresAt = time.Unix(expires, 0)
+	if used > 0 || time.Now().After(j.ExpiresAt) {
+		return Join{}, ErrJoinInvalid
+	}
+	return j, nil
+}
+
+// RedeemJoin spends a code and returns the token it stood for. The spend is one
+// statement guarded by the unused-and-unexpired condition, so two devices racing
+// for the same code cannot both win.
+func (s *Store) RedeemJoin(code string) (string, Join, error) {
+	j, err := s.PeekJoin(code)
+	if err != nil {
+		return "", Join{}, err
+	}
+	res, err := s.db.Exec(`UPDATE join_codes SET used_at=? WHERE hash=? AND used_at=0 AND expires_at>=?`,
+		time.Now().Unix(), hashToken(code), time.Now().Unix())
+	if err != nil {
+		return "", Join{}, err
+	}
+	if n, _ := res.RowsAffected(); n != 1 {
+		return "", Join{}, ErrJoinInvalid
+	}
+	tok, err := s.Add(j.Device, j.Vault)
+	if err != nil {
+		return "", Join{}, err
+	}
+	return tok, j, nil
 }

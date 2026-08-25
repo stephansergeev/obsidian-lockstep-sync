@@ -210,6 +210,23 @@ export class SyncClient {
 		return { files: Number(resp.json?.files ?? 0), bytes: Number(resp.json?.bytes ?? 0) };
 	}
 
+	/**
+	 * Make a join link for another device: a page on this server with the steps in
+	 * order, ending in Connect. The link carries a one-time code that becomes a token
+	 * only when Connect is pressed there.
+	 */
+	async createJoin(name: string): Promise<{ code: string; url: string; expires_in: number }> {
+		const resp = await this.call("POST", "/join", {
+			body: JSON.stringify({ name }),
+			headers: { "Content-Type": "application/json" },
+		});
+		return {
+			code: String(resp.json?.code ?? ""),
+			url: String(resp.json?.url ?? ""),
+			expires_in: Number(resp.json?.expires_in ?? 0),
+		};
+	}
+
 	/** Mint a token for another device on this same vault. */
 	async issueToken(name: string): Promise<{ token: string; vault: string }> {
 		const resp = await this.call("POST", "/tokens", {
@@ -310,4 +327,31 @@ function safeJson(resp: RequestUrlResponse): Record<string, unknown> {
 	} catch {
 		return {};
 	}
+}
+
+/**
+ * Turn a join code into a token. Needs no token itself: the code is the credential,
+ * and this is the one request a device makes before it has anything else.
+ */
+export async function redeemJoin(
+	serverUrl: string,
+	code: string,
+): Promise<{ token: string; vault: string; device: string; url: string }> {
+	const resp = await requestUrl({
+		url: `${serverUrl.replace(/\/+$/, "")}/v1/join/redeem`,
+		method: "POST",
+		body: JSON.stringify({ code }),
+		headers: { "Content-Type": "application/json" },
+		throw: false,
+	});
+	if (resp.status >= 400) {
+		const j = safeJson(resp);
+		throw new ApiError(resp.status, String(j.error ?? "http_error"), String(j.message ?? `HTTP ${resp.status}`));
+	}
+	return {
+		token: String(resp.json?.token ?? ""),
+		vault: String(resp.json?.vault ?? ""),
+		device: String(resp.json?.device ?? ""),
+		url: String(resp.json?.url ?? serverUrl),
+	};
 }

@@ -30,6 +30,14 @@ accepts writes only from the device doing it. What the server's disk may still h
 blocks is outside the plugin's reach; a vault that must never have been readable on the
 server should be encrypted from its first sync.
 
+**Nothing here talks to anyone but your server.** The plugin makes requests to the address in
+its settings and to nothing else; the server makes no outbound connections at all, not for
+updates, not for statistics. The join page it serves for new devices is a template inside the
+same binary: no external script, style, image or font, and a `Content-Security-Policy` of
+`default-src 'none'` that makes the browser refuse any request the page might try. The one
+link that leaves your server is the app store link for Obsidian, and it is a plain link that
+does nothing until tapped. All of this is a grep away in a repository this size.
+
 **The token is the access boundary.** Anyone holding a device token can read, write and
 delete in that vault, whatever encryption is set to. Tokens are stored on the server as
 sha256, shown once at issue, and revocable per device.

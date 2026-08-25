@@ -1,5 +1,15 @@
 # Changelog
 
+## 0.16.0
+
+Link a new device now makes a page on your own server, not a bare link. The page
+puts the steps in order for the device that scans it: Obsidian with a vault open,
+the plugin (through BRAT until the catalogue listing is live), then Connect. The
+link carries a one-time code that turns into a token only when Connect is pressed,
+and expires in fifteen minutes; a photographed screen is worthless by then. The
+installer and `sync-server link` print the same page. If pressing a button leaves
+the page in front, it points at the app store for that platform.
+
 ## 0.15.0
 
 Encryption can be turned on for a vault that is already on the server. Encrypt

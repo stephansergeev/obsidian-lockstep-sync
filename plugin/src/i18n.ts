@@ -133,6 +133,11 @@ const en: Dict = {
 	"progress.doneEncrypted": "Done. All files synced, encrypted.",
 	"settings.section.more": "More settings",
 	"add.title": "Add another device",
+	"add.readyDirect":
+		"Obsidian has to be installed on the other device already, with a vault open and this plugin in it.",
+	"add.contentsCode":
+		"A one-time code for the device called {device}. It turns into a token only when Connect is pressed there, and expires in fifteen minutes.",
+	"add.linkSpent": "That link has expired or was already used. Make a new one from a device that is set up.",
 	"add.intro":
 		"This makes a link for one device. Open it on that device and Obsidian fills in the settings. Give each device its own, so losing one means revoking one.",
 	"add.name": "What to call it",
@@ -140,16 +145,16 @@ const en: Dict = {
 		"Filled in with the likely answer. Shown when two devices change the same file and one of them has to be chosen.",
 	"add.create": "Create the link",
 	"add.ready":
-		"Obsidian has to be installed on the other device already, with a vault open and this plugin in it.",
+		"Open the link on the other device: a page on your server walks through installing the plugin and connecting, in order. Obsidian with a vault open is all that has to be there already.",
 	"add.scan":
-		"Point the other device's camera at this screen. Nothing is sent anywhere: the code holds the same link printed below it.",
+		"Point the other device's camera at this screen. The code holds the same link printed below it, and nothing else.",
 	"add.contents": "Everything the code contains",
 	"add.contentsUrl": "The address of your server: {url}",
 	"add.contentsToken": "A token issued a moment ago for the device called {device}, and for nothing else",
 	"add.contentsNothingElse":
 		"Nothing further. Not your passphrase, not your notes, and nothing that runs on its own.",
 	"add.orLink":
-		"Or take the link. Paste it into a browser or a message on the other device and opening it starts Obsidian already configured.",
+		"Or send the link. It opens the same page with the steps in order, and it works once, for fifteen minutes.",
 	"add.copy": "Copy link",
 	"add.copyManually": "Could not reach the clipboard. The link is selected, copy it by hand.",
 	"add.openHere": "Open on this device",
@@ -324,6 +329,11 @@ const ru: Dict = {
 	"progress.doneEncrypted": "Готово. Все файлы синхронизированы, зашифрованы.",
 	"settings.section.more": "Остальные настройки",
 	"add.title": "Добавить устройство",
+	"add.readyDirect":
+		"На другом устройстве уже должен стоять Obsidian, с открытым волтом и этим плагином.",
+	"add.contentsCode":
+		"Одноразовый код для устройства {device}. Он становится токеном только при нажатии Connect там и истекает через пятнадцать минут.",
+	"add.linkSpent": "Эта ссылка истекла или уже использована. Сделай новую с настроенного устройства.",
 	"add.intro":
 		"Ссылка делается для одного устройства. Открой её там, и Obsidian сам заполнит настройки. Каждому устройству — своя, чтобы потеря одного означала отзыв одного.",
 	"add.name": "Как его назвать",
@@ -331,16 +341,16 @@ const ru: Dict = {
 		"Заполнено наиболее вероятным вариантом. Показывается, когда два устройства правят один файл и надо выбрать версию.",
 	"add.create": "Создать ссылку",
 	"add.ready":
-		"На другом устройстве уже должен стоять Obsidian, с открытым волтом и этим плагином.",
+		"Открой ссылку на другом устройстве: страница на твоём сервере проведёт по шагам — установить плагин и подключиться. Там заранее нужен только Obsidian с открытым волтом.",
 	"add.scan":
-		"Наведи камеру другого устройства на этот экран. Ничего никуда не отправляется: в коде та же ссылка, что напечатана ниже.",
+		"Наведи камеру другого устройства на этот экран. В коде та же ссылка, что напечатана ниже, и больше ничего.",
 	"add.contents": "Что именно в этом коде",
 	"add.contentsUrl": "Адрес твоего сервера: {url}",
 	"add.contentsToken": "Токен, выпущенный минуту назад для устройства «{device}» и ни для чего больше",
 	"add.contentsNothingElse":
 		"Больше ничего. Ни пароля, ни заметок, ни чего-либо, что выполняется само.",
 	"add.orLink":
-		"Или возьми ссылку. Вставь её в браузер или в сообщение на другом устройстве: при открытии запустится Obsidian уже настроенным.",
+		"Или отправь ссылку. Она открывает ту же страницу с шагами по порядку; работает один раз, пятнадцать минут.",
 	"add.copy": "Скопировать ссылку",
 	"add.copyManually": "Не получилось обратиться к буферу обмена. Ссылка выделена, скопируй руками.",
 	"add.openHere": "Открыть здесь",

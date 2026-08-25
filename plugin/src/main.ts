@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: MIT
 
 import { Notice, Plugin, TAbstractFile, TFile, normalizePath } from "obsidian";
-import { ApiError, SyncClient, type ChangeEntry } from "./api";
+import { ApiError, SyncClient, type ChangeEntry, redeemJoin } from "./api";
 import { ConflictModal } from "./conflict-modal";
 import { showConflictNotice } from "./conflict-notice";
 import { RestoreModal } from "./restore-modal";
@@ -515,8 +515,28 @@ export default class LockstepPlugin extends Plugin {
 	 * Everything except the passphrase, which is deliberately never in the link.
 	 */
 	private async applySetupLink(params: Record<string, string>): Promise<void> {
-		const url = (params["url"] ?? "").trim();
-		const token = (params["token"] ?? "").trim();
+		let url = (params["url"] ?? "").trim();
+		let token = (params["token"] ?? "").trim();
+		const code = (params["code"] ?? "").trim();
+		if (url && code && !token) {
+			// The link from the join page: a code stands in for the token and is
+			// spent here, now. The page a camera saw earlier is worthless from this
+			// moment, which is the point of it.
+			try {
+				const joined = await redeemJoin(url, code);
+				token = joined.token;
+				url = joined.url || url;
+				if (joined.device && !params["device"]) params["device"] = joined.device;
+			} catch (e) {
+				new Notice(
+					e instanceof ApiError && e.status === 410
+						? t("add.linkSpent")
+						: t("notice.error", { what: t("add.title"), message: e instanceof Error ? e.message : String(e) }),
+					10000,
+				);
+				return;
+			}
+		}
 		if (!url || !token) {
 			new Notice(t("add.linkBroken"), 8000);
 			return;
@@ -589,6 +609,14 @@ export default class LockstepPlugin extends Plugin {
 			async (name) => {
 				const client = this.client();
 				if (!client) throw new Error("not configured");
+				// A page on the server with the steps in order, carrying a one-time
+				// code. A server from before the page has no such route, and gets the
+				// older link with the token in it, which still works everywhere.
+				try {
+					return (await client.createJoin(name)).url;
+				} catch (e) {
+					if (!(e instanceof ApiError) || e.status !== 404) throw e;
+				}
 				const issued = await client.issueToken(name);
 				const url = encodeURIComponent(this.settings.serverUrl);
 				const token = encodeURIComponent(issued.token);

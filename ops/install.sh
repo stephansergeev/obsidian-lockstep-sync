@@ -216,14 +216,13 @@ MANUAL
 		;;
 esac
 
-say "issuing a token for your first device"
-TOKEN="$("$BIN" token add --data "$DATA_DIR" --vault main --name "$(hostname)-first" | grep -o 'obs_[A-Za-z0-9_-]*')"
+say "making a join link for your first device"
+# A page on this server with the steps in order: install the plugin, connect. The
+# link carries a one-time code, good for an hour; the token is issued when Connect
+# is pressed on the device. Later devices get the same page from inside the plugin.
 chown -R "$USER_NAME:$USER_NAME" "$DATA_DIR"
-
-# The same link the plugin makes for later devices, so the first one is no harder
-# than the rest. Opening it in Obsidian fills the settings in.
-urlencode() { python3 -c 'import sys,urllib.parse;print(urllib.parse.quote(sys.argv[1],safe=""))' "$1" 2>/dev/null || echo "$1"; }
-SETUP="obsidian://lockstep-setup?url=$(urlencode "https://$DOMAIN")&token=$(urlencode "$TOKEN")&device=desktop"
+SETUP="$("$BIN" link --data "$DATA_DIR" --vault main --name desktop --url "https://$DOMAIN" --minutes 60 | tail -1)"
+chown -R "$USER_NAME:$USER_NAME" "$DATA_DIR"
 
 # Escape codes only where somebody is looking at a terminal. A log file gets plain text.
 if [ -t 1 ]; then BOLD=$'\e[1m'; DIM=$'\e[2m'; RESET=$'\e[0m'; else BOLD=""; DIM=""; RESET=""; fi
@@ -234,9 +233,8 @@ ${BOLD}Done.${RESET}
 
   Server URL   https://$DOMAIN
 
-First install the plugin in Obsidian (community catalogue, or BRAT with
-stephansergeev/obsidian-lockstep-sync). Then open this link on that machine
-and the plugin configures itself. ${DIM}Triple-click the line to select all of it.${RESET}
+Open this link on the device you want to set up. The page walks through installing
+the plugin and connecting; it works once, for an hour. ${DIM}Triple-click the line to select all of it.${RESET}
 
 DONE
 # OSC 8 makes the link clickable in terminals that understand it (iTerm2, Windows
