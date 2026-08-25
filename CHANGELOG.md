@@ -1,5 +1,14 @@
 # Changelog
 
+## 1.0.0
+
+The release submitted to the community catalogue. Nothing new in it: 0.16.2 with the
+number it has earned. Two-way sync through a server you run, line-level merge with
+every conflict asked rather than decided, encryption of content and names with the
+key derived on the device, encryption that can be turned on later, a join page for
+new devices, and a first sync that sends notes before attachments. Tested on a vault
+of 844 files and 1.19 GB, from a phone that started with no vault at all.
+
 ## 0.16.2
 
 Progress on the phone. Obsidian mobile has no status bar, so a first sync there had
