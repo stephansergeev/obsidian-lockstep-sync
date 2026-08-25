@@ -6,14 +6,7 @@ import { ConflictModal } from "./conflict-modal";
 import { showConflictNotice } from "./conflict-notice";
 import { RestoreModal } from "./restore-modal";
 import { AddDeviceModal } from "./onboarding";
-import {
-	VaultCipher,
-	WrongPassphrase,
-	plaintext,
-	type Cipher,
-	type PathCipher,
-	type VaultKeyParams,
-} from "./crypto";
+import { VaultCipher, WrongPassphrase, plaintext, type Cipher, type PathCipher, type VaultKeyParams, type Migration, type VaultKeyRecord } from "./crypto";
 import { t } from "./i18n";
 import { LocalIndex } from "./index-store";
 import { conflictName, defaultDeviceName, sha256, toNFC } from "./paths";
@@ -58,6 +51,8 @@ export default class LockstepPlugin extends Plugin {
 	private focusPassphrase = false;
 	/** Whether the vault already has key parameters. Null until asked. */
 	private vaultHasKey: boolean | null = null;
+	/** The migration marker last seen on the key record, while one is running. */
+	private migration: Migration | null = null;
 	/** In flight, so two callers do not both do it and both report it. */
 	private unlocking: Promise<void> | null = null;
 	/** The passphrase whose outcome is already known and already announced. */
@@ -111,9 +106,11 @@ export default class LockstepPlugin extends Plugin {
 				const text =
 					total > 0
 						? t(
-								this.engine.busy && this.engine.phase === "pull"
-									? "progress.download"
-									: this.cipher.enabled
+								this.engine.phase === "encrypt"
+									? "progress.encrypting"
+									: this.engine.busy && this.engine.phase === "pull"
+										? "progress.download"
+										: this.cipher.enabled
 										? "progress.encrypted"
 										: "progress.plain",
 								{ pct, done, total },
@@ -142,6 +139,11 @@ export default class LockstepPlugin extends Plugin {
 
 		this.addCommand({ id: "sync-now", name: t("cmd.sync"), callback: () => void this.syncNow() });
 		this.addCommand({ id: "pull-all", name: t("cmd.pull"), callback: () => void this.pullAll() });
+		this.addCommand({
+			id: "encrypt-in-place",
+			name: t("cmd.encrypt"),
+			callback: () => void this.encryptFromCommand(),
+		});
 		// A link that sets up another device. Registered before anything else, so a
 		// device that has just been installed can be configured by opening one.
 		this.registerObsidianProtocolHandler("lockstep-setup", (params) => {
@@ -318,6 +320,16 @@ export default class LockstepPlugin extends Plugin {
 		return this.encryptionWanted() && !this.locked;
 	}
 
+	/** True when this device started encrypting the vault and has not finished. */
+	migrationHere(): boolean {
+		return this.migration?.mine === true;
+	}
+
+	/** The device encrypting the vault right now, when it is not this one. */
+	migrationElsewhere(): string | null {
+		return this.migration && !this.migration.mine ? this.migration.device : null;
+	}
+
 	/**
 	 * Whether this device means to encrypt. A passphrase is the intent; there is no
 	 * switch to also flip, because a switch that must agree with a field is a step
@@ -374,18 +386,39 @@ export default class LockstepPlugin extends Plugin {
 		const client = this.client(false);
 		if (!client) return;
 		try {
-			const stored = (await client.getVaultKey()) as VaultKeyParams | null;
+			const stored = (await client.getVaultKey()) as VaultKeyRecord | null;
 			this.vaultHasKey = stored !== null;
+			this.migration = stored?.migration ?? null;
+			if (stored && this.migration && !this.migration.mine) {
+				// Another device is in the middle of re-uploading the vault encrypted.
+				// Joining now would read a vault that is half one thing and half the
+				// other. Not settled: the next pass asks again, and the wait ends on
+				// its own when the marker goes.
+				this.cipher = plaintext;
+				this.pathCipher = null;
+				this.locked = true;
+				this.cipherStatus = t("encryption.inProgressElsewhere", { device: this.migration.device });
+				this.setStatus(this.cipherStatus);
+				if (!quiet) new Notice(`Lockstep: ${this.cipherStatus}`, 8000);
+				return;
+			}
 			if (stored) {
 				const cipher = await VaultCipher.unlock(this.settings.passphrase, stored);
 				this.cipher = cipher;
 				this.pathCipher = stored.paths === "encrypted" ? await cipher.pathCipher() : null;
 				this.locked = false;
 				this.announcedEncryptedVault = false;
+				this.settledPassphrase = this.settings.passphrase;
+				if (this.migration) {
+					// Ours, and interrupted. It continues without being asked: the
+					// question was answered when the button was pressed.
+					this.cipherStatus = t("encryption.encrypting");
+					void this.encryptInPlace(quiet);
+					return;
+				}
 				this.cipherStatus = t(
 					this.pathCipher ? "encryption.readyWithPaths" : "encryption.ready",
 				);
-				this.settledPassphrase = this.settings.passphrase;
 				// Whether a vault is actually hidden is the one thing somebody turning
 				// this on wants confirmed. A grey caption under a text field is not a
 				// confirmation.
@@ -406,27 +439,26 @@ export default class LockstepPlugin extends Plugin {
 				this.cipherStatus = t("encryption.pressSet");
 				if (!quiet) new Notice(`Lockstep: ${this.cipherStatus}`, 8000);
 			} else {
-				// Names can only be hidden in a vault that starts empty. Everything
-				// already on the server is stored under a readable path, and a vault
-				// cannot hold both kinds: the client would upload every existing file a
-				// second time under its hidden name and leave the first copy behind.
+				// The same key record whether the vault starts empty or full: names
+				// hidden, content hidden. A vault that already holds readable files is
+				// brought to that state by encryptInPlace, right after the key is set.
 				const stats = await client.stats();
 				const occupied = Number(stats["files"] ?? 0) + Number(stats["folders"] ?? 0) > 0;
-				const { cipher, params } = await VaultCipher.create(this.settings.passphrase, {
-					paths: occupied ? "plain" : "encrypted",
-				});
+				const { cipher, params } = await VaultCipher.create(this.settings.passphrase);
 				this.vaultHasKey = true;
 				await client.putVaultKey(params);
 				this.cipher = cipher;
-				this.pathCipher = params.paths === "encrypted" ? await cipher.pathCipher() : null;
+				this.pathCipher = await cipher.pathCipher();
 				this.locked = false;
 				this.announcedEncryptedVault = false;
-				this.cipherStatus = t("encryption.created");
 				this.settledPassphrase = this.settings.passphrase;
-				if (!quiet) {
-					new Notice(t("encryption.created"), 10000);
-					if (occupied) new Notice(t("encryption.namesStayVisible"), 15000);
+				if (occupied) {
+					this.cipherStatus = t("encryption.encrypting");
+					await this.encryptInPlace(quiet);
+					return;
 				}
+				this.cipherStatus = t("encryption.created");
+				if (!quiet) new Notice(t("encryption.created"), 10000);
 				void this.syncNow(true);
 			}
 		} catch (e) {
@@ -720,6 +752,74 @@ export default class LockstepPlugin extends Plugin {
 			if (this.engine.takeQueued()) this.scheduleSync();
 		} catch (e) {
 			this.reportError(t("error.sync"), e);
+		} finally {
+			await this.flushJournal();
+		}
+	}
+
+	/**
+	 * The command palette's way in. Right after loading, the plugin may not have
+	 * asked the server about the key yet, so the first step is to let that settle;
+	 * then the passphrase either creates the key and starts the re-upload, or opens
+	 * an existing one and continues an interrupted run.
+	 */
+	private async encryptFromCommand(): Promise<void> {
+		if (!this.settings.passphrase) {
+			new Notice(`Lockstep: ${t("encryption.pressSet")}`, 8000);
+			return;
+		}
+		try {
+			await this.applyEncryption(true);
+			if (!this.cipher.enabled) await this.applyEncryption(false, true);
+			else await this.encryptInPlace(false);
+		} catch {
+			/* already reported */
+		}
+	}
+
+	/**
+	 * Re-upload the vault encrypted and erase the readable copies. Runs from the
+	 * device that pressed the button, and again on the next start if it was cut
+	 * short. The engine does the work; this is the reporting around it.
+	 */
+	async encryptInPlace(quiet = false): Promise<void> {
+		if (!this.cipher.enabled || !this.pathCipher) return;
+		const sealed = this.client(!quiet);
+		if (!sealed) return;
+		if (this.engine.busy) {
+			if (!quiet) new Notice(t("encryption.busy"));
+			return;
+		}
+		const plain = new SyncClient(this.settings.serverUrl, this.settings.token, this.settings.deviceName, null);
+		const started = Date.now();
+		this.setStatus(t("encryption.encrypting"));
+		this.showProgress(t("encryption.encrypting"));
+		try {
+			const report = await this.engine.encryptInPlace({
+				plain,
+				sealed,
+				cipher: this.cipher,
+				paths: this.pathCipher,
+			});
+			this.migration = null;
+			this.serverEmpty = null;
+			await this.refreshServerVault();
+			const secs = ((Date.now() - started) / 1000).toFixed(0);
+			this.cipherStatus = t("encryption.readyWithPaths");
+			this.lastSummary = t("progress.doneMigrated");
+			this.showProgress(this.lastSummary);
+			this.setStatus(this.lastSummary);
+			new Notice(
+				t("encryption.migrated", { files: report.uploaded + report.kept, secs }),
+				12000,
+			);
+			this.scheduleSync();
+		} catch (e) {
+			if (this.unloaded) return;
+			// The marker stays on the server and the passphrase stays here, so the
+			// next start, or the button, does the rest.
+			this.reportError(t("encryption.migrateStopped"), e);
+			this.showProgress(t("encryption.migrateStopped"));
 		} finally {
 			await this.flushJournal();
 		}

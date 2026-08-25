@@ -20,8 +20,15 @@ encryption below what it claims.
 ## What the design already assumes
 
 **The server is not trusted with content.** With encryption on it holds AES-256-GCM
-ciphertext and cannot read it. It does still see file and folder names, sizes and timings.
-Encrypting paths is planned and not done.
+ciphertext under sealed file and folder names, and can read neither. It does still see
+sizes, timings, and the shape of the folder tree.
+
+**Turning encryption on later erases the readable history.** A vault that was on the server
+readable is re-uploaded sealed, and the readable copies are then deleted and purged at once,
+content and revisions, rather than kept for the retention window. While that runs the server
+accepts writes only from the device doing it. What the server's disk may still hold in freed
+blocks is outside the plugin's reach; a vault that must never have been readable on the
+server should be encrypted from its first sync.
 
 **The token is the access boundary.** Anyone holding a device token can read, write and
 delete in that vault, whatever encryption is set to. Tokens are stored on the server as

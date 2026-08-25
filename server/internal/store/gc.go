@@ -2,7 +2,10 @@
 
 package store
 
-import "time"
+import (
+	"math"
+	"time"
+)
 
 // GCPolicy says what history is worth keeping.
 //
@@ -88,7 +91,20 @@ func (s *Store) ForgetDeleted(days int) (int64, error) {
 	if days <= 0 {
 		return 0, nil
 	}
-	cutoff := time.Now().AddDate(0, 0, -days).UnixMilli()
+	return s.forgetDeletedBefore(time.Now().AddDate(0, 0, -days).UnixMilli())
+}
+
+// ForgetAllDeleted erases every deleted file right now, whatever the retention
+// window says, along with every revision of each.
+//
+// This exists for one moment: a vault that was readable on the server has just been
+// re-uploaded encrypted, and the readable copies are the tombstones. Keeping them
+// for the retention window would keep the vault readable for the retention window.
+func (s *Store) ForgetAllDeleted() (int64, error) {
+	return s.forgetDeletedBefore(math.MaxInt64)
+}
+
+func (s *Store) forgetDeletedBefore(cutoff int64) (int64, error) {
 	tx, err := s.db.Begin()
 	if err != nil {
 		return 0, err

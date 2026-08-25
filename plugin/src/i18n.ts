@@ -86,6 +86,23 @@ const en: Dict = {
 	"settings.passphrase.medium": "Medium. Four unrelated words would be stronger.",
 	"settings.passphrase.strong": "Strong.",
 
+	"settings.encrypt.descMigrate":
+		"Files on the server are readable right now. This uploads every one of them again, encrypted and under hidden names, then erases the readable copies and their history. Other devices join with the same passphrase once it is done.",
+	"settings.encrypt.migrate": "Encrypt everything",
+	"settings.encrypt.descResume":
+		"Encryption was started from this device and did not finish. It continues from where it stopped; nothing is sent twice.",
+	"settings.encrypt.resume": "Continue encrypting",
+	"banner.encrypting": "Being encrypted from {device}",
+	"encryption.inProgressElsewhere":
+		"Encryption is being turned on from {device}. This device joins when it is done.",
+	"encryption.encrypting": "Encrypting everything on the server",
+	"encryption.migrated": "Done. Everything on the server is encrypted: {files} files in {secs} s.",
+	"encryption.migrateStopped":
+		"Encryption stopped before it finished. It continues on the next start, or press Continue encrypting.",
+	"encryption.busy": "A sync is running. Try again in a moment.",
+	"progress.encrypting": "Encrypting: {pct}% ({done} of {total})",
+	"progress.doneMigrated": "Done. Everything on the server is encrypted.",
+	"cmd.encrypt": "Encrypt everything on the server",
 	"encryption.off": "Encryption is off. The server can read your notes.",
 	"encryption.locked": "Enter the passphrase to unlock this vault.",
 	"encryption.vaultIsEncrypted":
@@ -97,8 +114,6 @@ const en: Dict = {
 	"banner.hiddenNames": "Encrypted, file names included",
 	"banner.locked": "Waiting for the passphrase",
 	"banner.open": "Not encrypted",
-	"encryption.namesStayVisible":
-		"This vault already holds files, so their names stay visible to the server. Content from now on is encrypted. To hide names as well, set encryption up on an empty vault before putting anything in it.",
 	"encryption.wrong": "Wrong passphrase for this vault.",
 	"encryption.failed": "Could not unlock: {message}",
 
@@ -262,6 +277,23 @@ const ru: Dict = {
 	"settings.passphrase.medium": "Средний. Четыре несвязанных слова были бы крепче.",
 	"settings.passphrase.strong": "Сильный.",
 
+	"settings.encrypt.descMigrate":
+		"Файлы на сервере сейчас читаемы. Это загрузит каждый из них заново, зашифрованным и под скрытым именем, а затем сотрёт читаемые копии и их историю. Другие устройства подключатся с тем же паролем, когда всё закончится.",
+	"settings.encrypt.migrate": "Зашифровать всё",
+	"settings.encrypt.descResume":
+		"Шифрование было начато с этого устройства и не завершилось. Продолжится с места остановки; ничего не отправляется дважды.",
+	"settings.encrypt.resume": "Продолжить шифрование",
+	"banner.encrypting": "Шифруется с устройства {device}",
+	"encryption.inProgressElsewhere":
+		"Шифрование включается с устройства {device}. Это устройство подключится, когда всё закончится.",
+	"encryption.encrypting": "Шифрую всё на сервере",
+	"encryption.migrated": "Готово. Всё на сервере зашифровано: {files} файлов за {secs} с.",
+	"encryption.migrateStopped":
+		"Шифрование остановилось, не завершившись. Продолжится при следующем запуске или по кнопке Продолжить шифрование.",
+	"encryption.busy": "Идёт синхронизация. Попробуй через минуту.",
+	"progress.encrypting": "Шифрование: {pct}% ({done} из {total})",
+	"progress.doneMigrated": "Готово. Всё на сервере зашифровано.",
+	"cmd.encrypt": "Зашифровать всё на сервере",
 	"encryption.off": "Шифрование выключено. Сервер видит твои заметки.",
 	"encryption.locked": "Введи пароль, чтобы открыть волт.",
 	"encryption.vaultIsEncrypted":
@@ -273,8 +305,6 @@ const ru: Dict = {
 	"banner.hiddenNames": "Зашифрован, включая имена файлов",
 	"banner.locked": "Ждёт пароль",
 	"banner.open": "Не зашифрован",
-	"encryption.namesStayVisible":
-		"В волте уже есть файлы, поэтому их имена останутся видны серверу. Содержимое с этого момента шифруется. Чтобы скрыть и имена, включай шифрование на пустом волте, до того как в него что-то попадёт.",
 	"encryption.wrong": "Неверный пароль для этого волта.",
 	"encryption.failed": "Не удалось открыть: {message}",
 

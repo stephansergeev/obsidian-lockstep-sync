@@ -191,6 +191,25 @@ export class SyncClient {
 		});
 	}
 
+	/**
+	 * Mark this device as the one turning encryption on. Until the mark is cleared
+	 * the server accepts writes from nobody else, so nothing readable can land
+	 * between the moment the readable copies are listed and the moment they go.
+	 */
+	async setMigration(): Promise<void> {
+		await this.call("PUT", "/vaultkey/migration");
+	}
+
+	async clearMigration(): Promise<void> {
+		await this.call("DELETE", "/vaultkey/migration");
+	}
+
+	/** Erase every deleted file now, content and history included. */
+	async purgeDeleted(): Promise<{ files: number; bytes: number }> {
+		const resp = await this.call("DELETE", "/deleted");
+		return { files: Number(resp.json?.files ?? 0), bytes: Number(resp.json?.bytes ?? 0) };
+	}
+
 	/** Mint a token for another device on this same vault. */
 	async issueToken(name: string): Promise<{ token: string; vault: string }> {
 		const resp = await this.call("POST", "/tokens", {

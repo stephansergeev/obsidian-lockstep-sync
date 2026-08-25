@@ -81,13 +81,25 @@ export interface VaultKeyParams {
 	/**
 	 * Whether file and folder names are encrypted as well as content.
 	 *
-	 * Write-once, like everything else in this record, and only ever "encrypted" for a
-	 * vault that starts empty. A vault cannot hold both kinds: turning it on where
-	 * files already exist would upload every one of them a second time under its
-	 * hidden name and leave the readable copy behind.
+	 * Write-once, like everything else in this record. New vaults hide names. A vault
+	 * that already holds readable files gets here through SyncEngine.encryptInPlace,
+	 * which uploads every file again under its hidden name and erases the readable
+	 * copies, so the outcome is the same as having started encrypted.
 	 */
 	paths?: "plain" | "encrypted";
 }
+
+/** Who is turning encryption on for a vault that already held readable files. */
+export interface Migration {
+	/** The device, as the server names it. */
+	device: string;
+	started: number;
+	/** True for the device that is doing it, decided by the server. */
+	mine?: boolean;
+}
+
+/** The key record as the server returns it: the parameters, plus the marker while a migration runs. */
+export type VaultKeyRecord = VaultKeyParams & { migration?: Migration };
 
 export interface Cipher {
 	readonly enabled: boolean;

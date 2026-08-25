@@ -953,3 +953,129 @@ test("a first sync sends notes before attachments", async (t) => {
 	assert.ok(order.slice(0, 16).every((p) => p.endsWith(".md")), `notes did not go first: ${order.join(", ")}`);
 	assert.ok(order.indexOf("photo.png") < order.indexOf("scan.pdf"), "images before other binaries");
 });
+
+// --- turning encryption on later -----------------------------------------------
+
+async function plainPair(t) {
+	const server = await startServer();
+	const a = await makeDevice(server, "desktop", server.tokens.a);
+	const b = await makeDevice(server, "phone", server.tokens.b);
+	t.after(async () => {
+		await a.cleanup();
+		await b.cleanup();
+		await server.stop();
+	});
+	const stats = async () =>
+		(await fetch(`${server.url}/v1/stats`, { headers: { Authorization: `Bearer ${server.tokens.a}` } })).json();
+	return { server, a, b, stats };
+}
+
+test("encryption can be turned on for a vault that is already on the server", async (t) => {
+	const { server, a, b, stats } = await plainPair(t);
+	await a.edit("notes/plan.md", "the passphrase to everything is hunter2\n");
+	await a.edit("todo.md", "buy milk\n");
+	await a.vault.writeBinary("img/photo.png", new Uint8Array([1, 2, 3, 4]).buffer);
+	await a.sync();
+	await b.sync();
+	// A file the desktop has not seen yet. It must survive, so the migration takes
+	// it in before it erases anything.
+	await b.edit("from-phone.md", "phone only\n");
+	await b.sync();
+
+	const { cipher, params } = await VaultCipher.create("later is fine");
+	const paths = await cipher.pathCipher();
+	const { plain, sealed } = a.clients(paths);
+	await plain.putVaultKey(params);
+	const report = await a.engine.encryptInPlace({ plain, sealed, cipher, paths });
+	a.setCipher(cipher);
+	a.setPathCipher(paths);
+
+	assert.equal(report.pulled, 1);
+	assert.equal(report.uploaded, 4);
+	assert.equal(report.erased, 4);
+	assert.equal(await a.vault.read("from-phone.md"), "phone only\n");
+
+	// The server: four hidden entries, nothing readable, nothing restorable.
+	const live = (await server.rawChanges(server.tokens.a)).entries.filter((e) => !e.deleted);
+	assert.equal(live.length, 4);
+	for (const e of live) {
+		assert.doesNotMatch(e.path, /\.(md|png)$/);
+		await paths.decrypt(e.path);
+	}
+	assert.equal((await stats()).deleted, 0);
+	const bytes = await server.rawBytes(server.tokens.a, await paths.encrypt("notes/plan.md"));
+	assert.equal(bytes.includes("hunter2"), false);
+	assert.equal((await plain.getVaultKey()).migration, undefined);
+
+	// The desktop is settled: another pass moves nothing.
+	const again = await a.sync();
+	assert.equal(again.uploaded + again.downloaded + again.conflicts, 0, JSON.stringify(again));
+
+	// The phone joins with the passphrase and adopts what it already has, no
+	// downloads and no conflicts, then edits flow both ways as before.
+	const phoneCipher = await VaultCipher.unlock("later is fine", params);
+	b.setCipher(phoneCipher);
+	b.setPathCipher(await phoneCipher.pathCipher());
+	const joined = await b.sync();
+	assert.equal(joined.conflicts, 0, JSON.stringify(joined));
+	assert.equal(joined.downloaded, 0, JSON.stringify(joined));
+	const onPhone = Object.keys(await b.vault.snapshot()).filter((p) => !p.startsWith(".index")).sort();
+	assert.deepEqual(onPhone, ["from-phone.md", "img/photo.png", "notes/plan.md", "todo.md"]);
+
+	await b.edit("todo.md", "buy milk and bread\n");
+	await b.sync();
+	await a.sync();
+	assert.equal(await a.vault.read("todo.md"), "buy milk and bread\n");
+	await a.delete("notes/plan.md");
+	await a.sync();
+	await b.sync();
+	assert.equal(await b.vault.exists("notes/plan.md"), false);
+});
+
+test("an interrupted encryption finishes where it stopped, and nobody else writes meanwhile", async (t) => {
+	const { server, a, b } = await plainPair(t);
+	for (let i = 1; i <= 6; i++) await a.edit(`n${i}.md`, `note ${i}\n`);
+	await a.sync();
+	await b.sync();
+
+	const { cipher, params } = await VaultCipher.create("pw");
+	const paths = await cipher.pathCipher();
+	const { plain, sealed } = a.clients(paths);
+	await plain.putVaultKey(params);
+
+	// The app dies during the third upload.
+	let calls = 0;
+	const dying = {
+		enabled: true,
+		decrypt: (d) => cipher.decrypt(d),
+		encrypt: async (d) => {
+			if (++calls === 3) a.stop();
+			return cipher.encrypt(d);
+		},
+	};
+	await assert.rejects(a.engine.encryptInPlace({ plain, sealed, cipher: dying, paths }), /stopped/);
+
+	// The marker stands, the readable copies are all still there, and the phone
+	// cannot write until it is done.
+	assert.equal((await plain.getVaultKey()).migration?.device, "desktop");
+	const mid = (await server.rawChanges(server.tokens.a)).entries.filter((e) => !e.deleted);
+	assert.equal(mid.filter((e) => e.path.endsWith(".md")).length, 6);
+	assert.ok(mid.length > 6, "some hidden uploads should have landed before the stop");
+	await assert.rejects(
+		b.clients(null).plain.putFile("late.md", 0, new TextEncoder().encode("x").buffer, Date.now()),
+		/encryption is being turned on from desktop/,
+	);
+
+	a.resume();
+	const report = await a.engine.encryptInPlace({ plain, sealed, cipher, paths });
+	assert.equal(report.uploaded + report.kept, 6);
+	assert.ok(report.kept >= 1, "files sent before the stop are not sent again");
+	assert.equal(report.erased, 6);
+	const live = (await server.rawChanges(server.tokens.a)).entries.filter((e) => !e.deleted);
+	assert.equal(live.length, 6);
+	assert.equal(live.filter((e) => e.path.endsWith(".md")).length, 0);
+	assert.equal((await plain.getVaultKey()).migration, undefined);
+	// Each note exactly once under its hidden name.
+	const names = await Promise.all(live.map((e) => paths.decrypt(e.path)));
+	assert.deepEqual(names.sort(), ["n1.md", "n2.md", "n3.md", "n4.md", "n5.md", "n6.md"]);
+});

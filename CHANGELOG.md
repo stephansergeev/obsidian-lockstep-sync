@@ -1,5 +1,16 @@
 # Changelog
 
+## 0.15.0
+
+Encryption can be turned on for a vault that is already on the server. Encrypt
+everything, in the settings, uploads every file again sealed and under a hidden name,
+then erases the readable copies and their history at once. It first takes in anything
+the server holds that the device does not, so nothing is erased that was never
+re-uploaded; it continues from where it stopped if the app is closed halfway; and the
+server accepts writes from no other device until it is done. A device that had the
+vault readable joins afterwards by adopting what it already has, without downloading
+it again, and keeps both versions of anything edited on both sides in the meantime.
+
 ## 0.14.1
 
 Notes go first. A first sync sends text before images and images before everything

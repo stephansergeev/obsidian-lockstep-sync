@@ -108,13 +108,14 @@ export async function makeDevice(server, name, token, options = {}) {
 	const logs = [];
 	const stopFlag = { value: false };
 	let cipher = options.cipher ?? { enabled: false, encrypt: async (d) => d, decrypt: async (d) => d };
+	let pathCipher = options.pathCipher ?? null;
 
 	const engine = new SyncEngine({
 		app: { vault },
 		index,
 		settings,
 		client: () =>
-			new SyncClient(server.url, token, settings.deviceName, options.pathCipher ?? null),
+			new SyncClient(server.url, token, settings.deviceName, pathCipher),
 		cipher: () => cipher,
 		guard: async () => options.guard ? options.guard() : "",
 		listLocalFiles: () => Object.keys(vault.snapshotSync()),
@@ -134,6 +135,16 @@ export async function makeDevice(server, name, token, options = {}) {
 		logs,
 		setCipher(c) {
 			cipher = c;
+		},
+		setPathCipher(pc) {
+			pathCipher = pc;
+		},
+		/** Clients the way the plugin builds them for encryptInPlace. */
+		clients(pc) {
+			return {
+				plain: new SyncClient(server.url, token, settings.deviceName, null),
+				sealed: new SyncClient(server.url, token, settings.deviceName, pc),
+			};
 		},
 		/** Pretend the plugin was unloaded mid-pass. */
 		stop() {

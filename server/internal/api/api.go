@@ -60,11 +60,14 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("DELETE /v1/file", s.auth(s.deleteFile))
 	mux.HandleFunc("POST /v1/rename", s.auth(s.rename))
 	mux.HandleFunc("GET /v1/deleted", s.auth(s.deleted))
+	mux.HandleFunc("DELETE /v1/deleted", s.auth(s.purgeDeleted))
 	mux.HandleFunc("POST /v1/tokens", s.auth(s.issueToken))
 	mux.HandleFunc("GET /v1/retention", s.auth(s.getRetention))
 	mux.HandleFunc("PUT /v1/retention", s.auth(s.putRetention))
 	mux.HandleFunc("GET /v1/vaultkey", s.auth(s.getVaultKey))
 	mux.HandleFunc("PUT /v1/vaultkey", s.auth(s.putVaultKey))
+	mux.HandleFunc("PUT /v1/vaultkey/migration", s.auth(s.putMigration))
+	mux.HandleFunc("DELETE /v1/vaultkey/migration", s.auth(s.clearMigration))
 	return mux
 }
 
@@ -364,6 +367,10 @@ func (s *Server) getFile(w http.ResponseWriter, r *http.Request, c ctx) {
 }
 
 func (s *Server) putFile(w http.ResponseWriter, r *http.Request, c ctx) {
+	if from, busy := encryptingElsewhere(r, c); busy {
+		writeEncrypting(w, from)
+		return
+	}
 	p, err := pathParam(r)
 	if err != nil {
 		writeErr(w, http.StatusBadRequest, "bad_path", err.Error())
@@ -415,6 +422,10 @@ func (s *Server) putFile(w http.ResponseWriter, r *http.Request, c ctx) {
 }
 
 func (s *Server) deleteFile(w http.ResponseWriter, r *http.Request, c ctx) {
+	if from, busy := encryptingElsewhere(r, c); busy {
+		writeEncrypting(w, from)
+		return
+	}
 	p, err := pathParam(r)
 	if err != nil {
 		writeErr(w, http.StatusBadRequest, "bad_path", err.Error())
@@ -446,6 +457,10 @@ type renameReq struct {
 }
 
 func (s *Server) rename(w http.ResponseWriter, r *http.Request, c ctx) {
+	if from, busy := encryptingElsewhere(r, c); busy {
+		writeEncrypting(w, from)
+		return
+	}
 	var req renameReq
 	if err := json.NewDecoder(io.LimitReader(r.Body, 1<<16)).Decode(&req); err != nil {
 		writeErr(w, http.StatusBadRequest, "bad_request", err.Error())
@@ -493,7 +508,111 @@ func (s *Server) getVaultKey(w http.ResponseWriter, r *http.Request, c ctx) {
 		return
 	}
 	w.Header().Set("Content-Type", "application/json; charset=utf-8")
+	// While the vault is being re-uploaded encrypted, every reader of the key
+	// record learns it in the same request, so no device acts on a half-encrypted
+	// vault by reading one thing and not the other.
+	if raw, err := c.files.GetMeta("encrypting"); err == nil {
+		var record, marker map[string]any
+		if json.Unmarshal([]byte(value), &record) == nil && json.Unmarshal([]byte(raw), &marker) == nil {
+			// Whether the caller is the device doing it. Decided here, because only
+			// the server knows the name it filed the marker under.
+			marker["mine"] = marker["device"] == device(r, c.tok.Name)
+			record["migration"] = marker
+			writeJSON(w, http.StatusOK, record)
+			return
+		}
+	}
 	_, _ = io.WriteString(w, value)
+}
+
+// The migration marker: which device is turning encryption on for a vault that
+// already holds readable files, and since when. It is set before the first
+// encrypted upload and removed after the last readable copy is gone, so a device
+// that reads the key record in between knows to wait rather than join.
+//
+// It can be rewritten, unlike the key parameters: an interrupted migration may be
+// finished from another device that holds every file, and that device takes it over.
+
+func (s *Server) putMigration(w http.ResponseWriter, r *http.Request, c ctx) {
+	if _, err := c.files.GetMeta("vaultkey"); errors.Is(err, store.ErrNotFound) {
+		writeErr(w, http.StatusConflict, "no_key", "set the vault key parameters first")
+		return
+	}
+	// The device is taken from the request, not the body: it has to be the same
+	// name the write handlers will compare against, and they only see requests.
+	marker, err := json.Marshal(map[string]any{
+		"device":  device(r, c.tok.Name),
+		"started": time.Now().UnixMilli(),
+	})
+	if err != nil {
+		writeErr(w, http.StatusInternalServerError, "internal", err.Error())
+		return
+	}
+	if err := c.files.PutMeta("encrypting", string(marker)); err != nil {
+		writeErr(w, http.StatusInternalServerError, "internal", err.Error())
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]any{"ok": true})
+}
+
+// encryptingElsewhere says whether a write has to wait: the vault is being
+// re-uploaded encrypted from another device, and a readable write landing now
+// would be erased with the rest of the readable copies, or survive them and leave
+// the vault half hidden. Either is worse than a short wait.
+func encryptingElsewhere(r *http.Request, c ctx) (string, bool) {
+	raw, err := c.files.GetMeta("encrypting")
+	if err != nil {
+		return "", false
+	}
+	var m struct {
+		Device string `json:"device"`
+	}
+	if json.Unmarshal([]byte(raw), &m) != nil || m.Device == device(r, c.tok.Name) {
+		return "", false
+	}
+	return m.Device, true
+}
+
+func writeEncrypting(w http.ResponseWriter, from string) {
+	writeErr(w, http.StatusLocked, "encrypting",
+		fmt.Sprintf("encryption is being turned on from %s; writes resume when it is done", from))
+}
+
+func (s *Server) clearMigration(w http.ResponseWriter, r *http.Request, c ctx) {
+	if err := c.files.DeleteMeta("encrypting"); err != nil {
+		writeErr(w, http.StatusInternalServerError, "internal", err.Error())
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]any{"ok": true})
+}
+
+// purgeDeleted erases every deleted file now, content included, instead of at the
+// end of the retention window.
+//
+// The one caller is the encryption migration, for which the deleted files are the
+// readable copies of everything. It is a real erasure and it is the client's to
+// ask for; the server does it in one place so that no device has to walk the list.
+func (s *Server) purgeDeleted(w http.ResponseWriter, r *http.Request, c ctx) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	files, err := c.files.ForgetAllDeleted()
+	if err != nil {
+		writeErr(w, http.StatusInternalServerError, "internal", err.Error())
+		return
+	}
+	live, err := c.files.LiveHashes()
+	if err != nil {
+		writeErr(w, http.StatusInternalServerError, "internal", err.Error())
+		return
+	}
+	swept, err := c.blobs.Sweep(live, false)
+	if err != nil {
+		writeErr(w, http.StatusInternalServerError, "internal", err.Error())
+		return
+	}
+	s.logger().Info("erased deleted files on request",
+		"vault", c.tok.Vault, "files", files, "bytes", swept.Bytes)
+	writeJSON(w, http.StatusOK, map[string]any{"files": files, "bytes": swept.Bytes})
 }
 
 func (s *Server) putVaultKey(w http.ResponseWriter, r *http.Request, c ctx) {

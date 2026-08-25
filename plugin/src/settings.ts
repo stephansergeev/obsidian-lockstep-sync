@@ -131,16 +131,20 @@ export class SyncSettingsTab extends PluginSettingTab {
 	private renderEncryption(containerEl: HTMLElement): void {
 		const encrypting = this.plugin.encryptionReady();
 		const locked = this.plugin.isLocked();
+		const elsewhere = this.plugin.migrationElsewhere();
+		const resumable = this.plugin.migrationHere();
 		const state = containerEl.createDiv({
 			cls: `lockstep-banner ${encrypting ? "is-safe" : locked ? "is-locked" : "is-open"}`,
 		});
 		state.createDiv({ cls: "lockstep-banner-text" }).createDiv({
 			cls: "lockstep-banner-title",
-			text: encrypting
-				? t(this.plugin.hidesNames() ? "banner.hiddenNames" : "banner.hidden")
-				: locked
-					? t("banner.locked")
-					: t("banner.open"),
+			text: elsewhere
+				? t("banner.encrypting", { device: elsewhere })
+				: encrypting
+					? t(this.plugin.hidesNames() ? "banner.hiddenNames" : "banner.hidden")
+					: locked
+						? t("banner.locked")
+						: t("banner.open"),
 		});
 
 		const meter = containerEl.createDiv({ cls: "lockstep-meter" });
@@ -148,6 +152,9 @@ export class SyncSettingsTab extends PluginSettingTab {
 		const segments = [0, 1, 2].map(() => bar.createDiv({ cls: "lockstep-meter-segment" }));
 		const label = meter.createDiv({ cls: "lockstep-meter-label" });
 		const fresh = this.plugin.vaultNeedsSetup();
+		// No key yet and files already on the server: setting the passphrase means
+		// re-uploading them hidden, and the description has to say so before the press.
+		const occupied = fresh && this.plugin.serverLooksEmpty() === false;
 
 		const judge = (value: string) => {
 			// Strength only matters while the passphrase is being chosen.
@@ -166,7 +173,17 @@ export class SyncSettingsTab extends PluginSettingTab {
 
 		const row = new Setting(containerEl)
 			.setName(t("settings.encrypt.name"))
-			.setDesc(t(fresh ? "settings.encrypt.descNew" : "settings.encrypt.descExisting"))
+			.setDesc(
+				t(
+					fresh
+						? occupied
+							? "settings.encrypt.descMigrate"
+							: "settings.encrypt.descNew"
+						: resumable
+							? "settings.encrypt.descResume"
+							: "settings.encrypt.descExisting",
+				),
+			)
 			.addText((text) => {
 				text.inputEl.type = "password";
 				if (this.plugin.takeFocusRequest()) {
@@ -201,12 +218,13 @@ export class SyncSettingsTab extends PluginSettingTab {
 			row.addButton((b) =>
 				b
 					.setCta()
-					.setButtonText(t("settings.encrypt.set"))
+					.setButtonText(t(occupied ? "settings.encrypt.migrate" : "settings.encrypt.set"))
 					.setTooltip(t("settings.encrypt.setTip"))
 					.onClick(async () => {
 						b.setDisabled(true);
 						try {
-							// Creates the key and starts the sync; progress lands below.
+							// Creates the key and starts the sync, or the re-upload;
+							// progress lands below.
 							await this.plugin.applyEncryption(false, true);
 						} catch {
 							/* already reported */
@@ -214,6 +232,19 @@ export class SyncSettingsTab extends PluginSettingTab {
 						}
 					}),
 			);
+		} else if (resumable) {
+			row.addButton((b) =>
+				b
+					.setCta()
+					.setButtonText(t("settings.encrypt.resume"))
+					.onClick(async () => {
+						b.setDisabled(true);
+						await this.plugin.encryptInPlace(false);
+						this.display();
+					}),
+			);
+		}
+		if (fresh || resumable) {
 			this.plugin.progressTargets.push(containerEl.createDiv({ cls: "lockstep-progress" }));
 		}
 	}

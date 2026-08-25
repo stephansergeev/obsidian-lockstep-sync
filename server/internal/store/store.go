@@ -457,6 +457,13 @@ func (s *Store) PutMeta(key, value string) error {
 	return err
 }
 
+// DeleteMeta removes a client value. Missing is not an error: the caller is
+// stating that the value should be absent, and it is.
+func (s *Store) DeleteMeta(key string) error {
+	_, err := s.db.Exec(`DELETE FROM meta WHERE key=?`, "client:"+key)
+	return err
+}
+
 // Deleted is a file that is gone but still recoverable: the tombstone, plus the
 // last revision that had content behind it.
 type Deleted struct {

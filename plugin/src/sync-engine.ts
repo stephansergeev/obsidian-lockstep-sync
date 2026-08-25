@@ -7,7 +7,7 @@ export { SyncClient } from "./api";
 import { merge3 } from "./diff3";
 import type { LocalIndex } from "./index-store";
 import { conflictName, defaultDeviceName, sha256, toNFC } from "./paths";
-import type { Cipher } from "./crypto";
+import { plaintext as plaintextCipher, type Cipher, type PathCipher } from "./crypto";
 import type { SyncSettings } from "./settings";
 
 /**
@@ -46,6 +46,27 @@ function emptyReport(): SyncReport {
 		skipped: 0,
 		errors: [],
 	};
+}
+
+/** What encryptInPlace needs beyond the engine's own dependencies. */
+export interface EncryptInPlaceArgs {
+	/** Talks to the server by the names it holds now: the readable ones. */
+	plain: SyncClient;
+	/** Talks to the server by hidden names, which is how every device talks to it afterwards. */
+	sealed: SyncClient;
+	cipher: Cipher;
+	paths: PathCipher;
+}
+
+export interface EncryptReport {
+	/** Readable files the server had that this device did not, or had differently, taken in first. */
+	pulled: number;
+	uploaded: number;
+	/** Already on the server under their hidden names with the same content: a resumed run. */
+	kept: number;
+	/** Readable copies erased, folders included. */
+	erased: number;
+	purgedBytes: number;
 }
 
 export interface EngineDeps {
@@ -96,7 +117,7 @@ export class SyncEngine {
 	 */
 	private passCipher: Cipher | null = null;
 	/** Which half of a pass is running, for progress wording. */
-	phase: "idle" | "pull" | "push" = "idle";
+	phase: "idle" | "pull" | "push" | "encrypt" = "idle";
 	private running = false;
 	private queued = false;
 
@@ -112,9 +133,28 @@ export class SyncEngine {
 	private async resetCursorIfCipherChanged(): Promise<void> {
 		const now = this.deps.cipher().enabled;
 		if (this.deps.index.readEncrypted === now) return;
+		if (now) this.forgetServerRevisions();
 		this.deps.index.setReadEncrypted(now);
 		this.deps.index.resetCursor();
 		await this.deps.index.save();
+	}
+
+	/**
+	 * Keep what is known about the files on disk, forget what was known about the
+	 * server's copies of them.
+	 *
+	 * This device read the vault readable, and the vault has since been encrypted:
+	 * every file on the server is now a different entry under a different name, and
+	 * the revisions the index remembers belong to entries that no longer exist. A
+	 * merge based on them would fetch the wrong ancestor. With the base gone, a file
+	 * that is the same on both sides is simply adopted, and one that differs is kept
+	 * in both versions, which is the honest answer when the ancestor is unknown.
+	 */
+	private forgetServerRevisions(): void {
+		for (const path of this.deps.index.paths()) {
+			const entry = this.deps.index.get(path);
+			if (entry) this.deps.index.set(path, { ...entry, base_rev: 0, base_hash: "" });
+		}
 	}
 
 	/** Settings are edited in place by the settings tab, so the engine re-reads them. */
@@ -272,6 +312,162 @@ export class SyncEngine {
 			await this.deps.index.save();
 		}
 		return report;
+	}
+
+	/**
+	 * Turn encryption on for a vault that is already on the server, readable.
+	 *
+	 * Three moves, in an order that never leaves a file in neither form:
+	 *
+	 *   1. Take in whatever the server holds readable that this device does not,
+	 *      through the ordinary pull, so that nothing is erased that was never
+	 *      re-uploaded. A file edited on both sides is kept in both versions, as it
+	 *      would be in any sync.
+	 *   2. Upload every local file under its hidden name, encrypted, notes first. A
+	 *      file already there with the same content is left alone, which is what
+	 *      makes an interrupted run finish rather than start over.
+	 *   3. Erase the readable copies, then their history, then the marker.
+	 *
+	 * The server accepts writes from nobody else while the marker stands, so the
+	 * list taken in step 1 is still the truth in step 3. Every step can be repeated:
+	 * if the app dies at any point the next run does the remaining part and the
+	 * skipped parts cost a hash each.
+	 */
+	async encryptInPlace(args: EncryptInPlaceArgs): Promise<EncryptReport> {
+		if (this.running) throw new Error("a sync is running; try again in a moment");
+		this.running = true;
+		this.phase = "encrypt";
+		const adapter = this.deps.app.vault.adapter;
+		const out: EncryptReport = { pulled: 0, uploaded: 0, kept: 0, erased: 0, purgedBytes: 0 };
+		try {
+			await args.plain.setMigration();
+
+			// What the server holds, sorted by which name it holds it under. A name
+			// the key cannot open is a readable one from before.
+			const readable = new Map<string, ChangeEntry>();
+			const hidden = new Map<string, ChangeEntry>();
+			for (let since = 0; ; ) {
+				const page = await args.plain.changes(since, 500);
+				for (const entry of page.entries) {
+					if (entry.deleted) continue;
+					let local: string | null = null;
+					try {
+						local = await args.paths.decrypt(entry.path);
+					} catch {
+						local = null;
+					}
+					if (local === null) readable.set(toNFC(entry.path), entry);
+					else hidden.set(toNFC(local), entry);
+				}
+				since = page.next_seq;
+				if (!page.has_more) break;
+			}
+			this.trace(`encrypt: server holds ${readable.size} readable, ${hidden.size} hidden`);
+
+			// 1. Pull the readable entries, exactly as a plaintext pass would.
+			this.passCipher = plaintextCipher;
+			const pull = emptyReport();
+			for (const [path, entry] of readable) {
+				if (this.deps.stopped()) throw new Error("stopped");
+				if (this.isExcluded(path)) continue;
+				await this.applyRemote(args.plain, entry, path, pull);
+			}
+			out.pulled = pull.downloaded + pull.merged + pull.conflicts;
+			this.adoptUnknownFiles();
+			// Moves not yet sent are moot: the destination goes up under its own name
+			// and the source is about to be erased with every other readable path.
+			for (const rename of [...this.deps.index.renames]) this.deps.index.clearRename(rename);
+			await this.deps.index.save();
+
+			// 2. Upload everything on disk, hidden. Notes first, as on a first sync.
+			this.passCipher = args.cipher;
+			const onDisk = new Set<string>();
+			for (const path of [...this.deps.listLocalFiles(), ...this.deps.index.paths()]) {
+				if (this.isExcluded(path) || this.deps.index.get(path)?.folder) continue;
+				if (await adapter.exists(path)) onDisk.add(path);
+			}
+			const queue = [...onDisk].sort((a, b) => weight(a) - weight(b) || a.localeCompare(b));
+			let done = 0;
+			let next = 0;
+			let lastCheckpoint = Date.now();
+			const one = async (path: string): Promise<void> => {
+				if (this.isFolder(path)) return;
+				const data = await adapter.readBinary(path);
+				const hash = await sha256(data);
+				const have = hidden.get(toNFC(path));
+				if (have && (await this.matchesRemote(data, have.hash))) {
+					this.deps.index.set(path, {
+						base_rev: have.rev,
+						base_hash: have.hash ?? "",
+						plain_hash: hash,
+						local_hash: hash,
+						mtime: have.mtime,
+						dirty: false,
+					});
+					out.kept++;
+					return;
+				}
+				const sealed = await args.cipher.encrypt(data);
+				const res = await args.sealed.putFile(path, have?.rev ?? 0, sealed, Date.now());
+				this.deps.index.set(path, {
+					base_rev: res.rev,
+					base_hash: res.hash || (await sha256(sealed)),
+					plain_hash: hash,
+					local_hash: hash,
+					mtime: Date.now(),
+					dirty: false,
+				});
+				out.uploaded++;
+				this.trace(`encrypted ${path} (${data.byteLength} bytes)`);
+			};
+			const worker = async (): Promise<void> => {
+				while (next < queue.length) {
+					if (this.deps.stopped()) throw new Error("stopped");
+					const path = queue[next++] as string;
+					await one(path);
+					done++;
+					this.deps.onProgress?.(done, queue.length, path);
+					if (Date.now() - lastCheckpoint > 2000) {
+						lastCheckpoint = Date.now();
+						await this.deps.index.save();
+					}
+				}
+			};
+			await Promise.all(Array.from({ length: Math.min(4, queue.length) }, worker));
+			await this.deps.index.save();
+
+			// 3. The readable copies go, files before the folders that held them.
+			let lastSeq = 0;
+			const targets = [...readable.entries()].sort((a, b) => Number(a[1].folder) - Number(b[1].folder));
+			for (const [path, entry] of targets) {
+				if (this.deps.stopped()) throw new Error("stopped");
+				const res = await args.plain.deleteFile(path, entry.rev);
+				lastSeq = Math.max(lastSeq, res.seq);
+				out.erased++;
+			}
+			// Paths the index still knows that are not on disk were deleted here and
+			// never sent; their readable copies are gone with the rest.
+			for (const path of this.deps.index.paths()) {
+				if (!(await adapter.exists(path))) this.deps.index.remove(path);
+			}
+			out.purgedBytes = (await args.plain.purgeDeleted()).bytes;
+			await args.plain.clearMigration();
+
+			// This device has seen everything it just did. From here it reads with
+			// the key, and the cursor starts past its own work.
+			this.deps.index.setReadEncrypted(true);
+			this.deps.index.setLastSeq(lastSeq);
+			this.trace(
+				`encrypt: done, ${out.pulled} pulled, ${out.uploaded} uploaded, ${out.kept} kept, ` +
+					`${out.erased} readable copies erased, ${out.purgedBytes} bytes purged`,
+			);
+			return out;
+		} finally {
+			this.phase = "idle";
+			this.passCipher = null;
+			this.running = false;
+			await this.deps.index.save();
+		}
 	}
 
 	/**

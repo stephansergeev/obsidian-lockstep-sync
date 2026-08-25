@@ -599,3 +599,82 @@ func TestADeviceCanIssueATokenForAnotherDevice(t *testing.T) {
 		t.Fatalf("an empty name must be refused, got %d", resp.StatusCode)
 	}
 }
+
+// --- turning encryption on later ----------------------------------------------
+
+func TestPurgeErasesDeletedFilesNow(t *testing.T) {
+	h := newHarness(t)
+	first := h.put(h.deskTok, "a.md", 0, "readable text")
+	h.del(h.deskTok, "a.md", first.Rev)
+
+	code, _ := h.get(h.deskTok, "a.md", first.Rev)
+	if code != 200 {
+		t.Fatalf("old revision should still be readable before the purge, got %d", code)
+	}
+	resp, body := h.do(h.deskTok, "DELETE", "/v1/deleted", nil, nil)
+	if resp.StatusCode != 200 {
+		t.Fatalf("purge: %d %s", resp.StatusCode, body)
+	}
+	var out struct{ Files int64 `json:"files"` }
+	_ = json.Unmarshal(body, &out)
+	if out.Files != 1 {
+		t.Fatalf("purge should report the one erased file, got %d", out.Files)
+	}
+	if code, _ := h.get(h.deskTok, "a.md", first.Rev); code != 404 {
+		t.Fatalf("content must be gone after the purge, got %d", code)
+	}
+	_, body = h.do(h.deskTok, "GET", "/v1/deleted", nil, nil)
+	if strings.Contains(string(body), "a.md") {
+		t.Fatalf("purged file still listed as restorable: %s", body)
+	}
+	_, body = h.do(h.deskTok, "GET", "/v1/changes?since=0", nil, nil)
+	if strings.Contains(string(body), "a.md") {
+		t.Fatalf("purged file still in the change log: %s", body)
+	}
+}
+
+func TestMigrationMarkerLocksOutOtherDevices(t *testing.T) {
+	h := newHarness(t)
+	if resp, _ := h.do(h.deskTok, "PUT", "/v1/vaultkey/migration", nil, nil); resp.StatusCode != 409 {
+		t.Fatalf("a marker without key parameters should be refused, got %d", resp.StatusCode)
+	}
+	h.do(h.deskTok, "PUT", "/v1/vaultkey", strings.NewReader(`{"v":1,"kdf":"Argon2id"}`), nil)
+	if resp, body := h.do(h.deskTok, "PUT", "/v1/vaultkey/migration", nil, nil); resp.StatusCode != 200 {
+		t.Fatalf("marker: %d %s", resp.StatusCode, body)
+	}
+
+	// Every reader of the key record sees the marker, and learns whose it is.
+	_, body := h.do(h.phoneTok, "GET", "/v1/vaultkey", nil, nil)
+	var seen struct {
+		Migration struct {
+			Device string `json:"device"`
+			Mine   bool   `json:"mine"`
+		} `json:"migration"`
+	}
+	_ = json.Unmarshal(body, &seen)
+	if seen.Migration.Device != "desk-01" || seen.Migration.Mine {
+		t.Fatalf("phone should see desk's marker as not its own: %s", body)
+	}
+	_, body = h.do(h.deskTok, "GET", "/v1/vaultkey", nil, nil)
+	_ = json.Unmarshal(body, &seen)
+	if !seen.Migration.Mine {
+		t.Fatalf("desk should see the marker as its own: %s", body)
+	}
+
+	// The other device cannot write; the migrating one can.
+	if r := h.put(h.phoneTok, "late.md", 0, "written during encryption"); r.Status != 423 {
+		t.Fatalf("phone write during encryption should get 423, got %d", r.Status)
+	}
+	if r := h.put(h.deskTok, "hidden-name", 0, "ciphertext"); r.Status != 200 {
+		t.Fatalf("desk write during its own encryption should pass, got %d", r.Status)
+	}
+
+	h.do(h.deskTok, "DELETE", "/v1/vaultkey/migration", nil, nil)
+	if r := h.put(h.phoneTok, "late.md", 0, "after"); r.Status != 200 {
+		t.Fatalf("phone write after encryption should pass, got %d", r.Status)
+	}
+	_, body = h.do(h.phoneTok, "GET", "/v1/vaultkey", nil, nil)
+	if strings.Contains(string(body), "migration") {
+		t.Fatalf("marker should be gone: %s", body)
+	}
+}

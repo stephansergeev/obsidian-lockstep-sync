@@ -75,9 +75,14 @@ the passphrase.
 ## Encryption
 
 Type a passphrase in the settings and notes are sealed on the device with AES-256-GCM
-before they leave; on a vault that starts empty, file and folder names are sealed
-too. The key comes from the passphrase through Argon2id and goes nowhere. A wrong
-passphrase stops syncing; it never falls back to plaintext.
+before they leave, file and folder names included. The key comes from the passphrase
+through Argon2id and goes nowhere. A wrong passphrase stops syncing; it never falls
+back to plaintext.
+
+It can be turned on later, on a vault already on the server. The plugin uploads every
+file again, sealed, then erases the readable copies and their history; other devices
+join with the same passphrase once it is done. If the app is closed halfway, it
+continues on the next start.
 
 Choose the passphrase as if it were permanent, because it is: set once per vault,
 never changeable, never recoverable. Losing it does not lose your notes, since
