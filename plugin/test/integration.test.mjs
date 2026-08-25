@@ -936,16 +936,20 @@ test("unloading the plugin stops a running pass, and the next one finishes the j
 test("a first sync sends notes before attachments", async (t) => {
 	// The other device receives in upload order, so on a vault of many notes and a
 	// gigabyte of attachments every note is readable there within the first minute.
-	// That minute is where somebody decides whether this works.
+	// Four uploads run at once, so completion order is not start order: what is
+	// guaranteed is that no attachment starts until every note has been taken.
 	const { a, cleanup } = await twoDevices();
 	t.after(cleanup);
 
+	for (let i = 0; i < 20; i++) await a.vault.write(`note-${String(i).padStart(2, "0")}.md`, `text ${i}\n`);
 	await a.vault.writeBinary("scan.pdf", new Uint8Array(2048).buffer);
 	await a.vault.writeBinary("photo.png", new Uint8Array(512).buffer);
-	await a.vault.write("z-note.md", "text\n");
-	await a.vault.write("a-note.md", "text\n");
 	await a.sync();
 
 	const order = a.logs.filter((l) => l.includes(" sent ")).map((l) => l.split(" sent ")[1].split(" in ")[0]);
-	assert.deepEqual(order, ["a-note.md", "z-note.md", "photo.png", "scan.pdf"]);
+	assert.equal(order.length, 22);
+	// With four in flight, an attachment can only start after at least sixteen
+	// notes have finished, so the first sixteen completions are all notes.
+	assert.ok(order.slice(0, 16).every((p) => p.endsWith(".md")), `notes did not go first: ${order.join(", ")}`);
+	assert.ok(order.indexOf("photo.png") < order.indexOf("scan.pdf"), "images before other binaries");
 });
