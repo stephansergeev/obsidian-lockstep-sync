@@ -932,3 +932,20 @@ test("unloading the plugin stops a running pass, and the next one finishes the j
 	await b.sync();
 	assert.equal(await b.vault.read("n/39.md"), "note 39\n");
 });
+
+test("a first sync sends notes before attachments", async (t) => {
+	// The other device receives in upload order, so on a vault of many notes and a
+	// gigabyte of attachments every note is readable there within the first minute.
+	// That minute is where somebody decides whether this works.
+	const { a, cleanup } = await twoDevices();
+	t.after(cleanup);
+
+	await a.vault.writeBinary("scan.pdf", new Uint8Array(2048).buffer);
+	await a.vault.writeBinary("photo.png", new Uint8Array(512).buffer);
+	await a.vault.write("z-note.md", "text\n");
+	await a.vault.write("a-note.md", "text\n");
+	await a.sync();
+
+	const order = a.logs.filter((l) => l.includes(" sent ")).map((l) => l.split(" sent ")[1].split(" in ")[0]);
+	assert.deepEqual(order, ["a-note.md", "z-note.md", "photo.png", "scan.pdf"]);
+});

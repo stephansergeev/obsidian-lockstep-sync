@@ -109,9 +109,10 @@ const en: Dict = {
 	"settings.addDevice.button": "Link device",
 	"settings.initial.name": "Initial sync",
 	"settings.initial.desc":
-		"One press, once: your {count} files go to the server as they are, not encrypted, and from then on syncing is fully automatic. To encrypt them instead, set a passphrase below and it starts on its own.",
+		"One press, once: your {count} files go to the server as they are, not encrypted, and from then on syncing is fully automatic. Notes go first, so you can link your phone right away. To encrypt instead, set a passphrase below and it starts on its own.",
 	"settings.initial.button": "Initial sync",
 	"progress.plain": "Syncing: {pct}% ({done} of {total})",
+	"progress.download": "Downloading: {pct}% ({done} of {total})",
 	"progress.encrypted": "Encrypted sync: {pct}% ({done} of {total})",
 	"progress.done": "Done. All files synced.",
 	"progress.doneEncrypted": "Done. All files synced, encrypted.",
@@ -284,9 +285,10 @@ const ru: Dict = {
 	"settings.addDevice.button": "Подключить",
 	"settings.initial.name": "Первый синк",
 	"settings.initial.desc":
-		"Одно нажатие, один раз: {count} файлов уйдут на сервер как есть, без шифрования, а дальше синхронизация полностью автоматическая. Чтобы зашифровать, задай пароль ниже: она начнётся сама.",
+		"Одно нажатие, один раз: {count} файлов уйдут на сервер как есть, без шифрования, а дальше синхронизация полностью автоматическая. Заметки идут первыми, так что телефон можно подключать сразу. Чтобы зашифровать, задай пароль ниже: она начнётся сама.",
 	"settings.initial.button": "Первый синк",
 	"progress.plain": "Синхронизация: {pct}% ({done} из {total})",
+	"progress.download": "Загрузка: {pct}% ({done} из {total})",
 	"progress.encrypted": "Шифрованная синхронизация: {pct}% ({done} из {total})",
 	"progress.done": "Готово. Все файлы синхронизированы.",
 	"progress.doneEncrypted": "Готово. Все файлы синхронизированы, зашифрованы.",

@@ -63,6 +63,8 @@ export interface EngineDeps {
 	onConflict: (path: string, copy: string) => void;
 	/** Every file path in the vault right now. Cheap: Obsidian keeps this in memory. */
 	listLocalFiles: () => string[];
+	/** How many files the server holds, or 0 if unknown. Gives a pull a denominator. */
+	serverFileCount?: () => number;
 	/**
 	 * True once the plugin has been unloaded. A pass is a chain of awaits, and
 	 * unloading does not cancel it: an updated plugin's old copy kept uploading for
@@ -93,6 +95,8 @@ export class SyncEngine {
 	 * running upload, and the tail of that pass went up in plaintext.
 	 */
 	private passCipher: Cipher | null = null;
+	/** Which half of a pass is running, for progress wording. */
+	phase: "idle" | "pull" | "push" = "idle";
 	private running = false;
 	private queued = false;
 
@@ -256,10 +260,13 @@ export class SyncEngine {
 			// the resurrected file as a local edit, and pushed it to every other
 			// device. Telling the server where things live first closes the window.
 			await this.flushRenames(client, report);
+			this.phase = "pull";
 			await this.pull(client, report);
 			this.adoptUnknownFiles();
+			this.phase = "push";
 			await this.push(client, report);
 		} finally {
+			this.phase = "idle";
 			this.passCipher = null;
 			this.running = false;
 			await this.deps.index.save();
@@ -340,11 +347,12 @@ export class SyncEngine {
 					}
 					this.deps.index.setLastSeq(entry.seq);
 					await checkpoint();
-					this.deps.onProgress?.(
-						report.downloaded + report.renamed + report.merged + report.deleted,
-						0,
-						path,
-					);
+					// A catch-up pull has a denominator: the number of files the server
+					// holds. It is only exact for a device starting from nothing, which
+					// is exactly when somebody is watching the number.
+					const arrived = report.downloaded + report.renamed + report.merged;
+					const total = this.deps.index.lastSeq === 0 || arrived > 0 ? (this.deps.serverFileCount?.() ?? 0) : 0;
+					this.deps.onProgress?.(arrived, arrived >= 5 ? total : 0, path);
 				}
 				this.deps.index.setLastSeq(page.next_seq);
 				if (!page.has_more || this.deps.stopped()) break;
@@ -660,10 +668,17 @@ export class SyncEngine {
 
 		// Counted before anything is sent, so the first sync of a large vault can say
 		// how far along it is rather than only that it is moving.
-		const pending = this.deps.index.paths().filter((path) => {
-			const entry = this.deps.index.get(path);
-			return entry !== undefined && !entry.folder && entry.dirty === true && !this.isExcluded(path);
-		});
+		const pending = this.deps.index
+			.paths()
+			.filter((path) => {
+				const entry = this.deps.index.get(path);
+				return entry !== undefined && !entry.folder && entry.dirty === true && !this.isExcluded(path);
+			})
+			// Notes first, attachments last. The other device receives in this order,
+			// so on a vault of a thousand notes and a gigabyte of PDFs every note is
+			// readable there within the first minute, while the PDFs are still coming.
+			// That minute is where somebody decides whether this works.
+			.sort((a, b) => weight(a) - weight(b) || a.localeCompare(b));
 		let done = 0;
 		let next = 0;
 		let lastCheckpoint = Date.now();
@@ -982,6 +997,14 @@ export class SyncEngine {
 		this.deps.index.clearConflict(path);
 		await this.deps.index.save();
 	}
+}
+
+/** Sort key for the first sync: text before everything else, big binaries last. */
+function weight(path: string): number {
+	const ext = path.slice(path.lastIndexOf(".") + 1).toLowerCase();
+	if (ext === "md" || ext === "canvas" || ext === "txt" || ext === "json") return 0;
+	if (ext === "png" || ext === "jpg" || ext === "jpeg" || ext === "webp" || ext === "gif" || ext === "svg") return 1;
+	return 2;
 }
 
 function describe(e: unknown): string {

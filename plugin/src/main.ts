@@ -66,6 +66,8 @@ export default class LockstepPlugin extends Plugin {
 	private serverVault = "";
 	/** Whether the bound server vault holds nothing yet. Cached once it is false. */
 	private serverEmpty: boolean | null = null;
+	/** How many files the server reported last time it was asked. */
+	private serverFiles = 0;
 	private interval: number | null = null;
 	/** Set on unload; a running pass stops at the next file and writes nothing more. */
 	private unloaded = false;
@@ -99,18 +101,23 @@ export default class LockstepPlugin extends Plugin {
 			guard: (manual) => this.reasonNotToSync(manual),
 			listLocalFiles: () => this.app.vault.getFiles().map((f) => f.path),
 			stopped: () => this.unloaded,
+			serverFileCount: () => this.serverFiles,
 			trace: (line) => this.traceLine(line),
 			onProgress: (done, total, path) => {
 				// Movement while a long sync runs, and a percentage where the total is
 				// known. Somebody watching a first sync needs to see how far it is, not
 				// a word that never changes.
+				const pct = total > 0 ? Math.min(100, Math.round((done / total) * 100)) : 0;
 				const text =
 					total > 0
-						? t(this.cipher.enabled ? "progress.encrypted" : "progress.plain", {
-								pct: Math.round((done / total) * 100),
-								done,
-								total,
-							})
+						? t(
+								this.engine.busy && this.engine.phase === "pull"
+									? "progress.download"
+									: this.cipher.enabled
+										? "progress.encrypted"
+										: "progress.plain",
+								{ pct, done, total },
+							)
 						: t("status.progress", { done, path: path.split("/").pop() ?? path });
 				this.setStatus(text);
 				this.showProgress(text);
@@ -255,7 +262,8 @@ export default class LockstepPlugin extends Plugin {
 		if (this.serverEmpty === false) return false;
 		try {
 			const stats = await client.stats();
-			this.serverEmpty = Number(stats["files"] ?? 0) === 0 && Number(stats["seq"] ?? 0) === 0;
+			this.serverFiles = Number(stats["files"] ?? 0);
+			this.serverEmpty = this.serverFiles === 0 && Number(stats["seq"] ?? 0) === 0;
 		} catch {
 			return false; // cannot tell; do not block on a hiccup
 		}
@@ -271,7 +279,8 @@ export default class LockstepPlugin extends Plugin {
 		try {
 			const stats = await client.stats();
 			this.serverVault = String(stats["vault"] ?? "");
-			this.serverEmpty = Number(stats["files"] ?? 0) === 0 && Number(stats["seq"] ?? 0) === 0;
+			this.serverFiles = Number(stats["files"] ?? 0);
+			this.serverEmpty = this.serverFiles === 0 && Number(stats["seq"] ?? 0) === 0;
 		} catch {
 			this.serverVault = "";
 		}
@@ -488,6 +497,8 @@ export default class LockstepPlugin extends Plugin {
 		if (params["device"]) this.settings.deviceName = params["device"].trim();
 		await this.saveSettings();
 		await this.refreshServerVault();
+		// Also start a pass right away where nothing blocks it, and keep the
+		// denominator fresh so the first pull shows a percentage.
 
 		// An encrypted vault needs a passphrase before anything can happen, so the
 		// switch is turned on for them and the cursor is put in the field. Telling

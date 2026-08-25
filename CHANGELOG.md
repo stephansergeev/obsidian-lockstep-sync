@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.14.1
+
+Notes go first. A first sync sends text before images and images before everything
+else, so the other device has every note readable within its first minute while the
+gigabyte of PDFs is still on its way. A device catching up from nothing shows a
+percentage of the files the server holds rather than a bare count.
+
 ## 0.14.0
 
 The first real vault went through, and fixed three things on its way.
