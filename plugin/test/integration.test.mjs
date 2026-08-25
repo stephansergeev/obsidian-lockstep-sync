@@ -885,3 +885,27 @@ test("wiping the passphrase mid-pass leaks nothing", async (t) => {
 		assert.equal(raw.includes("secret number"), false, `${entry.path} went up readable`);
 	}
 });
+
+test("a vault that existed before the plugin is uploaded on its first sync", async (t) => {
+	// The watcher never mentions files that were there before it started, and that
+	// is every file in a vault somebody actually wants to sync. The first sync of
+	// such a vault used to finish instantly, up to date, having sent nothing.
+	const { a, b, cleanup } = await twoDevices();
+	t.after(cleanup);
+
+	// Written straight to disk, bypassing the index entirely, like a pre-existing vault.
+	await a.vault.write("Notes/one.md", "first\n");
+	await a.vault.write("Notes/deep/two.md", "second\n");
+	await a.vault.write("three.md", "third\n");
+
+	const report = await a.sync();
+	assert.equal(report.uploaded, 3, "every pre-existing file must go up");
+
+	await b.sync();
+	assert.equal(await b.vault.read("Notes/deep/two.md"), "second\n");
+	assert.equal(await b.vault.read("three.md"), "third\n");
+
+	// And a second pass sends nothing again.
+	const again = await a.sync();
+	assert.equal(again.uploaded, 0);
+});

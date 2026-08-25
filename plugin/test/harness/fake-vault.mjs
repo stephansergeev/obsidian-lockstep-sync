@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: MIT
 
 import fs from "node:fs/promises";
+import fsSync from "node:fs";
 import path from "node:path";
 
 /**
@@ -88,6 +89,21 @@ export class FakeVault {
 			throw new Error(`Path is a directory: rm returned EISDIR (is a directory) ${p}`);
 		}
 		await fs.rm(this.full(p), { recursive: true });
+	}
+
+	/** Every file path, synchronously, the way Obsidian's in-memory index answers. */
+	snapshotSync() {
+		const out = {};
+		const walk = (dir, prefix) => {
+			for (const entry of fsSync.readdirSync(dir, { withFileTypes: true })) {
+				const rel = prefix ? `${prefix}/${entry.name}` : entry.name;
+				if (entry.name.startsWith(".")) continue;
+				if (entry.isDirectory()) walk(path.join(dir, entry.name), rel);
+				else out[rel] = true;
+			}
+		};
+		walk(this.root, "");
+		return out;
 	}
 
 	/** Everything in the vault, as a map of path to text. Used for assertions. */

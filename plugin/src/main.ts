@@ -85,6 +85,7 @@ export default class LockstepPlugin extends Plugin {
 			client: () => this.client(false),
 			cipher: () => this.cipher,
 			guard: (manual) => this.reasonNotToSync(manual),
+			listLocalFiles: () => this.app.vault.getFiles().map((f) => f.path),
 			trace: (line) => this.traceLine(line),
 			onProgress: (done, path) => {
 				// Movement while a long first sync runs. Somebody watching an empty

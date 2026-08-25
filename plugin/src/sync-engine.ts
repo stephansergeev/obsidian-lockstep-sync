@@ -61,6 +61,8 @@ export interface EngineDeps {
 	 */
 	guard: (manual: boolean) => Promise<string>;
 	onConflict: (path: string, copy: string) => void;
+	/** Every file path in the vault right now. Cheap: Obsidian keeps this in memory. */
+	listLocalFiles: () => string[];
 	/** Called as each file lands, so a long first sync shows movement rather than a pause. */
 	onProgress?: (done: number, path: string) => void;
 	/**
@@ -245,6 +247,7 @@ export class SyncEngine {
 			// device. Telling the server where things live first closes the window.
 			await this.flushRenames(client, report);
 			await this.pull(client, report);
+			this.adoptUnknownFiles();
 			await this.push(client, report);
 		} finally {
 			this.passCipher = null;
@@ -573,6 +576,32 @@ export class SyncEngine {
 	}
 
 	// --- push -----------------------------------------------------------------
+
+	/**
+	 * Queue every file the index has never heard of.
+	 *
+	 * The watcher only sees what happens after the plugin started. A vault that
+	 * existed before it was connected, which is every vault worth syncing, has
+	 * hundreds of files the watcher will never mention, and the first sync of it
+	 * used to finish instantly having sent nothing. Runs after pull, so files that
+	 * just arrived from the server are already indexed and are not sent back.
+	 */
+	private adoptUnknownFiles(): void {
+		let adopted = 0;
+		for (const path of this.deps.listLocalFiles()) {
+			const normal = toNFC(path);
+			if (this.isExcluded(normal) || this.deps.index.get(normal)) continue;
+			this.deps.index.set(normal, {
+				base_rev: 0,
+				base_hash: "",
+				local_hash: "",
+				mtime: Date.now(),
+				dirty: true,
+			});
+			adopted++;
+		}
+		if (adopted > 0) this.trace(`adopted ${adopted} files the index had never seen`);
+	}
 
 	private async flushRenames(client: SyncClient, report: SyncReport): Promise<void> {
 		// Sent as moves so the file keeps its history, instead of showing up on other
