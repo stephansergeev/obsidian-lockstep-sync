@@ -171,3 +171,23 @@
 .lockstep-progress.is-done {
 	color: var(--color-green);
 }
+
+/* Rows that carry more than a field: the meter and the progress line wrap under
+   the control instead of sitting beside it. */
+.setting-item.lockstep-row-stacked {
+	flex-wrap: wrap;
+}
+
+.setting-item.lockstep-row-stacked > .lockstep-meter,
+.setting-item.lockstep-row-stacked > .lockstep-progress {
+	flex-basis: 100%;
+	order: 3;
+	margin-bottom: 0;
+}
+
+/* Rows that are only a banner or a summary line, with no name and no control. */
+.setting-item.lockstep-row-bare {
+	display: block;
+	padding: 0;
+	border: none;
+}

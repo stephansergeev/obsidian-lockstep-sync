@@ -1,6 +1,13 @@
 // SPDX-License-Identifier: MIT
 
-import { App, Notice, PluginSettingTab, Setting } from "obsidian";
+import {
+	App,
+	Notice,
+	PluginSettingTab,
+	Setting,
+	type SettingDefinition,
+	type SettingDefinitionItem,
+} from "obsidian";
 import { otherSideLabel } from "./conflict-notice";
 import { t } from "./i18n";
 import { defaultDeviceName } from "./paths";
@@ -54,6 +61,12 @@ export const DEFAULT_SETTINGS: SyncSettings = {
  * made of. Decisions first, the three things a person acts on next, and every
  * setting that was typed once and never again at the bottom, in order of how often
  * it is likely to be touched.
+ *
+ * The tab is declared rather than drawn: Obsidian renders the definitions, indexes
+ * their names for the settings search, and re-evaluates every `visible` predicate
+ * on `update()`. Rows that are more than a field, the passphrase with its meter and
+ * its button, the conflicts, the progress line, render themselves into the row the
+ * framework hands them.
  */
 export class SyncSettingsTab extends PluginSettingTab {
 	/** Held so the field does not blank out while the server is being asked. */
@@ -71,99 +84,184 @@ export class SyncSettingsTab extends PluginSettingTab {
 		this.plugin.lastSummary = null;
 	}
 
-	override display(): void {
-		const { containerEl } = this;
-		containerEl.empty();
-		this.plugin.progressTargets = [];
-
-		this.renderConflicts(containerEl);
-		this.renderInitialSync(containerEl);
-		this.renderEncryption(containerEl);
-
-		new Setting(containerEl)
-			.setName(t("settings.addDevice.name"))
-			.setDesc(t("settings.addDevice.desc"))
-			.addButton((b) =>
-				b.setCta().setButtonText(t("settings.addDevice.button")).onClick(() => {
-					this.plugin.openAddDevice();
-				}),
-			);
-
-		new Setting(containerEl).setName(t("settings.section.more")).setHeading();
-		this.renderMore(containerEl);
-
-		containerEl.createEl("p", {
-			cls: "setting-item-description",
-			text: this.plugin.statusLine(),
-		});
+	override getControlValue(key: string): unknown {
+		const settings = this.plugin.settings as unknown as Record<string, unknown>;
+		if (key === "excludes") return this.plugin.settings.excludes.join("\n");
+		return settings[key];
 	}
+
+	override async setControlValue(key: string, value: unknown): Promise<void> {
+		const settings = this.plugin.settings as unknown as Record<string, unknown>;
+		if (key === "excludes") {
+			this.plugin.settings.excludes = String(value)
+				.split("\n")
+				.map((s) => s.trim())
+				.filter(Boolean);
+		} else {
+			settings[key] = typeof value === "string" ? value.trim() : value;
+		}
+		await this.plugin.saveSettings();
+	}
+
+	override getSettingDefinitions(): SettingDefinitionItem[] {
+		this.plugin.progressTargets = [];
+		void this.plugin.pruneConflicts();
+		if (this.plugin.serverLooksEmpty() === null) {
+			// Not asked yet. Ask, and redraw when the answer changes what is shown.
+			void this.plugin.refreshServerVault().then(() => this.update());
+		}
+		return [
+			this.conflictsGroup(),
+			this.initialSyncRow(),
+			this.lastSummaryRow(),
+			this.encryptionBanner(),
+			this.passphraseRow(),
+			{
+				name: t("settings.addDevice.name"),
+				desc: t("settings.addDevice.desc"),
+				render: (setting) => {
+					setting.addButton((b) =>
+						b.setCta().setButtonText(t("settings.addDevice.button")).onClick(() => {
+							this.plugin.openAddDevice();
+						}),
+					);
+				},
+			},
+			{
+				type: "group",
+				heading: t("settings.section.more"),
+				items: this.moreItems(),
+			},
+			{
+				name: "",
+				desc: this.plugin.statusLine(),
+				searchable: false,
+			},
+		];
+	}
+
+	// --- decisions first ----------------------------------------------------------
 
 	/**
 	 * The first sync of an existing vault into an empty server is a decision, and it
 	 * is the first thing on the screen until it has been made. Once the server holds
 	 * anything the question no longer exists and neither does the block.
 	 */
-	private renderInitialSync(containerEl: HTMLElement): void {
-		const empty = this.plugin.serverLooksEmpty();
-		if (empty === null) {
-			void this.plugin.refreshServerVault().then(() => {
-				if (this.plugin.serverLooksEmpty() === true) this.display();
-			});
-			return;
-		}
-		if (!empty || this.plugin.encryptionWanted() || this.app.vault.getFiles().length === 0) {
-			// The block is gone; if a sync just finished, say so where it was.
-			if (this.plugin.lastSummary) {
-				containerEl.createDiv({ cls: "lockstep-progress is-done", text: this.plugin.lastSummary });
-			}
-			return;
-		}
-
-		new Setting(containerEl)
-			.setName(t("settings.initial.name"))
-			.setDesc(t("settings.initial.desc", { count: this.app.vault.getFiles().length }))
-			.addButton((b) =>
-				b
-					.setCta()
-					.setButtonText(t("settings.initial.button"))
-					.onClick(async () => {
-						b.setDisabled(true);
-						await this.plugin.syncNow();
-						await this.plugin.refreshServerVault();
-						this.display();
-					}),
-			);
-		this.plugin.progressTargets.push(containerEl.createDiv({ cls: "lockstep-progress" }));
+	private initialSyncRow(): SettingDefinition {
+		const files = this.app.vault.getFiles().length;
+		return {
+			name: t("settings.initial.name"),
+			desc: t("settings.initial.desc", { count: files }),
+			visible: () =>
+				this.plugin.serverLooksEmpty() === true &&
+				!this.plugin.encryptionWanted() &&
+				this.app.vault.getFiles().length > 0,
+			render: (setting) => {
+				setting.addButton((b) =>
+					b
+						.setCta()
+						.setButtonText(t("settings.initial.button"))
+						.onClick(() => {
+							b.setDisabled(true);
+							void (async () => {
+								await this.plugin.syncNow();
+								await this.plugin.refreshServerVault();
+								this.update();
+							})();
+						}),
+				);
+				this.plugin.progressTargets.push(this.progressLine(setting));
+			},
+		};
 	}
 
-	private renderEncryption(containerEl: HTMLElement): void {
-		const encrypting = this.plugin.encryptionReady();
-		const locked = this.plugin.isLocked();
-		const elsewhere = this.plugin.migrationElsewhere();
-		const resumable = this.plugin.migrationHere();
-		const state = containerEl.createDiv({
-			cls: `lockstep-banner ${encrypting ? "is-safe" : locked ? "is-locked" : "is-open"}`,
-		});
-		state.createDiv({ cls: "lockstep-banner-text" }).createDiv({
-			cls: "lockstep-banner-title",
-			text: elsewhere
-				? t("banner.encrypting", { device: elsewhere })
-				: encrypting
-					? t(this.plugin.hidesNames() ? "banner.hiddenNames" : "banner.hidden")
-					: locked
-						? t("banner.locked")
-						: t("banner.open"),
-		});
+	/** Where the initial-sync block stood: if a sync just finished, say so there. */
+	private lastSummaryRow(): SettingDefinition {
+		return {
+			name: "",
+			searchable: false,
+			visible: () =>
+				this.plugin.lastSummary !== null &&
+				!(this.plugin.serverLooksEmpty() === true && !this.plugin.encryptionWanted()),
+			render: (setting) => {
+				setting.settingEl.empty();
+				setting.settingEl.addClass("lockstep-row-bare");
+				setting.settingEl.createDiv({
+					cls: "lockstep-progress is-done",
+					text: this.plugin.lastSummary ?? "",
+				});
+			},
+		};
+	}
 
-		const meter = containerEl.createDiv({ cls: "lockstep-meter" });
-		const bar = meter.createDiv({ cls: "lockstep-meter-bar" });
-		const segments = [0, 1, 2].map(() => bar.createDiv({ cls: "lockstep-meter-segment" }));
-		const label = meter.createDiv({ cls: "lockstep-meter-label" });
+	private encryptionBanner(): SettingDefinition {
+		return {
+			name: "",
+			searchable: false,
+			render: (setting) => {
+				const encrypting = this.plugin.encryptionReady();
+				const locked = this.plugin.isLocked();
+				const elsewhere = this.plugin.migrationElsewhere();
+				setting.settingEl.empty();
+				setting.settingEl.addClass("lockstep-row-bare");
+				const state = setting.settingEl.createDiv({
+					cls: `lockstep-banner ${encrypting ? "is-safe" : locked ? "is-locked" : "is-open"}`,
+				});
+				state.createDiv({ cls: "lockstep-banner-text" }).createDiv({
+					cls: "lockstep-banner-title",
+					text: elsewhere
+						? t("banner.encrypting", { device: elsewhere })
+						: encrypting
+							? t(this.plugin.hidesNames() ? "banner.hiddenNames" : "banner.hidden")
+							: locked
+								? t("banner.locked")
+								: t("banner.open"),
+				});
+			},
+		};
+	}
+
+	/**
+	 * The passphrase and whichever button belongs beside it: Set on a fresh vault,
+	 * Encrypt everything on a readable one, Continue on an interrupted migration,
+	 * Unlock on a device joining an encrypted vault. Enter presses that button.
+	 */
+	private passphraseRow(): SettingDefinition {
 		const fresh = this.plugin.vaultNeedsSetup();
+		const resumable = this.plugin.migrationHere();
 		// No key yet and files already on the server: setting the passphrase means
 		// re-uploading them hidden, and the description has to say so before the press.
 		const occupied = fresh && this.plugin.serverLooksEmpty() === false;
+		return {
+			name: t("settings.encrypt.name"),
+			desc: t(
+				fresh
+					? occupied
+						? "settings.encrypt.descMigrate"
+						: "settings.encrypt.descNew"
+					: resumable
+						? "settings.encrypt.descResume"
+						: "settings.encrypt.descExisting",
+			),
+			aliases: ["passphrase", "encryption", "password"],
+			render: (setting) => this.renderPassphrase(setting, fresh, resumable, occupied),
+		};
+	}
 
+	private renderPassphrase(
+		row: Setting,
+		fresh: boolean,
+		resumable: boolean,
+		occupied: boolean,
+	): void {
+		const encrypting = this.plugin.encryptionReady();
+		const elsewhere = this.plugin.migrationElsewhere();
+
+		row.settingEl.addClass("lockstep-row-stacked");
+		const meter = row.settingEl.createDiv({ cls: "lockstep-meter" });
+		const bar = meter.createDiv({ cls: "lockstep-meter-bar" });
+		const segments = [0, 1, 2].map(() => bar.createDiv({ cls: "lockstep-meter-segment" }));
+		const label = meter.createDiv({ cls: "lockstep-meter-label" });
 		const judge = (value: string) => {
 			// Strength only matters while the passphrase is being chosen.
 			meter.toggleClass("is-hidden", !value || !fresh);
@@ -179,67 +277,57 @@ export class SyncSettingsTab extends PluginSettingTab {
 			label.addClass(`is-${verdict}`);
 		};
 
-		const row = new Setting(containerEl)
-			.setName(t("settings.encrypt.name"))
-			.setDesc(
-				t(
-					fresh
-						? occupied
-							? "settings.encrypt.descMigrate"
-							: "settings.encrypt.descNew"
-						: resumable
-							? "settings.encrypt.descResume"
-							: "settings.encrypt.descExisting",
-				),
-			)
-			.addText((text) => {
-				text.inputEl.type = "password";
-				if (this.plugin.takeFocusRequest()) {
-					window.setTimeout(() => {
-						text.inputEl.focus();
-						text.inputEl.scrollIntoView({ block: "center" });
-					}, 50);
-				}
-				text
-					.setPlaceholder(t("settings.encrypt.placeholder"))
-					.setValue(this.plugin.settings.passphrase)
-					.onChange(async (v) => {
-						this.plugin.settings.passphrase = v;
-						await this.plugin.saveSettings();
-						judge(v);
-					});
-				judge(this.plugin.settings.passphrase);
-				text.inputEl.addEventListener("blur", () => {
-					void (async () => {
-						// Unlocking an existing vault is safe to try on blur: a fragment
-						// gives a wrong-passphrase notice and nothing more. Creating a key
-						// is not, and waits for the button.
-						try {
-							await this.plugin.applyEncryption();
-						} catch {
-							/* already reported */
-						}
-						this.display();
-					})();
+		row.addText((text) => {
+			text.inputEl.type = "password";
+			if (this.plugin.takeFocusRequest()) {
+				window.setTimeout(() => {
+					text.inputEl.focus();
+					text.inputEl.scrollIntoView({ block: "center" });
+				}, 50);
+			}
+			text
+				.setPlaceholder(t("settings.encrypt.placeholder"))
+				.setValue(this.plugin.settings.passphrase)
+				.onChange((v) => {
+					this.plugin.settings.passphrase = v;
+					void this.plugin.saveSettings();
+					judge(v);
 				});
+			judge(this.plugin.settings.passphrase);
+			text.inputEl.addEventListener("blur", () => {
+				void (async () => {
+					// Unlocking an existing vault is safe to try on blur: a fragment
+					// gives a wrong-passphrase notice and nothing more. Creating a key
+					// is not, and waits for the button.
+					try {
+						await this.plugin.applyEncryption();
+					} catch {
+						/* already reported */
+					}
+					this.update();
+				})();
 			});
+		});
 
+		const press = async (run: () => Promise<void>) => {
+			try {
+				await run();
+			} catch {
+				/* already reported */
+			}
+			this.update();
+		};
 		if (fresh) {
 			row.addButton((b) =>
 				b
 					.setCta()
 					.setButtonText(t(occupied ? "settings.encrypt.migrate" : "settings.encrypt.set"))
 					.setTooltip(t("settings.encrypt.setTip"))
-					.onClick(async () => {
+					.onClick(() => {
 						b.setDisabled(true);
-						try {
-							// Creates the key and starts the sync, or the re-upload;
-							// progress lands below.
-							await this.plugin.applyEncryption(false, true);
-						} catch {
-							/* already reported */
-							this.display();
-						}
+						// Creates the key and starts the sync, or the re-upload; progress
+						// lands below.
+						void press(() => this.plugin.applyEncryption(false, true));
 					}),
 			);
 		} else if (resumable) {
@@ -247,10 +335,9 @@ export class SyncSettingsTab extends PluginSettingTab {
 				b
 					.setCta()
 					.setButtonText(t("settings.encrypt.resume"))
-					.onClick(async () => {
+					.onClick(() => {
 						b.setDisabled(true);
-						await this.plugin.encryptInPlace(false);
-						this.display();
+						void press(() => this.plugin.encryptInPlace(false));
 					}),
 			);
 		} else if (!encrypting && !elsewhere) {
@@ -261,14 +348,9 @@ export class SyncSettingsTab extends PluginSettingTab {
 				b
 					.setCta()
 					.setButtonText(t("settings.encrypt.unlock"))
-					.onClick(async () => {
+					.onClick(() => {
 						b.setDisabled(true);
-						try {
-							await this.plugin.applyEncryption(false);
-						} catch {
-							/* already reported */
-						}
-						this.display();
+						void press(() => this.plugin.applyEncryption(false));
 					}),
 			);
 		}
@@ -284,175 +366,177 @@ export class SyncSettingsTab extends PluginSettingTab {
 			});
 		}
 		if (fresh || resumable || (!encrypting && !elsewhere)) {
-			this.plugin.progressTargets.push(containerEl.createDiv({ cls: "lockstep-progress" }));
+			this.plugin.progressTargets.push(this.progressLine(row));
 		}
 	}
 
-	/** Everything typed once and rarely again, most-touched first. */
-	private renderMore(containerEl: HTMLElement): void {
-		new Setting(containerEl)
-			.setName(t("settings.restore.name"))
-			.setDesc(t("settings.restore.desc"))
-			.addButton((b) =>
-				b.setButtonText(t("settings.restore.button")).onClick(() => this.plugin.openRestore()),
-			);
-
-		new Setting(containerEl)
-			.setName(t("settings.retention.name"))
-			.setDesc(t("settings.retention.desc"))
-			.addText((text) => {
-				text.inputEl.type = "number";
-				text.inputEl.min = "0";
-				text.inputEl.max = "3650";
-				text.setPlaceholder("30").setValue(this.retentionValue);
-				text.inputEl.addEventListener("blur", () => {
-					void (async () => {
-						const days = Number(text.getValue());
-						if (!Number.isFinite(days) || days < 0 || days > 3650) return;
-						try {
-							await this.plugin.setRetention(days);
-							this.retentionValue = String(days);
-							new Notice(
-								days === 0
-									? t("settings.retention.forever")
-									: t("settings.retention.saved", { days }),
-							);
-						} catch (e) {
-							new Notice(
-								t("notice.error", {
-									what: t("settings.retention.name"),
-									message: e instanceof Error ? e.message : String(e),
-								}),
-								8000,
-							);
-						}
-					})();
-				});
-				void this.plugin.getRetention().then((days) => {
-					this.retentionValue = String(days);
-					text.setValue(this.retentionValue);
-				});
-			});
-
-		new Setting(containerEl)
-			.setName(t("settings.serverUrl.name"))
-			.setDesc(t("settings.serverUrl.desc"))
-			.addText((text) =>
-				text
-					.setPlaceholder("https://sync.example.com")
-					.setValue(this.plugin.settings.serverUrl)
-					.onChange(async (v) => {
-						this.plugin.settings.serverUrl = v.trim();
-						await this.plugin.saveSettings();
-					}),
-			);
-
-		new Setting(containerEl)
-			.setName(t("settings.token.name"))
-			.setDesc(t("settings.token.desc"))
-			.addText((text) => {
-				text.inputEl.type = "password";
-				text
-					.setPlaceholder("obs_…")
-					.setValue(this.plugin.settings.token)
-					.onChange(async (v) => {
-						this.plugin.settings.token = v.trim();
-						await this.plugin.saveSettings();
-					});
-			});
-
-		// Which vault on the server this token opens. What the vault is called in
-		// Obsidian is local to this device and travels nowhere.
-		const vaultRow = new Setting(containerEl)
-			.setName(t("settings.serverVault.name"))
-			.setDesc(t("settings.serverVault.desc"));
-		const vaultValue = vaultRow.controlEl.createSpan({
-			cls: "lockstep-vault-name",
-			text: this.plugin.serverVaultName() || t("settings.serverVault.unknown"),
-		});
-		void this.plugin.refreshServerVault().then(() => {
-			vaultValue.setText(this.plugin.serverVaultName() || t("settings.serverVault.unknown"));
-		});
-
-		new Setting(containerEl)
-			.setName(t("settings.device.name"))
-			.setDesc(t("settings.device.desc"))
-			.addText((text) =>
-				text
-					.setPlaceholder(defaultDeviceName())
-					.setValue(this.plugin.settings.deviceName)
-					.onChange(async (v) => {
-						this.plugin.settings.deviceName = v.trim();
-						await this.plugin.saveSettings();
-					}),
-			);
-
-		new Setting(containerEl)
-			.setName(t("settings.excludes.name"))
-			.setDesc(t("settings.excludes.desc"))
-			.addTextArea((text) =>
-				text.setValue(this.plugin.settings.excludes.join("\n")).onChange(async (v) => {
-					this.plugin.settings.excludes = v
-						.split("\n")
-						.map((s) => s.trim())
-						.filter(Boolean);
-					await this.plugin.saveSettings();
-				}),
-			);
+	/** A line under a row where a sync in progress writes its percentage. */
+	private progressLine(row: Setting): HTMLElement {
+		row.settingEl.addClass("lockstep-row-stacked");
+		return row.settingEl.createDiv({ cls: "lockstep-progress" });
 	}
 
-	private renderConflicts(containerEl: HTMLElement): void {
-		void this.plugin.pruneConflicts();
-		const conflicts = this.plugin.index?.conflicts ?? [];
-		if (conflicts.length === 0) return;
+	// --- everything typed once and rarely again, most-touched first --------------
 
-		new Setting(containerEl).setName(t("conflict.title")).setHeading();
-		containerEl.createEl("p", { cls: "setting-item-description", text: t("conflict.intro") });
-
-		for (const c of conflicts) {
-			const setting = new Setting(containerEl)
-				.setName(c.path)
-				.setDesc(
-					t("conflict.detail", {
-						device: c.device,
-						other: c.server_device || t("conflict.serverFallback"),
-						when: new Date(c.at).toLocaleString(),
-					}),
-				);
-
-			const decide = async (choice: "mine" | "server" | "merged") => {
-				try {
-					await this.plugin.resolveConflict(c.path, choice);
-					new Notice(t("conflict.resolved", { path: c.path }));
-				} catch (e) {
-					new Notice(
-						t("notice.error", {
-							what: t("conflict.title"),
-							message: e instanceof Error ? e.message : String(e),
-						}),
-						8000,
+	private moreItems(): SettingDefinition[] {
+		return [
+			{
+				name: t("settings.restore.name"),
+				desc: t("settings.restore.desc"),
+				render: (setting) => {
+					setting.addButton((b) =>
+						b.setButtonText(t("settings.restore.button")).onClick(() => this.plugin.openRestore()),
 					);
-				}
-				this.display();
-			};
+				},
+			},
+			{
+				name: t("settings.retention.name"),
+				desc: t("settings.retention.desc"),
+				// Lives on the server, not in the settings file, so it is a render row.
+				render: (setting) => this.renderRetention(setting),
+			},
+			{
+				name: t("settings.serverUrl.name"),
+				desc: t("settings.serverUrl.desc"),
+				control: { type: "text", key: "serverUrl", placeholder: "https://sync.example.com" },
+			},
+			{
+				name: t("settings.token.name"),
+				desc: t("settings.token.desc"),
+				// A password field, which the text control does not offer.
+				render: (setting) => {
+					setting.addText((text) => {
+						text.inputEl.type = "password";
+						text
+							.setPlaceholder("obs_…")
+							.setValue(this.plugin.settings.token)
+							.onChange((v) => {
+								this.plugin.settings.token = v.trim();
+								void this.plugin.saveSettings();
+							});
+					});
+				},
+			},
+			{
+				// Which vault on the server this token opens. What the vault is called in
+				// Obsidian is local to this device and travels nowhere.
+				name: t("settings.serverVault.name"),
+				desc: t("settings.serverVault.desc"),
+				render: (setting) => {
+					const value = setting.controlEl.createSpan({
+						cls: "lockstep-vault-name",
+						text: this.plugin.serverVaultName() || t("settings.serverVault.unknown"),
+					});
+					void this.plugin.refreshServerVault().then(() => {
+						value.setText(this.plugin.serverVaultName() || t("settings.serverVault.unknown"));
+					});
+				},
+			},
+			{
+				name: t("settings.device.name"),
+				desc: t("settings.device.desc"),
+				control: { type: "text", key: "deviceName", placeholder: defaultDeviceName() },
+			},
+			{
+				name: t("settings.excludes.name"),
+				desc: t("settings.excludes.desc"),
+				control: { type: "textarea", key: "excludes" },
+			},
+		];
+	}
 
-			if (c.mergeable) {
-				setting.addButton((b) =>
-					b
-						.setCta()
-						.setButtonText(t("conflict.keepBoth"))
-						.setTooltip(t("conflict.keepBoth.tooltip"))
-						.onClick(() => void decide("merged")),
-				);
-			}
-			setting.addButton((b) =>
-				b
-					.setButtonText(t("conflict.keepMine", { device: c.device }))
-					.onClick(() => void decide("mine")),
-			);
-			setting.addButton((b) =>
-				b.setButtonText(otherSideLabel(c)).onClick(() => void decide("server")),
-			);
-		}
+	private renderRetention(setting: Setting): void {
+		setting.addText((text) => {
+			text.inputEl.type = "number";
+			text.inputEl.min = "0";
+			text.inputEl.max = "3650";
+			text.setPlaceholder("30").setValue(this.retentionValue);
+			text.inputEl.addEventListener("blur", () => {
+				void (async () => {
+					const days = Number(text.getValue());
+					if (!Number.isFinite(days) || days < 0 || days > 3650) return;
+					try {
+						await this.plugin.setRetention(days);
+						this.retentionValue = String(days);
+						new Notice(
+							days === 0 ? t("settings.retention.forever") : t("settings.retention.saved", { days }),
+						);
+					} catch (e) {
+						new Notice(
+							t("notice.error", {
+								what: t("settings.retention.name"),
+								message: e instanceof Error ? e.message : String(e),
+							}),
+							8000,
+						);
+					}
+				})();
+			});
+			void this.plugin.getRetention().then((days) => {
+				this.retentionValue = String(days);
+				text.setValue(this.retentionValue);
+			});
+		});
+	}
+
+	// --- conflicts, when there are any --------------------------------------------
+
+	private conflictsGroup(): SettingDefinitionItem {
+		const conflicts = this.plugin.index?.conflicts ?? [];
+		return {
+			type: "group",
+			heading: t("conflict.title"),
+			visible: () => (this.plugin.index?.conflicts ?? []).length > 0,
+			items: [
+				{ name: "", desc: t("conflict.intro"), searchable: false },
+				...conflicts.map(
+					(c): SettingDefinition => ({
+						name: c.path,
+						desc: t("conflict.detail", {
+							device: c.device,
+							other: c.server_device || t("conflict.serverFallback"),
+							when: new Date(c.at).toLocaleString(),
+						}),
+						searchable: false,
+						render: (setting) => {
+							const decide = (choice: "mine" | "server" | "merged") => {
+								void (async () => {
+									try {
+										await this.plugin.resolveConflict(c.path, choice);
+										new Notice(t("conflict.resolved", { path: c.path }));
+									} catch (e) {
+										new Notice(
+											t("notice.error", {
+												what: t("conflict.title"),
+												message: e instanceof Error ? e.message : String(e),
+											}),
+											8000,
+										);
+									}
+									this.update();
+								})();
+							};
+							if (c.mergeable) {
+								setting.addButton((b) =>
+									b
+										.setCta()
+										.setButtonText(t("conflict.keepBoth"))
+										.setTooltip(t("conflict.keepBoth.tooltip"))
+										.onClick(() => decide("merged")),
+								);
+							}
+							setting.addButton((b) =>
+								b
+									.setButtonText(t("conflict.keepMine", { device: c.device }))
+									.onClick(() => decide("mine")),
+							);
+							setting.addButton((b) =>
+								b.setButtonText(otherSideLabel(c)).onClick(() => decide("server")),
+							);
+						},
+					}),
+				),
+			],
+		};
 	}
 }

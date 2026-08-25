@@ -51,9 +51,8 @@ vault files, which is what a sync is.
 
 On 1.0.1 the review came back with one risk, `minAppVersion` lower than the newest API
 used (`getLanguage`, `messageEl`: 1.8.7), fixed in 1.0.3 along with the remaining lint
-warnings. Left open on purpose: the declarative settings API (`getSettingDefinitions`,
-1.13.0), which replaces the settings tab this plugin was written against; it is a
-rewrite of the settings screen and will come as its own release.
+warnings. 1.0.4 moved the settings tab to the declarative API (`getSettingDefinitions`, 1.13.0),
+which was the last warning standing; minAppVersion is 1.13.0 with it.
 
 ## Steps
 

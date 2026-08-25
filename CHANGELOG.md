@@ -1,5 +1,12 @@
 # Changelog
 
+## 1.0.4
+
+The settings tab is declared rather than drawn, through the settings API that
+arrived in Obsidian 1.13: every setting is indexed for the settings search, and
+the framework re-evaluates which rows to show. The screen itself is unchanged.
+minAppVersion is 1.13.0, since that API is what renders the tab.
+
 ## 1.0.3
 
 The catalogue review's second pass. minAppVersion is 1.8.7, which is where
