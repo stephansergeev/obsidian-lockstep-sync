@@ -44,7 +44,7 @@ A machine reachable from the internet, and a domain name pointed at it:
 
 ```bash
 curl -fsSLO https://github.com/stephansergeev/obsidian-lockstep-sync/releases/latest/download/install.sh
-less install.sh    # you are about to run it as root
+less install.sh    # read what you are about to run as root; q to close
 sudo bash install.sh sync.example.com
 ```
 
