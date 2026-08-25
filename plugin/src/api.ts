@@ -331,7 +331,7 @@ function safeJson(resp: RequestUrlResponse): Record<string, unknown> {
 
 /**
  * Turn a join code into a token. Needs no token itself: the code is the credential,
- * and this is the one request a device makes before it has anything else.
+ * and this is the one request a device makes before it holds any other credential.
  */
 export async function redeemJoin(
 	serverUrl: string,
