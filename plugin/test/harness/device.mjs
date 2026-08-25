@@ -106,6 +106,7 @@ export async function makeDevice(server, name, token, options = {}) {
 
 	const conflicts = [];
 	const logs = [];
+	const stopFlag = { value: false };
 	let cipher = options.cipher ?? { enabled: false, encrypt: async (d) => d, decrypt: async (d) => d };
 
 	const engine = new SyncEngine({
@@ -117,6 +118,7 @@ export async function makeDevice(server, name, token, options = {}) {
 		cipher: () => cipher,
 		guard: async () => options.guard ? options.guard() : "",
 		listLocalFiles: () => Object.keys(vault.snapshotSync()),
+		stopped: () => stopFlag.value,
 		onConflict: (path, copy) => conflicts.push({ path, copy }),
 		log: (message, error) => logs.push(`${message}: ${error ?? ""}`),
 		trace: (line) => logs.push(`[${name}] ${line}`),
@@ -132,6 +134,13 @@ export async function makeDevice(server, name, token, options = {}) {
 		logs,
 		setCipher(c) {
 			cipher = c;
+		},
+		/** Pretend the plugin was unloaded mid-pass. */
+		stop() {
+			stopFlag.value = true;
+		},
+		resume() {
+			stopFlag.value = false;
 		},
 		/** Write a file and tell the index about it, the way the watcher would. */
 		async edit(filePath, text) {

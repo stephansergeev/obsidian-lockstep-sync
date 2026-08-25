@@ -909,3 +909,26 @@ test("a vault that existed before the plugin is uploaded on its first sync", asy
 	const again = await a.sync();
 	assert.equal(again.uploaded, 0);
 });
+
+test("unloading the plugin stops a running pass, and the next one finishes the job", async (t) => {
+	// A pass is a chain of awaits and unloading does not cancel it. The old copy of
+	// an updated plugin kept uploading for two minutes beside its replacement,
+	// sending every file twice and overwriting the journal on its way out.
+	const { a, b, cleanup } = await twoDevices();
+	t.after(cleanup);
+
+	for (let i = 0; i < 40; i++) await a.vault.write(`n/${String(i).padStart(2, "0")}.md`, `note ${i}\n`);
+	let seen = 0;
+	a.engine["deps"].onProgress = () => {
+		seen++;
+		if (seen === 5) a.stop();
+	};
+	const first = await a.sync();
+	assert.ok(first.uploaded < 40, "the pass must stop early once unloaded");
+
+	a.resume();
+	const second = await a.sync();
+	assert.equal(first.uploaded + second.uploaded, 40, "nothing sent twice, nothing lost");
+	await b.sync();
+	assert.equal(await b.vault.read("n/39.md"), "note 39\n");
+});

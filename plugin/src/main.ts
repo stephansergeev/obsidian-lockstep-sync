@@ -31,7 +31,7 @@ const DEBOUNCE_MS = 2500;
 const SYNC_INTERVAL_MS = 15_000;
 
 /** How many journal lines to keep. Enough to cover a bad afternoon, not a month. */
-const JOURNAL_LINES = 400;
+const JOURNAL_LINES = 2000;
 
 export default class LockstepPlugin extends Plugin {
 	override settings: SyncSettings = { ...DEFAULT_SETTINGS };
@@ -67,6 +67,9 @@ export default class LockstepPlugin extends Plugin {
 	/** Whether the bound server vault holds nothing yet. Cached once it is false. */
 	private serverEmpty: boolean | null = null;
 	private interval: number | null = null;
+	/** Set on unload; a running pass stops at the next file and writes nothing more. */
+	private unloaded = false;
+
 	/** Places on the settings screen that mirror sync progress while it is open. */
 	progressTargets: HTMLElement[] = [];
 	/** The last completed sync's summary, shown once where the progress was. */
@@ -95,6 +98,7 @@ export default class LockstepPlugin extends Plugin {
 			cipher: () => this.cipher,
 			guard: (manual) => this.reasonNotToSync(manual),
 			listLocalFiles: () => this.app.vault.getFiles().map((f) => f.path),
+			stopped: () => this.unloaded,
 			trace: (line) => this.traceLine(line),
 			onProgress: (done, total, path) => {
 				// Movement while a long sync runs, and a percentage where the total is
@@ -184,6 +188,10 @@ export default class LockstepPlugin extends Plugin {
 	}
 
 	override async onunload(): Promise<void> {
+		// Async passes outlive the plugin object. Everything that could still be
+		// running checks this flag between files and stops, so an updated plugin
+		// does not share the vault with its own ghost.
+		this.unloaded = true;
 		if (this.debounce) clearTimeout(this.debounce);
 		await this.index.save();
 	}
@@ -222,7 +230,7 @@ export default class LockstepPlugin extends Plugin {
 	}
 
 	private async flushJournal(): Promise<void> {
-		if (!this.journalDirty) return;
+		if (!this.journalDirty || this.unloaded) return;
 		this.journalDirty = false;
 		try {
 			const dir = normalizePath(`${this.app.vault.configDir}/plugins/${this.manifest.id}`);

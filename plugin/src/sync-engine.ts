@@ -64,6 +64,13 @@ export interface EngineDeps {
 	/** Every file path in the vault right now. Cheap: Obsidian keeps this in memory. */
 	listLocalFiles: () => string[];
 	/**
+	 * True once the plugin has been unloaded. A pass is a chain of awaits, and
+	 * unloading does not cancel it: an updated plugin's old copy kept uploading for
+	 * two minutes after its replacement had started, sending every remaining file
+	 * twice and then overwriting the journal with its own. Checked between files.
+	 */
+	stopped: () => boolean;
+	/**
 	 * Called as each file moves. total is known for uploads, where the queue is
 	 * counted before it starts, and zero for downloads, which arrive in pages.
 	 */
@@ -293,6 +300,7 @@ export class SyncEngine {
 		for (;;) {
 			const page = await client.changes(this.deps.index.lastSeq, 200);
 			for (const entry of page.entries) {
+				if (this.deps.stopped()) return;
 				const path = toNFC(entry.path);
 				// A path that is queued to move away is already spoken for. Touching it
 				// here would recreate it moments before our own rename deletes it.
@@ -331,7 +339,7 @@ export class SyncEngine {
 				);
 			}
 			this.deps.index.setLastSeq(page.next_seq);
-			if (!page.has_more) break;
+			if (!page.has_more || this.deps.stopped()) break;
 		}
 	}
 
@@ -611,6 +619,7 @@ export class SyncEngine {
 		// Sent as moves so the file keeps its history, instead of showing up on other
 		// devices as a deletion followed by an unfamiliar new file.
 		for (const rename of [...this.deps.index.renames]) {
+			if (this.deps.stopped()) return;
 			try {
 				const res = await client.rename(rename.from, rename.to, rename.base_rev);
 				this.deps.index.clearRename(rename);
@@ -698,7 +707,7 @@ export class SyncEngine {
 		// than per file: a kill mid-batch loses at most two seconds of bookkeeping,
 		// and every file it forgets is simply sent again.
 		const worker = async (): Promise<void> => {
-			while (next < pending.length) {
+			while (next < pending.length && !this.deps.stopped()) {
 				const path = pending[next++] as string;
 				await one(path);
 				done++;
