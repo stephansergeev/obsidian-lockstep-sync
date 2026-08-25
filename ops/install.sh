@@ -232,7 +232,9 @@ Done.
   Server URL   https://$DOMAIN
   Token        $TOKEN
 
-Open this on the machine where you use Obsidian and it will set the plugin up:
+First install the plugin in Obsidian (community catalogue, or BRAT with
+stephansergeev/obsidian-lockstep-sync). Then open this link on that machine
+and the plugin configures itself:
 
   $SETUP
 

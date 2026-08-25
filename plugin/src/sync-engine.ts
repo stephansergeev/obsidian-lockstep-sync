@@ -75,6 +75,12 @@ export interface EngineDeps {
 export class SyncEngine {
 	/** Paths this plugin is writing right now, so its own writes do not look like edits. */
 	private suppressed = new Set<string>();
+	/**
+	 * The cipher for the duration of one pass, taken once at its start. Reading it
+	 * live meant that wiping the passphrase mid-pass swapped the cipher under a
+	 * running upload, and the tail of that pass went up in plaintext.
+	 */
+	private passCipher: Cipher | null = null;
 	private running = false;
 	private queued = false;
 
@@ -178,9 +184,13 @@ export class SyncEngine {
 	 * exactly the number the server would have. One more reason the nonce is derived
 	 * rather than random.
 	 */
+	private cipher(): Cipher {
+		return this.passCipher ?? this.deps.cipher();
+	}
+
 	private async matchesRemote(plain: ArrayBuffer, remoteHash: string | undefined): Promise<boolean> {
 		if (!remoteHash) return false;
-		const sealed = await this.deps.cipher().encrypt(plain);
+		const sealed = await this.cipher().encrypt(plain);
 		return (await sha256(sealed)) === remoteHash;
 	}
 
@@ -226,6 +236,7 @@ export class SyncEngine {
 				return report;
 			}
 			await this.resetCursorIfCipherChanged();
+			this.passCipher = this.deps.cipher();
 			// Renames go to the server before anything is read from it. A pass used to
 			// start by pulling, and at that moment the server still believed the old
 			// paths: they were missing locally, unknown to the index, and so were
@@ -236,6 +247,7 @@ export class SyncEngine {
 			await this.pull(client, report);
 			await this.push(client, report);
 		} finally {
+			this.passCipher = null;
 			this.running = false;
 			await this.deps.index.save();
 		}
@@ -524,7 +536,7 @@ export class SyncEngine {
 		if (expectHash && cipherHash !== expectHash) {
 			throw new Error(`corrupt download: expected ${expectHash}, got ${cipherHash}`);
 		}
-		const plain = await this.deps.cipher().decrypt(got.data);
+		const plain = await this.cipher().decrypt(got.data);
 		return { plain, cipherHash, plainHash: await sha256(plain), rev: got.rev || rev || 0 };
 	}
 
@@ -536,7 +548,7 @@ export class SyncEngine {
 		plain: ArrayBuffer,
 		plainHash: string,
 	): Promise<void> {
-		const sealed = await this.deps.cipher().encrypt(plain);
+		const sealed = await this.cipher().encrypt(plain);
 		const res = await client.putFile(path, baseRev, sealed, Date.now());
 		this.deps.index.set(path, {
 			base_rev: res.rev,
@@ -806,6 +818,8 @@ export class SyncEngine {
 	async restore(path: string, tombstoneRev: number, contentRev: number): Promise<void> {
 		const client = this.deps.client();
 		if (!client) throw new Error("not configured");
+		const barrier = await this.deps.guard();
+		if (barrier) throw new Error(barrier);
 		if (await this.deps.app.vault.adapter.exists(path)) {
 			throw new Error("a file already exists at that path");
 		}
@@ -830,6 +844,9 @@ export class SyncEngine {
 		const client = this.deps.client();
 		const pending = this.deps.index.conflicts.find((c) => c.path === path);
 		if (!client || !pending) return;
+		// Writes outside a pass answer to the same barrier as the pass itself.
+		const barrier = await this.deps.guard();
+		if (barrier) throw new Error(barrier);
 		const adapter = this.deps.app.vault.adapter;
 
 		if (choice === "server") {

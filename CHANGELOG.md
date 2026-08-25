@@ -1,5 +1,16 @@
 # Changelog
 
+## 0.13.2
+
+The cipher is taken once per pass. Read live, it could be swapped by a settings blur
+while an upload was still running, and the tail of that pass went up in plaintext.
+Wiping the passphrase mid-pass now leaks nothing, and there is a test that swaps the
+cipher between files to prove it. Restores and conflict resolutions answer to the
+same barrier as a pass.
+
+The installer no longer implies its link installs the plugin. It configures one that
+is already installed, and now says so, with the install step first.
+
 ## 0.13.1
 
 Ghost folders after a rename received on a desktop. The engine moved every file

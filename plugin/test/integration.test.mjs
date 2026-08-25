@@ -852,3 +852,36 @@ test("a deletion lands even when the index has forgotten what it knew", async (t
 	await a.sync();
 	assert.equal(await a.vault.exists("note.md"), false, "and nothing resurrected");
 });
+
+test("wiping the passphrase mid-pass leaks nothing", async (t) => {
+	// The cipher is taken once per pass. Read live, it could be swapped to the
+	// pass-through by a blur handler while an upload was still running, and the tail
+	// of that pass went to the server in plaintext.
+	const server = await startServer();
+	const { cipher } = await VaultCipher.create("shared passphrase", {
+		iterations: 1,
+		memory_kib: 64,
+	});
+	const opts = { cipher, pathCipher: await cipher.pathCipher() };
+	const a = await makeDevice(server, "mac", server.tokens.a, opts);
+	t.after(async () => {
+		await a.cleanup();
+		await server.stop();
+	});
+
+	for (let i = 0; i < 5; i++) await a.edit(`notes/${i}.md`, `secret number ${i}\n`);
+	let swapped = false;
+	a.engine["deps"].onProgress = () => {
+		if (!swapped) {
+			swapped = true;
+			a.setCipher({ enabled: false, encrypt: async (d) => d, decrypt: async (d) => d });
+		}
+	};
+	await a.sync();
+
+	const log = await server.rawChanges(server.tokens.a);
+	for (const entry of log.entries) {
+		const raw = await server.rawBytes(server.tokens.a, entry.path);
+		assert.equal(raw.includes("secret number"), false, `${entry.path} went up readable`);
+	}
+});
