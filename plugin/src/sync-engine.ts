@@ -59,7 +59,7 @@ export interface EngineDeps {
 	 * A reason not to sync at all, or empty when there is none. Checked before
 	 * anything is read or written.
 	 */
-	guard: () => Promise<string>;
+	guard: (manual: boolean) => Promise<string>;
 	onConflict: (path: string, copy: string) => void;
 	/** Called as each file lands, so a long first sync shows movement rather than a pause. */
 	onProgress?: (done: number, path: string) => void;
@@ -215,7 +215,7 @@ export class SyncEngine {
 	 * Pull runs first on purpose. Uploading against a stale revision only produces
 	 * conflicts that a pull would have avoided.
 	 */
-	async sync(): Promise<SyncReport> {
+	async sync(manual = false): Promise<SyncReport> {
 		if (this.running) {
 			// A pass is already in flight. Remember that something changed while it ran
 			// and let the caller schedule another one rather than interleaving two.
@@ -230,7 +230,7 @@ export class SyncEngine {
 			if (!client) return report;
 			// Reading an encrypted vault without the key produces filenames that are
 			// ciphertext and content that is noise. Better to do nothing and say why.
-			const barrier = await this.deps.guard();
+			const barrier = await this.deps.guard(manual);
 			if (barrier) {
 				report.errors.push(barrier);
 				return report;
@@ -818,7 +818,7 @@ export class SyncEngine {
 	async restore(path: string, tombstoneRev: number, contentRev: number): Promise<void> {
 		const client = this.deps.client();
 		if (!client) throw new Error("not configured");
-		const barrier = await this.deps.guard();
+		const barrier = await this.deps.guard(true);
 		if (barrier) throw new Error(barrier);
 		if (await this.deps.app.vault.adapter.exists(path)) {
 			throw new Error("a file already exists at that path");
@@ -845,7 +845,7 @@ export class SyncEngine {
 		const pending = this.deps.index.conflicts.find((c) => c.path === path);
 		if (!client || !pending) return;
 		// Writes outside a pass answer to the same barrier as the pass itself.
-		const barrier = await this.deps.guard();
+		const barrier = await this.deps.guard(true);
 		if (barrier) throw new Error(barrier);
 		const adapter = this.deps.app.vault.adapter;
 

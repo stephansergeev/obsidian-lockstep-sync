@@ -225,33 +225,44 @@ chown -R "$USER_NAME:$USER_NAME" "$DATA_DIR"
 urlencode() { python3 -c 'import sys,urllib.parse;print(urllib.parse.quote(sys.argv[1],safe=""))' "$1" 2>/dev/null || echo "$1"; }
 SETUP="obsidian://lockstep-setup?url=$(urlencode "https://$DOMAIN")&token=$(urlencode "$TOKEN")&device=desktop"
 
+# Escape codes only where somebody is looking at a terminal. A log file gets plain text.
+if [ -t 1 ]; then BOLD=$'\e[1m'; DIM=$'\e[2m'; RESET=$'\e[0m'; else BOLD=""; DIM=""; RESET=""; fi
+
 cat <<DONE
 
-Done.
+${BOLD}Done.${RESET}
 
   Server URL   https://$DOMAIN
-  Token        $TOKEN
 
 First install the plugin in Obsidian (community catalogue, or BRAT with
 stephansergeev/obsidian-lockstep-sync). Then open this link on that machine
-and the plugin configures itself:
-
-  $SETUP
+and the plugin configures itself. ${DIM}Triple-click the line to select all of it.${RESET}
 
 DONE
+# OSC 8 makes the link clickable in terminals that understand it (iTerm2, Windows
+# Terminal, GNOME). Others show the plain text underneath, which is all they need.
+printf '  \e]8;;%s\e\\%s%s%s\e]8;;\e\\\n\n' "$SETUP" "$BOLD" "$SETUP" "$RESET"
 
+# A phone can point its camera at the terminal instead of copying anything.
+if ! command -v qrencode >/dev/null 2>&1; then
+	apt-get install -y -qq qrencode >/dev/null 2>&1 || true
+fi
 if command -v qrencode >/dev/null 2>&1; then
-	echo "Or point a phone at this:"
+	echo "Or, on a phone, point the camera at this:"
 	echo
 	qrencode -t ANSIUTF8 -m 2 "$SETUP"
 	echo
 fi
 
+echo "Lost this screen? Make a fresh link any time with:"
+echo "  sudo $BIN link --data $DATA_DIR --url https://$DOMAIN --name desktop"
+echo
+
 cat <<DONE
 Once one device is set up, the rest are added from inside Obsidian: Add another
 device makes a link and a code for them, and nothing has to be typed there.
 
-To issue a token by hand instead:
+To issue a bare token instead:
 
   sudo $BIN token add --data $DATA_DIR --vault main --name phone
 

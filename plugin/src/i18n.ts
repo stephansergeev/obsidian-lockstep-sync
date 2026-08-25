@@ -82,6 +82,8 @@ const en: Dict = {
 	"settings.encrypt.set": "Set",
 	"settings.encrypt.setTip":
 		"Seals this vault with the passphrase as it is right now. Until this is pressed, nothing is created and nothing syncs.",
+	"encryption.firstSyncChoice":
+		"First sync: {count} files will go to your server as they are. Press Sync now if that is the plan. To encrypt them, set a passphrase first. Encryption can also be turned on later.",
 	"encryption.pressSet":
 		"Passphrase typed but not set. Press Set when it is complete: it seals the vault permanently, so it should not happen on a half-typed one.",
 	"cmd.resetIndex": "Reset the local sync index",
@@ -264,6 +266,8 @@ const ru: Dict = {
 	"settings.encrypt.set": "Задать",
 	"settings.encrypt.setTip":
 		"Запечатывает волт паролем ровно в его текущем виде. Пока кнопка не нажата, ничего не создаётся и не синкается.",
+	"encryption.firstSyncChoice":
+		"Первый синк: {count} файлов уйдут на твой сервер как есть. Нажми Sync now, если так и задумано. Чтобы шифровать, сначала задай пароль. Включить шифрование можно и позже.",
 	"encryption.pressSet":
 		"Пароль набран, но не задан. Нажми Задать, когда он дописан: волт запечатывается насовсем, и это не должно случиться на половине фразы.",
 	"cmd.resetIndex": "Сбросить локальный индекс синхронизации",

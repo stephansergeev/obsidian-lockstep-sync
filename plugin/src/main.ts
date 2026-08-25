@@ -64,6 +64,8 @@ export default class LockstepPlugin extends Plugin {
 	private settledPassphrase: string | null = null;
 	/** Which vault on the server this device is bound to, as the server names it. */
 	private serverVault = "";
+	/** Whether the bound server vault holds nothing yet. Cached once it is false. */
+	private serverEmpty: boolean | null = null;
 	private interval: number | null = null;
 	/** Decision journal, flushed to disk after every pass. */
 	private journal: string[] = [];
@@ -82,7 +84,7 @@ export default class LockstepPlugin extends Plugin {
 			settings: this.settings,
 			client: () => this.client(false),
 			cipher: () => this.cipher,
-			guard: () => this.reasonNotToSync(),
+			guard: (manual) => this.reasonNotToSync(manual),
 			trace: (line) => this.traceLine(line),
 			onProgress: (done, path) => {
 				// Movement while a long first sync runs. Somebody watching an empty
@@ -219,6 +221,17 @@ export default class LockstepPlugin extends Plugin {
 	 */
 	serverVaultName(): string {
 		return this.serverVault;
+	}
+
+	private async serverIsEmpty(client: SyncClient): Promise<boolean> {
+		if (this.serverEmpty === false) return false;
+		try {
+			const stats = await client.stats();
+			this.serverEmpty = Number(stats["files"] ?? 0) === 0 && Number(stats["seq"] ?? 0) === 0;
+		} catch {
+			return false; // cannot tell; do not block on a hiccup
+		}
+		return this.serverEmpty;
 	}
 
 	async refreshServerVault(): Promise<void> {
@@ -436,6 +449,8 @@ export default class LockstepPlugin extends Plugin {
 		this.settings.serverUrl = url;
 		this.settings.token = token;
 		this.announcedUnreachable = false;
+		this.serverEmpty = null;
+		this.announcedEncryptedVault = false;
 		if (params["device"]) this.settings.deviceName = params["device"].trim();
 		await this.saveSettings();
 		await this.refreshServerVault();
@@ -650,7 +665,7 @@ export default class LockstepPlugin extends Plugin {
 		this.setStatus(t("status.syncing"));
 		if (!quiet) new Notice(t("notice.syncing"));
 		try {
-			const report = await this.engine.sync();
+			const report = await this.engine.sync(!quiet);
 			const secs = ((Date.now() - started) / 1000).toFixed(1);
 			this.report(report, secs, quiet);
 			if (this.engine.takeQueued()) this.scheduleSync();
@@ -689,7 +704,10 @@ export default class LockstepPlugin extends Plugin {
 					});
 		this.setStatus(line);
 		if (!quiet || report.conflicts > 0) new Notice(t("notice.syncDone", { summary: line }));
-		const unreachable = report.errors.filter((e) => this.isUnreachable(e));
+		// The barrier is a state, already on the status bar and already announced
+		// once. Reported as a sync error too, it doubled every notice around it.
+		const errors = report.errors.filter((e) => e !== this.cipherStatus);
+		const unreachable = errors.filter((e) => this.isUnreachable(e));
 		if (unreachable.length > 0) {
 			if (!this.announcedUnreachable) {
 				this.announcedUnreachable = true;
@@ -698,7 +716,7 @@ export default class LockstepPlugin extends Plugin {
 			return;
 		}
 		this.announcedUnreachable = false;
-		for (const err of report.errors.slice(0, 3)) {
+		for (const err of errors.slice(0, 3)) {
 			new Notice(t("notice.error", { what: t("error.sync"), message: err }), 8000);
 		}
 	}
@@ -711,7 +729,7 @@ export default class LockstepPlugin extends Plugin {
 	 * that is noise, and the device then tries to create files with those names. Far
 	 * better to notice, refuse, and say which of the two things is missing.
 	 */
-	private async reasonNotToSync(): Promise<string> {
+	private async reasonNotToSync(manual = false): Promise<string> {
 		// The passphrase is already here. Unlocking is something to do, not something
 		// to ask for again: the first attempt may simply have run before the network
 		// was ready, and making somebody press a button to recover from that is
@@ -733,7 +751,29 @@ export default class LockstepPlugin extends Plugin {
 		try {
 			const key = await client.getVaultKey();
 			this.vaultHasKey = key !== null;
-			if (!key) return "";
+			if (!key) {
+				// No key and no passphrase. Before the very first upload of an existing
+				// vault into an empty server, that combination must not start on its
+				// own: whatever goes up now goes up readable, permanently, and the
+				// person may simply not have reached the passphrase field yet. One
+				// explicit Sync now says they have decided; a server that already
+				// holds files says the decision was made earlier.
+				if (!manual) {
+					const localFiles = this.app.vault.getFiles().length;
+					if (localFiles > 0 && (await this.serverIsEmpty(client))) {
+						this.cipherStatus = t("encryption.firstSyncChoice", {
+							count: localFiles,
+						});
+						this.setStatus(this.cipherStatus);
+						if (!this.announcedEncryptedVault) {
+							this.announcedEncryptedVault = true;
+							new Notice(`Lockstep: ${this.cipherStatus}`, 15000);
+						}
+						return this.cipherStatus;
+					}
+				}
+				return "";
+			}
 		} catch {
 			return ""; // cannot tell, and refusing on a network hiccup helps nobody
 		}
