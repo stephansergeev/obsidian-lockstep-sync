@@ -10,11 +10,10 @@ cross:
 	cd server && CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -trimpath -ldflags="-s -w" -o ../bin/sync-server-linux-amd64 ./cmd/sync-server
 	cd server && CGO_ENABLED=0 GOOS=linux GOARCH=arm64 go build -trimpath -ldflags="-s -w" -o ../bin/sync-server-linux-arm64 ./cmd/sync-server
 
-# Obsidian and BRAT look for manifest.json and main.js in the repository ROOT,
-# so the build artefacts are copied up after the bundle is made.
+# The plugin lives in the repository root, where Obsidian, BRAT and the catalogue
+# look for manifest.json and main.js.
 plugin:
-	cd plugin && npm run build
-	cp plugin/main.js plugin/manifest.json plugin/versions.json plugin/styles.css .
+	npm run build
 
 # Release assets: these three files are what BRAT and the catalogue expect.
 release: plugin
@@ -22,10 +21,10 @@ release: plugin
 
 test:
 	cd server && go test ./...
-	cd plugin && npm run check
+	npm run check
 
 fmt:
 	cd server && gofmt -w .
 
 clean:
-	rm -rf bin plugin/main.js main.js styles.css
+	rm -rf bin main.js

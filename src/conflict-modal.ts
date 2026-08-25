@@ -1,7 +1,6 @@
 // SPDX-License-Identifier: MIT
 
 import { App, Modal, Notice, Setting, TFile } from "obsidian";
-import { otherSideLabel } from "./conflict-notice";
 import { t } from "./i18n";
 import type { PendingConflict } from "./index-store";
 

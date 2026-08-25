@@ -9,6 +9,8 @@
  * dictionary lives here.
  */
 
+import { getLanguage } from "obsidian";
+
 type Dict = Record<string, string>;
 
 const en: Dict = {
@@ -403,20 +405,10 @@ const ru: Dict = {
 
 const locales: Record<string, Dict> = { ru };
 
-/**
- * Obsidian's UI language. getLanguage() is the supported API, but it is not
- * present in every version this plugin claims to support, so the older
- * localStorage key stays as a fallback.
- */
+/** Obsidian's UI language, from the API made for asking. */
 function currentLocale(): string {
 	try {
-		const api = (globalThis as { getLanguage?: () => string }).getLanguage;
-		if (typeof api === "function") return api();
-	} catch {
-		/* fall through to the storage probe below */
-	}
-	try {
-		return window.localStorage.getItem("language") ?? "en";
+		return getLanguage() || "en";
 	} catch {
 		return "en";
 	}

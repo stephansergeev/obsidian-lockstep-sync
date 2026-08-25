@@ -19,7 +19,7 @@ on disk. Only Obsidian itself is stubbed.
 
 ## Where things live
 
-`server/` is Go with no cgo. `plugin/` is TypeScript bundled by esbuild. `spec/` describes
+`server/` is Go with no cgo. The plugin is TypeScript in `src/`, bundled by esbuild into `main.js` at the root, where Obsidian looks for it. `spec/` describes
 the protocol and the reasoning behind the decisions; if a change alters behaviour described
 there, change that too. `ops/` is deployment.
 
@@ -29,6 +29,6 @@ Comments explain why, not what. The interesting comments in this codebase are th
 say what breaks if the code is written the obvious way instead.
 
 English everywhere: interface strings, README, commit messages, comments. Translations are
-added to `plugin/src/i18n.ts`, where English is the fallback for every missing key.
+added to `src/i18n.ts`, where English is the fallback for every missing key.
 
 Commit messages describe the change and its reason in prose. No trailers.

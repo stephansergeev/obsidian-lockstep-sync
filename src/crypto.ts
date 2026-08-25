@@ -177,7 +177,7 @@ export class VaultCipher implements Cipher {
 				overrides.iterations ?? (kdf === "Argon2id" ? ARGON2_PASSES : DEFAULT_ITERATIONS),
 			memory_kib: kdf === "Argon2id" ? (overrides.memory_kib ?? ARGON2_MEMORY_KIB) : undefined,
 			parallelism: kdf === "Argon2id" ? 1 : undefined,
-			salt: toBase64(salt.buffer as ArrayBuffer),
+			salt: toBase64(salt.buffer),
 			verifier: "",
 			// New vaults hide names as well as content. Existing ones keep whatever
 			// they were created with, because the two cannot be mixed.
@@ -185,7 +185,7 @@ export class VaultCipher implements Cipher {
 		};
 		const cipher = await VaultCipher.fromParams(passphrase, salt, params);
 		params.verifier = toBase64(
-			await cipher.encrypt(new TextEncoder().encode(VERIFY_TEXT).buffer as ArrayBuffer),
+			await cipher.encrypt(new TextEncoder().encode(VERIFY_TEXT).buffer),
 		);
 		return { cipher, params };
 	}
@@ -243,7 +243,7 @@ export class VaultCipher implements Cipher {
 		out.set(MAGIC, 0);
 		out.set(nonce, MAGIC.length);
 		out.set(new Uint8Array(sealed), MAGIC.length + NONCE_BYTES);
-		return out.buffer as ArrayBuffer;
+		return out.buffer;
 	}
 
 	async decrypt(data: ArrayBuffer): Promise<ArrayBuffer> {
@@ -368,18 +368,18 @@ export class PathCipher {
 
 	private async sealSegment(segment: string): Promise<string> {
 		const data = new TextEncoder().encode(segment);
-		const mac = await crypto.subtle.sign("HMAC", this.nonceKey, data as unknown as BufferSource);
+		const mac = await crypto.subtle.sign("HMAC", this.nonceKey, data);
 		const nonce = new Uint8Array(mac).slice(0, 12);
 		const sealed = await crypto.subtle.encrypt(
 			{ name: "AES-GCM", iv: nonce as unknown as BufferSource },
 			this.key,
-			data as unknown as BufferSource,
+			data,
 		);
 		const joined = new Uint8Array(12 + sealed.byteLength);
 		joined.set(nonce, 0);
 		joined.set(new Uint8Array(sealed), 12);
 		// base64url, because the result has to survive being a filename and a URL.
-		return toBase64(joined.buffer as ArrayBuffer)
+		return toBase64(joined.buffer)
 			.replace(/\+/g, "-")
 			.replace(/\//g, "_")
 			.replace(/=+$/, "");
@@ -418,5 +418,5 @@ export function fromBase64(text: string): ArrayBuffer {
 	const binary = atob(text);
 	const out = new Uint8Array(binary.length);
 	for (let i = 0; i < binary.length; i++) out[i] = binary.charCodeAt(i);
-	return out.buffer as ArrayBuffer;
+	return out.buffer;
 }

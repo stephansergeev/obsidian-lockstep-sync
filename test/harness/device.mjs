@@ -9,7 +9,7 @@ import { LocalIndex } from "../_index-store.mjs";
 import { SyncClient } from "../_sync-engine.mjs";
 import { FakeVault } from "./fake-vault.mjs";
 
-const BINARY = path.resolve("../bin/sync-server");
+const BINARY = path.resolve("bin/sync-server");
 
 /** A running server with its own data directory, thrown away afterwards. */
 export async function startServer() {

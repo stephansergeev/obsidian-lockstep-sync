@@ -6,12 +6,12 @@ import { ConflictModal } from "./conflict-modal";
 import { showConflictNotice } from "./conflict-notice";
 import { RestoreModal } from "./restore-modal";
 import { AddDeviceModal } from "./onboarding";
-import { VaultCipher, WrongPassphrase, plaintext, type Cipher, type PathCipher, type VaultKeyParams, type Migration, type VaultKeyRecord } from "./crypto";
+import { VaultCipher, WrongPassphrase, plaintext, type Cipher, type PathCipher, type Migration, type VaultKeyRecord } from "./crypto";
 import { t } from "./i18n";
 import { LocalIndex } from "./index-store";
 import { conflictName, defaultDeviceName, sha256, toNFC } from "./paths";
 import { SyncEngine, type SyncReport } from "./sync-engine";
-import { DEFAULT_SETTINGS, SyncSettingsTab, type SyncSettings } from "./settings";
+import { DEFAULT_SETTINGS, SyncSettingsTab, type SyncSettings, defaultExcludes } from "./settings";
 
 /** How long to wait after the last edit before syncing. Obsidian fires on every keystroke. */
 const DEBOUNCE_MS = 2500;
@@ -32,7 +32,7 @@ export default class LockstepPlugin extends Plugin {
 	private engine!: SyncEngine;
 	private statusBar: HTMLElement | null = null;
 	private lastStatus = t("status.notConnected");
-	private debounce: ReturnType<typeof setTimeout> | null = null;
+	private debounce: number | null = null;
 	private cipher: Cipher = plaintext;
 	private pathCipher: PathCipher | null = null;
 	private cipherStatus = "";
@@ -223,12 +223,16 @@ export default class LockstepPlugin extends Plugin {
 		// running checks this flag between files and stops, so an updated plugin
 		// does not share the vault with its own ghost.
 		this.unloaded = true;
-		if (this.debounce) clearTimeout(this.debounce);
+		if (this.debounce) window.clearTimeout(this.debounce);
 		await this.index.save();
 	}
 
 	async loadSettings(): Promise<void> {
-		this.settings = Object.assign({}, DEFAULT_SETTINGS, await this.loadData());
+		const saved = (await this.loadData()) as Partial<SyncSettings> | null;
+		this.settings = Object.assign({}, DEFAULT_SETTINGS, saved ?? {});
+		// The configuration folder is .obsidian by default and something else when
+		// the person chose so, and window state lives inside it under either name.
+		if (!saved?.excludes) this.settings.excludes = defaultExcludes(this.app.vault.configDir);
 		// Named for what this device is, so nobody has to correct an assumption about
 		// what they own before they can start. Whatever they type instead wins.
 		if (!this.settings.deviceName) {
@@ -764,8 +768,8 @@ export default class LockstepPlugin extends Plugin {
 	}
 
 	private scheduleSync(): void {
-		if (this.debounce) clearTimeout(this.debounce);
-		this.debounce = setTimeout(() => void this.syncNow(true), DEBOUNCE_MS);
+		if (this.debounce) window.clearTimeout(this.debounce);
+		this.debounce = window.setTimeout(() => void this.syncNow(true), DEBOUNCE_MS);
 	}
 
 	restartAutoSync(): void {
@@ -780,7 +784,7 @@ export default class LockstepPlugin extends Plugin {
 	/** Force a pass right now, used when the app is about to be suspended. */
 	private async flush(): Promise<void> {
 		if (this.debounce) {
-			clearTimeout(this.debounce);
+			window.clearTimeout(this.debounce);
 			this.debounce = null;
 		}
 		await this.syncNow(true);

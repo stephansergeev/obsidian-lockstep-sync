@@ -38,10 +38,21 @@ waiting to be asked.
 paths, including files Obsidian does not track, and it needs bytes rather than strings. There
 is no way to do that through the higher-level API.
 
+## What the automated review said on 1.0.0, and what changed
+
+Listed on 2026-08-25. The review passed with warnings, most of them one cause: the
+plugin's `package.json` lived in `plugin/`, the checker installs in the root, and every
+Obsidian type resolved to `any`. The plugin now lives in the root. The rest were taken
+one by one: `getLanguage()` for the locale, `window.setTimeout`, the configuration folder
+from `Vault#configDir`, provenance attestations on release assets. Two recommendations
+stand by design: the release carries the server binaries and installer alongside the
+plugin files (the installer downloads them from the same release), and the plugin lists
+vault files, which is what a sync is.
+
 ## Steps
 
 1. `make plugin` so the root artefacts match the source.
-2. Bump the version in `plugin/manifest.json`, run `make plugin` again, commit.
+2. Bump the version in `manifest.json`, run `make plugin` again, commit.
 3. Cut a release whose tag is exactly that version, attaching `main.js`, `manifest.json` and
    `styles.css`.
 4. Sign in at community.obsidian.md, link the GitHub account, add the plugin.

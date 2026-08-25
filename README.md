@@ -63,14 +63,13 @@ because a named volume is what `docker compose down -v` destroys.
 
 ## Install the plugin
 
-Through [BRAT](https://obsidian.md/plugins?id=obsidian42-brat): add
-`stephansergeev/obsidian-lockstep-sync`. Or copy `main.js`, `manifest.json` and
-`styles.css` from a release into `<vault>/.obsidian/plugins/lockstep-sync/`.
+Settings → Community plugins → Browse → **Lockstep Sync** → Install → Enable. Or from the
+web: [community.obsidian.md/plugins/lockstep-sync](https://community.obsidian.md/plugins/lockstep-sync).
+Pre-release builds come through [BRAT](https://obsidian.md/plugins?id=obsidian42-brat) with
+`stephansergeev/obsidian-lockstep-sync`.
 
-First device: open the link the installer printed. Every next device: **Add another
-device** in the settings, point its camera at the code, done. The code carries the
-address and a token minted for that one device, listed in words beside it, and never
-the passphrase.
+First device: open the link the installer printed. Every next device: **Link a new
+device** in the settings shows a QR code; the page it opens walks through the steps.
 
 ## Encryption
 

@@ -179,7 +179,7 @@ export class SyncEngine {
 		} finally {
 			// Obsidian delivers the change event after the write returns, so the guard
 			// is held a moment longer than the write itself.
-			setTimeout(() => this.suppressed.delete(path), 1500);
+			window.setTimeout(() => this.suppressed.delete(path), 1500);
 		}
 	}
 
@@ -211,7 +211,7 @@ export class SyncEngine {
 				// a desktop while phones, on a different adapter, cleaned up fine.
 				await adapter.rmdir(dir, true);
 				this.trace(`pruned empty folder ${dir}`);
-				setTimeout(() => this.suppressed.delete(dir), 1500);
+				window.setTimeout(() => this.suppressed.delete(dir), 1500);
 			} catch (e) {
 				this.trace(`could not prune ${dir}: ${e instanceof Error ? e.message : e}`);
 				return;
@@ -624,7 +624,7 @@ export class SyncEngine {
 					} else {
 						await adapter.rename(from, path);
 					}
-					setTimeout(() => {
+					window.setTimeout(() => {
 						this.suppressed.delete(from);
 						this.suppressed.delete(path);
 					}, 1500);
@@ -729,7 +729,7 @@ export class SyncEngine {
 			// Untouched here since we last saw it, so the deletion is safe to apply.
 			this.suppressed.add(path);
 			await adapter.remove(path);
-			setTimeout(() => this.suppressed.delete(path), 1500);
+			window.setTimeout(() => this.suppressed.delete(path), 1500);
 			this.deps.index.remove(path);
 			await this.pruneEmptyParents(path);
 			this.trace(`deletion applied ${path}`);
@@ -1224,5 +1224,5 @@ function encodeText(text: string): ArrayBuffer {
 	return encoded.buffer.slice(
 		encoded.byteOffset,
 		encoded.byteOffset + encoded.byteLength,
-	) as ArrayBuffer;
+	);
 }

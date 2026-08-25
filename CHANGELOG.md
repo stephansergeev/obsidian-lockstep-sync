@@ -1,5 +1,15 @@
 # Changelog
 
+## 1.0.1
+
+Listed in the community catalogue on 2026-08-25; this release takes the automated
+review's notes. The plugin sources moved to the repository root so the reviewer's
+type checker can see Obsidian's types. The locale comes from `getLanguage()`, timers
+go through `window`, and the default exclusions follow the vault's configuration
+folder instead of assuming `.obsidian`. Release assets now carry GitHub provenance
+attestations. The join page installs from the catalogue in one step; BRAT is no
+longer part of it.
+
 ## 1.0.0
 
 The release submitted to the community catalogue. Nothing new in it: 0.16.2 with the

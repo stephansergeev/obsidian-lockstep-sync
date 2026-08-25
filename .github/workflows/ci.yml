@@ -39,11 +39,9 @@ jobs:
         with:
           node-version: "20"
           cache: npm
-          cache-dependency-path: plugin/package-lock.json
-      - working-directory: plugin
-        run: npm ci
+          cache-dependency-path: package-lock.json
+      - run: npm ci
       - name: types
-        working-directory: plugin
         run: npm run check
       # The integration tests drive the real engine against a real server, so the
       # binary has to exist first. Everything that has gone wrong so far went wrong
@@ -51,10 +49,8 @@ jobs:
       - name: build server for integration tests
         run: make server
       - name: tests
-        working-directory: plugin
         run: npm test
-      - working-directory: plugin
-        run: npm run build
+      - run: npm run build
 
   image:
     name: container builds

@@ -1,12 +1,9 @@
 bin/
 data/
 node_modules/
-plugin/main.js
 .DS_Store
 
-# build artefacts copied to the root for releases
-/main.js
-/styles.css
+# build artefacts, tracked so BRAT and the catalogue see them at HEAD
 
 # bundled test fixtures
 test/_*.mjs
@@ -15,3 +12,5 @@ test/_*.js
 # local planning notes, not part of the project
 /.backlog.local.md
 /BACKLOG.md
+
+*.tgz

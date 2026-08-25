@@ -33,7 +33,7 @@ const joinTTL = 15 * time.Minute
 const (
 	pluginRepo      = "stephansergeev/obsidian-lockstep-sync"
 	pluginID        = "lockstep-sync"
-	inCatalogue     = false
+	inCatalogue     = true
 	bratInstallLink = "obsidian://show-plugin?id=obsidian42-brat"
 )
 

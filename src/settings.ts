@@ -29,12 +29,20 @@ export interface SyncSettings {
 	intervalSeconds: number;
 }
 
+/**
+ * What a fresh install leaves out. Window state differs per device and only
+ * gets in the way, and it lives in the configuration folder, whatever that is called.
+ */
+export function defaultExcludes(configDir: string): string[] {
+	return [`${configDir}/workspace.json`, `${configDir}/workspace-mobile.json`, ".trash/"];
+}
+
 export const DEFAULT_SETTINGS: SyncSettings = {
 	serverUrl: "",
 	token: "",
 	deviceName: "",
-	// workspace.json holds window state: it differs per device and only gets in the way.
-	excludes: [".obsidian/workspace.json", ".obsidian/workspace-mobile.json", ".trash/"],
+	// Filled in at load from the vault's configuration folder; see defaultExcludes.
+	excludes: [".trash/"],
 	autoSync: true,
 	encryption: false,
 	passphrase: "",

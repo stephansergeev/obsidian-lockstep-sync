@@ -1,8 +1,0 @@
-node_modules/
-main.js
-*.tgz
-
-# bundled test fixtures
-test/_*.mjs
-
-test/_*.js
