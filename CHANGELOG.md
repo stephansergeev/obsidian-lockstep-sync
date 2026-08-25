@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.16.1
+
+An Unlock & sync button beside the passphrase field for a device joining a vault
+that is already encrypted. Leaving the field used to be the trigger, which on a
+phone is nothing anybody does on purpose. Enter in the field presses whichever
+button stands beside it.
+
 ## 0.16.0
 
 Link a new device now makes a page on your own server, not a bare link. The page

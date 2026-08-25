@@ -76,6 +76,7 @@ const en: Dict = {
 	"settings.encrypt.descExisting": "Same passphrase as on your other devices.",
 	"settings.encrypt.placeholder": "passphrase",
 	"settings.encrypt.set": "Set passphrase & sync",
+	"settings.encrypt.unlock": "Unlock & sync",
 	"settings.encrypt.setTip":
 		"Seals this vault with the passphrase as it is right now. Until this is pressed, nothing is created and nothing syncs.",
 	"encryption.firstSyncChoice":
@@ -272,6 +273,7 @@ const ru: Dict = {
 	"settings.encrypt.descExisting": "Тот же пароль, что на других твоих устройствах.",
 	"settings.encrypt.placeholder": "пароль",
 	"settings.encrypt.set": "Задать пароль и синкать",
+	"settings.encrypt.unlock": "Открыть и синкать",
 	"settings.encrypt.setTip":
 		"Запечатывает волт паролем ровно в его текущем виде. Пока кнопка не нажата, ничего не создаётся и не синкается.",
 	"encryption.firstSyncChoice":

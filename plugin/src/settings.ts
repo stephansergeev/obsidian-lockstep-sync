@@ -243,8 +243,37 @@ export class SyncSettingsTab extends PluginSettingTab {
 						this.display();
 					}),
 			);
+		} else if (!encrypting && !elsewhere) {
+			// A vault that already has a key, on a device that has not opened it: the
+			// second device, typing the passphrase it was told. Leaving the field used
+			// to be the trigger, which on a phone is nothing anybody does on purpose.
+			row.addButton((b) =>
+				b
+					.setCta()
+					.setButtonText(t("settings.encrypt.unlock"))
+					.onClick(async () => {
+						b.setDisabled(true);
+						try {
+							await this.plugin.applyEncryption(false);
+						} catch {
+							/* already reported */
+						}
+						this.display();
+					}),
+			);
 		}
-		if (fresh || resumable) {
+		// Enter in the field presses whichever button stands beside it.
+		const field = row.controlEl.querySelector("input");
+		const button = row.controlEl.querySelector("button");
+		if (field && button) {
+			field.addEventListener("keydown", (ev) => {
+				if (ev.key === "Enter") {
+					ev.preventDefault();
+					button.click();
+				}
+			});
+		}
+		if (fresh || resumable || (!encrypting && !elsewhere)) {
 			this.plugin.progressTargets.push(containerEl.createDiv({ cls: "lockstep-progress" }));
 		}
 	}
