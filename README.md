@@ -65,8 +65,6 @@ because a named volume is what `docker compose down -v` destroys.
 
 Settings → Community plugins → Browse → **Lockstep Sync** → Install → Enable. Or from the
 web: [community.obsidian.md/plugins/lockstep-sync](https://community.obsidian.md/plugins/lockstep-sync).
-Pre-release builds come through [BRAT](https://obsidian.md/plugins?id=obsidian42-brat) with
-`stephansergeev/obsidian-lockstep-sync`.
 
 First device: open the link the installer printed. Every next device: **Link a new
 device** in the settings shows a QR code; the page it opens walks through the steps.

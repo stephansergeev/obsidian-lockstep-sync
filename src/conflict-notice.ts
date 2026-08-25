@@ -21,7 +21,7 @@ export function showConflictNotice(
 	// Zero means it stays put. A question that vanishes after five seconds is a
 	// question nobody answers.
 	const notice = new Notice("", 0);
-	const el = notice.noticeEl;
+	const el = notice.messageEl;
 	el.empty();
 	el.addClass("lockstep-conflict-notice");
 

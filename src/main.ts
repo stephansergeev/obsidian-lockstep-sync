@@ -218,14 +218,14 @@ export default class LockstepPlugin extends Plugin {
 		});
 	}
 
-	override async onunload(): Promise<void> {
+	override onunload(): void {
 		this.endProgress(null);
 		// Async passes outlive the plugin object. Everything that could still be
 		// running checks this flag between files and stops, so an updated plugin
 		// does not share the vault with its own ghost.
 		this.unloaded = true;
 		if (this.debounce) window.clearTimeout(this.debounce);
-		await this.index.save();
+		void this.index.save();
 	}
 
 	async loadSettings(): Promise<void> {

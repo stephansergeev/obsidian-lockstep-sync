@@ -956,7 +956,8 @@ test("a first sync sends notes before attachments", async (t) => {
 	// With four in flight, an attachment can only start after at least sixteen
 	// notes have finished, so the first sixteen completions are all notes.
 	assert.ok(order.slice(0, 16).every((p) => p.endsWith(".md")), `notes did not go first: ${order.join(", ")}`);
-	assert.ok(order.indexOf("photo.png") < order.indexOf("scan.pdf"), "images before other binaries");
+	// The two attachments are dequeued image first, but they are in flight together,
+	// so which one finishes first is the network's choice, not the queue's.
 });
 
 // --- turning encryption on later -----------------------------------------------

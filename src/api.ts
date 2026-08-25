@@ -141,12 +141,12 @@ export class SyncClient {
 
 	async health(): Promise<{ ok: boolean }> {
 		const resp = await this.call("GET", "/health");
-		return resp.json;
+		return resp.json as { ok: boolean };
 	}
 
 	async stats(): Promise<Record<string, number | string>> {
 		const resp = await this.call("GET", "/stats");
-		return resp.json;
+		return resp.json as Record<string, number | string>;
 	}
 
 	/** The change delta. The client never walks the vault tree at all. */
@@ -176,7 +176,7 @@ export class SyncClient {
 	async getVaultKey(): Promise<Record<string, unknown> | null> {
 		try {
 			const resp = await this.call("GET", "/vaultkey");
-			return resp.json;
+			return resp.json as Record<string, unknown> | null;
 		} catch (e) {
 			if (e instanceof ApiError && e.status === 404) return null;
 			throw e;
@@ -207,7 +207,7 @@ export class SyncClient {
 	/** Erase every deleted file now, content and history included. */
 	async purgeDeleted(): Promise<{ files: number; bytes: number }> {
 		const resp = await this.call("DELETE", "/deleted");
-		return { files: Number(resp.json?.files ?? 0), bytes: Number(resp.json?.bytes ?? 0) };
+		return { files: Number(safeJson(resp).files ?? 0), bytes: Number(safeJson(resp).bytes ?? 0) };
 	}
 
 	/**
@@ -221,9 +221,9 @@ export class SyncClient {
 			headers: { "Content-Type": "application/json" },
 		});
 		return {
-			code: String(resp.json?.code ?? ""),
-			url: String(resp.json?.url ?? ""),
-			expires_in: Number(resp.json?.expires_in ?? 0),
+			code: String(safeJson(resp).code ?? ""),
+			url: String(safeJson(resp).url ?? ""),
+			expires_in: Number(safeJson(resp).expires_in ?? 0),
 		};
 	}
 
@@ -233,13 +233,13 @@ export class SyncClient {
 			body: JSON.stringify({ name }),
 			headers: { "Content-Type": "application/json" },
 		});
-		return { token: String(resp.json?.token ?? ""), vault: String(resp.json?.vault ?? "") };
+		return { token: String(safeJson(resp).token ?? ""), vault: String(safeJson(resp).vault ?? "") };
 	}
 
 	/** How many days a deleted file stays recoverable. Zero means for good. */
 	async getRetention(): Promise<number> {
 		const resp = await this.call("GET", "/retention");
-		return Number(resp.json?.days ?? 30);
+		return Number(safeJson(resp).days ?? 30);
 	}
 
 	async setRetention(days: number): Promise<void> {
@@ -252,7 +252,7 @@ export class SyncClient {
 	/** Files that are gone but still recoverable, most recently deleted first. */
 	async deleted(limit = 200): Promise<DeletedFile[]> {
 		const resp = await this.call("GET", `/deleted?limit=${limit}`);
-		const entries = (resp.json?.entries ?? []) as DeletedFile[];
+		const entries = (safeJson(resp).entries ?? []) as DeletedFile[];
 		if (!this.paths) return entries;
 		const out: DeletedFile[] = [];
 		for (const entry of entries) {
@@ -309,7 +309,7 @@ export class SyncClient {
 				"Content-Type": "application/octet-stream",
 			},
 		});
-		return resp.json;
+		return resp.json as WriteResult;
 	}
 
 	async putFolder(path: string, baseRev: number): Promise<WriteResult> {
@@ -317,14 +317,14 @@ export class SyncClient {
 			body: new ArrayBuffer(0),
 			headers: { "X-Base-Rev": String(baseRev), "X-Folder": "1" },
 		});
-		return resp.json;
+		return resp.json as WriteResult;
 	}
 
 	async deleteFile(path: string, baseRev: number): Promise<WriteResult> {
 		const resp = await this.call("DELETE", `/file?path=${encodePath(await this.remote(path))}`, {
 			headers: { "X-Base-Rev": String(baseRev) },
 		});
-		return resp.json;
+		return resp.json as WriteResult;
 	}
 
 	async rename(from: string, to: string, baseRev: number): Promise<WriteResult> {
@@ -336,13 +336,13 @@ export class SyncClient {
 			}),
 			headers: { "Content-Type": "application/json" },
 		});
-		return resp.json;
+		return resp.json as WriteResult;
 	}
 }
 
 function safeJson(resp: RequestUrlResponse): Record<string, unknown> {
 	try {
-		return resp.json ?? {};
+		return (resp.json as Record<string, unknown> | null | undefined) ?? {};
 	} catch {
 		return {};
 	}
@@ -368,9 +368,9 @@ export async function redeemJoin(
 		throw new ApiError(resp.status, String(j.error ?? "http_error"), String(j.message ?? `HTTP ${resp.status}`));
 	}
 	return {
-		token: String(resp.json?.token ?? ""),
-		vault: String(resp.json?.vault ?? ""),
-		device: String(resp.json?.device ?? ""),
-		url: String(resp.json?.url ?? serverUrl),
+		token: String(safeJson(resp).token ?? ""),
+		vault: String(safeJson(resp).vault ?? ""),
+		device: String(safeJson(resp).device ?? ""),
+		url: String(safeJson(resp).url ?? serverUrl),
 	};
 }

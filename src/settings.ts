@@ -209,16 +209,18 @@ export class SyncSettingsTab extends PluginSettingTab {
 						judge(v);
 					});
 				judge(this.plugin.settings.passphrase);
-				text.inputEl.addEventListener("blur", async () => {
-					// Unlocking an existing vault is safe to try on blur: a fragment
-					// gives a wrong-passphrase notice and nothing more. Creating a key
-					// is not, and waits for the button.
-					try {
-						await this.plugin.applyEncryption();
-					} catch {
-						/* already reported */
-					}
-					this.display();
+				text.inputEl.addEventListener("blur", () => {
+					void (async () => {
+						// Unlocking an existing vault is safe to try on blur: a fragment
+						// gives a wrong-passphrase notice and nothing more. Creating a key
+						// is not, and waits for the button.
+						try {
+							await this.plugin.applyEncryption();
+						} catch {
+							/* already reported */
+						}
+						this.display();
+					})();
 				});
 			});
 
@@ -303,26 +305,28 @@ export class SyncSettingsTab extends PluginSettingTab {
 				text.inputEl.min = "0";
 				text.inputEl.max = "3650";
 				text.setPlaceholder("30").setValue(this.retentionValue);
-				text.inputEl.addEventListener("blur", async () => {
-					const days = Number(text.getValue());
-					if (!Number.isFinite(days) || days < 0 || days > 3650) return;
-					try {
-						await this.plugin.setRetention(days);
-						this.retentionValue = String(days);
-						new Notice(
-							days === 0
-								? t("settings.retention.forever")
-								: t("settings.retention.saved", { days }),
-						);
-					} catch (e) {
-						new Notice(
-							t("notice.error", {
-								what: t("settings.retention.name"),
-								message: e instanceof Error ? e.message : String(e),
-							}),
-							8000,
-						);
-					}
+				text.inputEl.addEventListener("blur", () => {
+					void (async () => {
+						const days = Number(text.getValue());
+						if (!Number.isFinite(days) || days < 0 || days > 3650) return;
+						try {
+							await this.plugin.setRetention(days);
+							this.retentionValue = String(days);
+							new Notice(
+								days === 0
+									? t("settings.retention.forever")
+									: t("settings.retention.saved", { days }),
+							);
+						} catch (e) {
+							new Notice(
+								t("notice.error", {
+									what: t("settings.retention.name"),
+									message: e instanceof Error ? e.message : String(e),
+								}),
+								8000,
+							);
+						}
+					})();
 				});
 				void this.plugin.getRetention().then((days) => {
 					this.retentionValue = String(days);

@@ -27,15 +27,8 @@ import (
 // of the screen is worthless by the evening.
 const joinTTL = 15 * time.Minute
 
-// Where the plugin comes from. Until the plugin is in the community catalogue it
-// is installed through BRAT, which takes two taps instead of one; the catalogue
-// link replaces both when the listing goes live.
-const (
-	pluginRepo      = "stephansergeev/obsidian-lockstep-sync"
-	pluginID        = "lockstep-sync"
-	inCatalogue     = true
-	bratInstallLink = "obsidian://show-plugin?id=obsidian42-brat"
-)
+// Where the plugin comes from: the community catalogue, opened inside Obsidian.
+const pluginID = "lockstep-sync"
 
 func (s *Server) createJoin(w http.ResponseWriter, r *http.Request, c ctx) {
 	var req struct {
@@ -112,9 +105,6 @@ func (s *Server) joinPage(w http.ResponseWriter, r *http.Request) {
 		Device:      j.Device,
 		Host:        r.Host,
 		Minutes:     int(time.Until(j.ExpiresAt).Minutes()) + 1,
-		InCatalogue: inCatalogue,
-		BratLink:    template.URL(bratInstallLink),
-		PluginLink:  template.URL("obsidian://brat?plugin=" + pluginRepo),
 		CatalogLink: template.URL("obsidian://show-plugin?id=" + pluginID),
 		ConnectLink: template.URL("obsidian://lockstep-setup?" + q.Encode()),
 	})
@@ -135,17 +125,14 @@ func publicBase(r *http.Request) string {
 }
 
 type joinView struct {
-	Expired     bool
-	Vault       string
-	Device      string
-	Host        string
-	Minutes     int
-	InCatalogue bool
+	Expired bool
+	Vault   string
+	Device  string
+	Host    string
+	Minutes int
 	// Typed as URLs on purpose: html/template rewrites an unknown scheme such as
 	// obsidian:// to a dead anchor unless told the value is trusted, and these are
 	// built here from constants and a code the server minted.
-	BratLink    template.URL
-	PluginLink  template.URL
 	CatalogLink template.URL
 	ConnectLink template.URL
 }
@@ -211,7 +198,6 @@ code { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 1
 <p><strong>Settings</strong> → <strong>Community plugins</strong> → <strong>Turn on community plugins</strong>.</p>
 </div>
 
-{{if .InCatalogue}}
 <div class="step">
 <h2>3. Install Lockstep Sync</h2>
 <p>Press <strong>Install</strong>, then <strong>Enable</strong>.</p>
@@ -223,25 +209,6 @@ code { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 1
 <p>Fills in the server address and this device's access, and syncing starts. If the vault is encrypted, the plugin asks for its passphrase first.</p>
 <a class="btn cta" href="{{.ConnectLink}}">Connect</a>
 </div>
-{{else}}
-<div class="step">
-<h2>3. Install BRAT</h2>
-<p>Press <strong>Install</strong>, then <strong>Enable</strong>.</p>
-<a class="btn" href="{{.BratLink}}">Install BRAT</a>
-</div>
-
-<div class="step">
-<h2>4. Install Lockstep Sync</h2>
-<p>Press <strong>Add plugin</strong> in the window that opens.</p>
-<a class="btn" href="{{.PluginLink}}">Install Lockstep Sync with BRAT</a>
-</div>
-
-<div class="step">
-<h2>5. Connect</h2>
-<p>Fills in the server address and this device's access, and syncing starts. If the vault is encrypted, the plugin asks for its passphrase first.</p>
-<a class="btn cta" href="{{.ConnectLink}}">Connect</a>
-</div>
-{{end}}
 
 <p class="foot">This link works once and for about {{.Minutes}} more minutes. It carries the server address and a one-time code, nothing else.</p>
 <script>

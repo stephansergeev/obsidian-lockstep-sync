@@ -1,5 +1,13 @@
 # Changelog
 
+## 1.0.3
+
+The catalogue review's second pass. minAppVersion is 1.8.7, which is where
+getLanguage() and Notice.messageEl appeared; the previous value promised more than
+the code could keep. Event handlers no longer hand promises to the DOM, unload is
+synchronous as the Plugin type expects, JSON from the server is typed at the one
+place it is parsed, and the bundler takes Node's own list of built-in modules.
+
 ## 1.0.2
 
 Large files on a phone. iOS suspends Obsidian whenever the screen goes dark, and a
