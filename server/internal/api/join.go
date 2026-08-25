@@ -198,31 +198,50 @@ code { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 1
 <div class="step"><p>Make a new one from a device that is already set up: Settings → Lockstep Sync → <strong>Link a new device</strong>. Each link works once and for a short while, on purpose.</p></div>
 {{else}}
 <h1>Lockstep Sync</h1>
-<p class="sub">Joining vault <strong>{{.Vault}}</strong> on {{.Host}} as <strong>{{.Device}}</strong></p>
+<p class="sub">A step-by-step guide to installing the Lockstep plugin and syncing a vault across several devices. This device joins vault <strong>{{.Vault}}</strong> on {{.Host}} as <strong>{{.Device}}</strong>.</p>
 
 <div class="step">
-<h2>1. Obsidian, with a vault open</h2>
-<p>Create a vault if this device has none, then in Settings → Community plugins turn off Restricted mode. Obsidian asks for that step itself; nothing here can do it for you.</p>
+<h2>1. Create a vault</h2>
+<p>Open Obsidian → <strong>Create new vault</strong> → give it a name → <strong>Create</strong>. Skip this if a vault is already open.</p>
 <p id="missing" hidden>Obsidian did not open, so it may not be installed. <a class="text" id="get" href="https://obsidian.md/download">Get it here</a>, then come back to this page.</p>
 </div>
 
 <div class="step">
-<h2>2. Install the plugin</h2>
+<h2>2. Allow community plugins</h2>
+<p><strong>Settings</strong> → <strong>Community plugins</strong> → <strong>Turn on community plugins</strong>.</p>
+</div>
+
 {{if .InCatalogue}}
-<p>Opens the plugin's page inside Obsidian. Press Install, then Enable.</p>
+<div class="step">
+<h2>3. Install Lockstep Sync</h2>
+<p>Press <strong>Install</strong>, then <strong>Enable</strong>.</p>
 <a class="btn" href="{{.CatalogLink}}">Install Lockstep Sync</a>
-{{else}}
-<p>Two taps until the plugin is in the community catalogue: BRAT first, then the plugin through it. In BRAT's window, press Add plugin.</p>
-<a class="btn" href="{{.BratLink}}">Install BRAT</a>
-<a class="btn" href="{{.PluginLink}}">Install Lockstep Sync with BRAT</a>
-{{end}}
 </div>
 
 <div class="step">
-<h2>3. Connect</h2>
-<p>Opens Obsidian with the server address and this device's access filled in. If the vault is encrypted, type its passphrase there; it is not in this link.</p>
+<h2>4. Connect</h2>
+<p>Fills in the server address and this device's access. If the vault is encrypted, enter its passphrase in the plugin's settings.</p>
 <a class="btn cta" href="{{.ConnectLink}}">Connect</a>
 </div>
+{{else}}
+<div class="step">
+<h2>3. Install BRAT</h2>
+<p>Press <strong>Install</strong>, then <strong>Enable</strong>.</p>
+<a class="btn" href="{{.BratLink}}">Install BRAT</a>
+</div>
+
+<div class="step">
+<h2>4. Install Lockstep Sync</h2>
+<p>Press <strong>Add plugin</strong> in the window that opens.</p>
+<a class="btn" href="{{.PluginLink}}">Install Lockstep Sync with BRAT</a>
+</div>
+
+<div class="step">
+<h2>5. Connect</h2>
+<p>Fills in the server address and this device's access. If the vault is encrypted, enter its passphrase in the plugin's settings.</p>
+<a class="btn cta" href="{{.ConnectLink}}">Connect</a>
+</div>
+{{end}}
 
 <p class="foot">This link works once and for about {{.Minutes}} more minutes. It carries the server address and a one-time code, nothing else.</p>
 <script>
