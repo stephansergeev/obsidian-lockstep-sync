@@ -8,6 +8,14 @@
  * Obsidian is a type and disappears at compile time.
  */
 
+// The plugin reaches timers through window, as Obsidian asks for popout windows.
+// Node has no window; here it is the global, which is what it is in Obsidian too.
+if (typeof globalThis.window === "undefined") globalThis.window = globalThis;
+
+export function getLanguage() {
+	return "en";
+}
+
 export async function requestUrl(options) {
 	const { url, method = "GET", body, headers = {} } = options;
 	const resp = await fetch(url, { method, body, headers });
