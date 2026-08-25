@@ -573,8 +573,12 @@ export default class LockstepPlugin extends Plugin {
 				: t("add.linkApplied", { vault: this.serverVault || "?" }),
 			10000,
 		);
-		this.openSettings(needsPassphrase);
-		if (!needsPassphrase) void this.syncNow(true);
+		// An encrypted vault needs the passphrase, so the settings open with the
+		// cursor in the field. A readable one needs nothing: syncing starts, and the
+		// status bar shows it moving. Opening the settings there put a passphrase
+		// field in front of somebody who had not been asked for one.
+		if (needsPassphrase) this.openSettings(true);
+		else void this.syncNow(true);
 	}
 
 	/**

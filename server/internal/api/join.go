@@ -220,7 +220,7 @@ code { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 1
 
 <div class="step">
 <h2>4. Connect</h2>
-<p>Fills in the server address and this device's access. If the vault is encrypted, enter its passphrase in the plugin's settings.</p>
+<p>Fills in the server address and this device's access, and syncing starts. If the vault is encrypted, the plugin asks for its passphrase first.</p>
 <a class="btn cta" href="{{.ConnectLink}}">Connect</a>
 </div>
 {{else}}
@@ -238,7 +238,7 @@ code { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 1
 
 <div class="step">
 <h2>5. Connect</h2>
-<p>Fills in the server address and this device's access. If the vault is encrypted, enter its passphrase in the plugin's settings.</p>
+<p>Fills in the server address and this device's access, and syncing starts. If the vault is encrypted, the plugin asks for its passphrase first.</p>
 <a class="btn cta" href="{{.ConnectLink}}">Connect</a>
 </div>
 {{end}}
