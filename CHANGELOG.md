@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.16.2
+
+Progress on the phone. Obsidian mobile has no status bar, so a first sync there had
+started and nothing on screen said how far it was. One notice now shows the
+percentage, updated in place, and gives way to Done at the end. A readable vault
+linked from the join page starts syncing without opening the settings first.
+
 ## 0.16.1
 
 An Unlock & sync button beside the passphrase field for a device joining a vault

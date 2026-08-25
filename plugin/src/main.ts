@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: MIT
 
-import { Notice, Plugin, TAbstractFile, TFile, normalizePath } from "obsidian";
+import { Notice, Plugin, TAbstractFile, TFile, normalizePath, Platform } from "obsidian";
 import { ApiError, SyncClient, type ChangeEntry, redeemJoin } from "./api";
 import { ConflictModal } from "./conflict-modal";
 import { showConflictNotice } from "./conflict-notice";
@@ -69,11 +69,32 @@ export default class LockstepPlugin extends Plugin {
 
 	/** Places on the settings screen that mirror sync progress while it is open. */
 	progressTargets: HTMLElement[] = [];
+	/**
+	 * On a phone there is no status bar, so a long sync was invisible: it had
+	 * started, and nothing on screen said how far it was. One notice, updated in
+	 * place and taken down at the end, is the phone's status bar.
+	 */
+	private progressNotice: Notice | null = null;
+	private progressNoticeAt = 0;
 	/** The last completed sync's summary, shown once where the progress was. */
 	lastSummary: string | null = null;
 
 	showProgress(text: string): void {
 		for (const el of this.progressTargets) el.setText(text);
+		if (!Platform.isMobile) return;
+		const now = Date.now();
+		if (this.progressNotice && now - this.progressNoticeAt < 400) return;
+		this.progressNoticeAt = now;
+		if (!this.progressNotice) this.progressNotice = new Notice(text, 0);
+		else this.progressNotice.setMessage(text);
+	}
+
+	/** Take the phone's progress notice down; say how it ended if there was one. */
+	private endProgress(summary: string | null): void {
+		if (!this.progressNotice) return;
+		this.progressNotice.hide();
+		this.progressNotice = null;
+		if (summary) new Notice(summary, 6000);
 	}
 
 	/** Decision journal, flushed to disk after every pass. */
@@ -197,6 +218,7 @@ export default class LockstepPlugin extends Plugin {
 	}
 
 	override async onunload(): Promise<void> {
+		this.endProgress(null);
 		// Async passes outlive the plugin object. Everything that could still be
 		// running checks this flag between files and stops, so an updated plugin
 		// does not share the vault with its own ghost.
@@ -777,14 +799,15 @@ export default class LockstepPlugin extends Plugin {
 			const report = await this.engine.sync(!quiet);
 			const secs = ((Date.now() - started) / 1000).toFixed(1);
 			this.report(report, secs, quiet);
-			if (report.uploaded > 0 && report.errors.length === 0) {
+			if (report.uploaded + report.downloaded > 0 && report.errors.length === 0) {
 				this.lastSummary = t(this.cipher.enabled ? "progress.doneEncrypted" : "progress.done");
-				this.showProgress(this.lastSummary);
+				for (const el of this.progressTargets) el.setText(this.lastSummary);
 			}
 			if (this.engine.takeQueued()) this.scheduleSync();
 		} catch (e) {
 			this.reportError(t("error.sync"), e);
 		} finally {
+			this.endProgress(this.lastSummary);
 			await this.flushJournal();
 		}
 	}
@@ -853,6 +876,7 @@ export default class LockstepPlugin extends Plugin {
 			this.reportError(t("encryption.migrateStopped"), e);
 			this.showProgress(t("encryption.migrateStopped"));
 		} finally {
+			this.endProgress(this.lastSummary);
 			await this.flushJournal();
 		}
 	}
