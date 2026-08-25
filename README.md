@@ -1,7 +1,36 @@
 # Lockstep Sync
 
-Your Obsidian vault on every device, kept in step through a server you own. No
-subscription, no third-party cloud, no account. One small binary and your notes.
+Two-way sync for your vault between desktop, iPhone, iPad and Android, through a server
+you own. Self-hosted, end-to-end encrypted, free and open source. No subscription, no
+third-party cloud, no account: one small binary on a machine you already have, and your
+notes.
+
+## What you get
+
+- **Sync every device**: macOS, Windows, Linux, iOS and Android, from the same plugin.
+  Changes leave moments after you stop typing and arrive in seconds.
+- **Your own server**: a single binary with SQLite inside, installed by one script on any
+  Linux box or VPS, or run as a container. No CouchDB, no S3, no Cloudflare, no account.
+- **End-to-end encryption**: AES-256-GCM on the device, key from your passphrase through
+  Argon2id. File and folder names are sealed too. The server holds ciphertext under
+  ciphertext names and can read none of it. Encryption can be turned on later.
+- **Conflicts are asked, never decided for you**: edits to different lines merge on their
+  own; edits to the same lines keep both versions whole and ask, with each side named
+  after the device it came from. An edit always beats a deletion.
+- **Deleted files come back**: every device can restore what was deleted, for thirty days
+  by default, then the server erases it.
+- **Large vaults and large files**: attachments of hundreds of megabytes, downloaded in
+  slices that survive a phone going to sleep. Notes arrive before attachments, so a new
+  device is readable within its first minute.
+- **Set up by QR code**: a page on your server walks a new device through installing the
+  plugin and connecting, in three taps. Tokens are per device and revocable.
+- **Backup by design**: the server keeps revision history you can garbage-collect on your
+  own terms, and every device holds ordinary readable files.
+- **Verified builds**: releases are built by CI from the signed tag, carry GitHub
+  provenance attestations, and reproduce byte-for-byte from the source.
+
+If you have looked at Obsidian Sync, Remotely Save, Self-hosted LiveSync, Syncthing or
+Git for this, the difference is below.
 
 ## Why this one
 

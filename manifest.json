@@ -3,7 +3,7 @@
   "name": "Lockstep Sync",
   "version": "1.0.4",
   "minAppVersion": "1.13.0",
-  "description": "Two-way vault sync through your own server. Self-hosted, no subscription, no cloud, single binary. Conflict-safe: nothing is overwritten silently.",
+  "description": "Sync your vault between desktop, iOS and Android through your own server. Self-hosted, end-to-end encrypted, free and open source: no cloud, no subscription. Conflicts are asked, never overwritten silently.",
   "author": "Stephan Sergeev",
   "authorUrl": "https://github.com/stephansergeev",
   "isDesktopOnly": false
