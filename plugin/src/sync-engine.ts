@@ -645,44 +645,72 @@ export class SyncEngine {
 			return entry !== undefined && !entry.folder && entry.dirty === true && !this.isExcluded(path);
 		});
 		let done = 0;
+		let next = 0;
+		let lastCheckpoint = Date.now();
 
-		for (const path of pending) {
+		const one = async (path: string): Promise<void> => {
 			const entry = this.deps.index.get(path);
-			if (!entry) continue;
-			done++;
+			if (!entry) return;
+			const started = Date.now();
 			try {
 				// A directory that an earlier version recorded as a file. Reading it
 				// fails every pass and says so, once per folder, forever.
 				if (this.isFolder(path)) {
 					this.deps.index.remove(path);
 					report.skipped++;
-					continue;
+					return;
 				}
 				if (!(await adapter.exists(path))) {
 					// Never uploaded, now gone. The server has nothing to forget.
 					if (entry.base_rev === 0) {
 						this.deps.index.remove(path);
 						report.skipped++;
-						continue;
+						return;
 					}
 					await this.pushDeletion(client, path, entry.base_rev, report);
-					continue;
+					return;
 				}
 				const data = await adapter.readBinary(path);
+				const read = Date.now();
 				const hash = await sha256(data);
+				const hashed = Date.now();
 				if (hash === entry.plain_hash) {
 					// Changed and changed back. Nothing to send.
 					this.deps.index.set(path, { ...entry, local_hash: hash, dirty: false });
 					report.skipped++;
-					continue;
+					return;
 				}
 				await this.upload(client, path, data, hash, entry.base_rev, report);
+				const sent = Date.now();
+				this.trace(
+					`sent ${path} in ${sent - started}ms ` +
+						`(read ${read - started}, hash ${hashed - read}, put ${sent - hashed}, ${data.byteLength} bytes)`,
+				);
 			} catch (e) {
 				report.errors.push(`${path}: ${describe(e)}`);
 				this.deps.log(`push ${path}`, e);
 			}
-			this.deps.onProgress?.(done, pending.length, path);
-		}
+		};
+
+		// A few files in flight at once. Each upload spends most of its time waiting
+		// on the network, and a vault of small notes sent strictly one after another
+		// ran at one file per round trip. The index is checkpointed on a clock rather
+		// than per file: a kill mid-batch loses at most two seconds of bookkeeping,
+		// and every file it forgets is simply sent again.
+		const worker = async (): Promise<void> => {
+			while (next < pending.length) {
+				const path = pending[next++] as string;
+				await one(path);
+				done++;
+				this.deps.onProgress?.(done, pending.length, path);
+				if (Date.now() - lastCheckpoint > 2000) {
+					lastCheckpoint = Date.now();
+					await this.deps.index.save();
+				}
+			}
+		};
+		await Promise.all(Array.from({ length: Math.min(4, pending.length) }, worker));
+		if (pending.length > 0) await this.deps.index.save();
 	}
 
 	private async upload(
