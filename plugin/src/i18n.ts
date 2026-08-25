@@ -109,7 +109,7 @@ const en: Dict = {
 	"settings.addDevice.button": "Link device",
 	"settings.initial.name": "Initial sync",
 	"settings.initial.desc":
-		"To put your {count} files on the server as they are, not encrypted, press here. To encrypt them instead, set a passphrase below and sync starts on its own.",
+		"One press, once: your {count} files go to the server as they are, not encrypted, and from then on syncing is fully automatic. To encrypt them instead, set a passphrase below and it starts on its own.",
 	"settings.initial.button": "Sync as is",
 	"settings.section.more": "More settings",
 	"add.title": "Add another device",
@@ -280,7 +280,7 @@ const ru: Dict = {
 	"settings.addDevice.button": "Подключить",
 	"settings.initial.name": "Первый синк",
 	"settings.initial.desc":
-		"Чтобы положить {count} файлов на сервер как есть, без шифрования, нажми сюда. Чтобы зашифровать, задай пароль ниже: синхронизация начнётся сама.",
+		"Одно нажатие, один раз: {count} файлов уйдут на сервер как есть, без шифрования, а дальше синхронизация полностью автоматическая. Чтобы зашифровать, задай пароль ниже: она начнётся сама.",
 	"settings.initial.button": "Синк как есть",
 	"settings.section.more": "Остальные настройки",
 	"add.title": "Добавить устройство",
