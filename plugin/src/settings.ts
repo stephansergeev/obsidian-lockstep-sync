@@ -206,15 +206,6 @@ export class SyncSettingsTab extends PluginSettingTab {
 	/** Everything typed once and rarely again, most-touched first. */
 	private renderMore(containerEl: HTMLElement): void {
 		new Setting(containerEl)
-			.setName(t("settings.sync.name"))
-			.setDesc(t("settings.sync.desc"))
-			.addButton((b) =>
-				b.setButtonText(t("settings.sync.button")).onClick(async () => {
-					await this.plugin.syncNow();
-				}),
-			);
-
-		new Setting(containerEl)
 			.setName(t("settings.restore.name"))
 			.setDesc(t("settings.restore.desc"))
 			.addButton((b) =>

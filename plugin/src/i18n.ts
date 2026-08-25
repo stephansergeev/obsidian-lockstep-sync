@@ -102,9 +102,6 @@ const en: Dict = {
 	"encryption.wrong": "Wrong passphrase for this vault.",
 	"encryption.failed": "Could not unlock: {message}",
 
-	"settings.sync.name": "Sync now",
-	"settings.sync.desc": "Runs on its own; this is for when you do not want to wait.",
-	"settings.sync.button": "Sync",
 
 	"cmd.addDevice": "Add another device",
 	"settings.addDevice.name": "Link a new device",
@@ -276,9 +273,6 @@ const ru: Dict = {
 	"encryption.wrong": "Неверный пароль для этого волта.",
 	"encryption.failed": "Не удалось открыть: {message}",
 
-	"settings.sync.name": "Синхронизировать сейчас",
-	"settings.sync.desc": "Идёт сама; это на случай, когда не хочется ждать.",
-	"settings.sync.button": "Синхронизировать",
 
 	"cmd.addDevice": "Добавить устройство",
 	"settings.addDevice.name": "Подключить новое устройство",
