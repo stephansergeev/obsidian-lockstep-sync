@@ -276,6 +276,25 @@ export class SyncClient {
 		};
 	}
 
+	/**
+	 * One slice of a file. The server answers Range requests, so a download that
+	 * a phone put to sleep half-way can be picked up where it stopped.
+	 */
+	async getFileRange(
+		path: string,
+		rev: number | undefined,
+		start: number,
+		end: number,
+	): Promise<{ data: ArrayBuffer; total: number }> {
+		const q = rev === undefined ? "" : `&rev=${rev}`;
+		const resp = await this.call("GET", `/file?path=${encodePath(await this.remote(path))}${q}`, {
+			headers: { Range: `bytes=${start}-${end}` },
+		});
+		const range = String(resp.headers["content-range"] ?? "");
+		const total = Number(range.split("/")[1] ?? 0);
+		return { data: resp.arrayBuffer, total };
+	}
+
 	async putFile(
 		path: string,
 		baseRev: number,

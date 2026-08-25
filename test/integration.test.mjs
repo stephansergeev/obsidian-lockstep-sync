@@ -670,13 +670,17 @@ test("a failed change does not move the cursor past itself", async (t) => {
 
 	const bad = await b.sync();
 	assert.ok(bad.errors.length > 0, "the failure has to be reported");
-	assert.equal(b.index.lastSeq, 0, "and the cursor must not have moved past it");
+	// The cursor moves on, the change does not get lost: it is kept aside, and the
+	// file behind it arrives in the same pass instead of waiting.
+	assert.equal(b.index.deferred.length, 1, "the failed change is kept");
+	assert.equal(b.index.deferred[0].path, "first.md");
+	assert.equal(await b.vault.read("second.md"), "two\n");
 
 	// The next pass, with writing working again, has to pick up what was missed.
 	const good = await b.sync();
 	assert.equal(good.errors.length, 0);
 	assert.equal(await b.vault.read("first.md"), "one\n");
-	assert.equal(await b.vault.read("second.md"), "two\n");
+	assert.equal(b.index.deferred.length, 0);
 	// Before this, a pass that failed marked the change handled and nothing ever
 	// asked for it again: the edit was gone from that device for good.
 });
@@ -1079,4 +1083,96 @@ test("an interrupted encryption finishes where it stopped, and nobody else write
 	// Each note exactly once under its hidden name.
 	const names = await Promise.all(live.map((e) => paths.decrypt(e.path)));
 	assert.deepEqual(names.sort(), ["n1.md", "n2.md", "n3.md", "n4.md", "n5.md", "n6.md"]);
+});
+
+// --- large files on a phone that sleeps ---------------------------------------------
+
+test("a large download cut off half-way resumes at the last whole slice", async (t) => {
+	const server = await startServer();
+	const a = await makeDevice(server, "desktop", server.tokens.a);
+	let slices = 0;
+	const b = await makeDevice(server, "phone", server.tokens.b, {
+		chunkBytes: 64 * 1024,
+		deferBaseMs: 0,
+		wrapClient: (c) =>
+			Object.assign(Object.create(c), {
+				async getFileRange(...args) {
+					// The screen goes dark after the second slice.
+					if (++slices === 3) b.stop();
+					return c.getFileRange(...args);
+				},
+			}),
+	});
+	t.after(async () => {
+		await a.cleanup();
+		await b.cleanup();
+		await server.stop();
+	});
+
+	const big = new Uint8Array(300 * 1024);
+	for (let i = 0; i < big.length; i++) big[i] = (i * 7) & 0xff;
+	await a.vault.writeBinary("deck.pptx", big.buffer);
+	await a.edit("after.md", "a note that comes after the big file\n");
+	await a.sync();
+
+	const first = await b.sync();
+	assert.equal(await b.vault.exists("deck.pptx"), false, "the file is not there yet");
+	assert.equal(b.index.deferred.length, 1, JSON.stringify(first));
+	assert.equal(b.index.deferred[0].path, "deck.pptx");
+
+	b.resume();
+	const second = await b.sync();
+	assert.equal(b.index.deferred.length, 0, JSON.stringify(second));
+	assert.ok(
+		b.logs.some((l) => /resumed deck\.pptx at slice 3 of 5/.test(l)),
+		`expected a resume trace, got:\n${b.logs.filter((l) => /deck/.test(l)).join("\n")}`,
+	);
+	const got = new Uint8Array(await b.vault.readBinary("deck.pptx"));
+	assert.equal(got.length, big.length);
+	assert.ok(got.every((v, i) => v === big[i]), "bytes must match after the resume");
+	assert.equal(await b.vault.read("after.md"), "a note that comes after the big file\n");
+});
+
+test("a file that will not download does not hold back the files behind it", async (t) => {
+	const server = await startServer();
+	const a = await makeDevice(server, "desktop", server.tokens.a);
+	let failures = 0;
+	const b = await makeDevice(server, "phone", server.tokens.b, {
+		deferBaseMs: 0,
+		wrapClient: (c) =>
+			Object.assign(Object.create(c), {
+				async getFile(path, rev) {
+					if (path === "poison.md" && failures < 2) {
+						failures++;
+						throw new Error("the network dropped");
+					}
+					return c.getFile(path, rev);
+				},
+			}),
+	});
+	t.after(async () => {
+		await a.cleanup();
+		await b.cleanup();
+		await server.stop();
+	});
+
+	await a.edit("first.md", "1\n");
+	await a.edit("poison.md", "eventually\n");
+	await a.edit("last.md", "3\n");
+	await a.sync();
+
+	const one = await b.sync();
+	assert.equal(await b.vault.read("first.md"), "1\n");
+	assert.equal(await b.vault.read("last.md"), "3\n", "the file behind the failure must arrive");
+	assert.equal(await b.vault.exists("poison.md"), false);
+	assert.equal(b.index.deferred.length, 1);
+	assert.equal(one.errors.length, 1, "the failure is reported once");
+
+	const two = await b.sync();
+	assert.equal(two.errors.length, 0, "a repeat failure goes to the journal, not the report");
+	assert.equal(b.index.deferred[0].attempts, 2);
+
+	await b.sync();
+	assert.equal(await b.vault.read("poison.md"), "eventually\n");
+	assert.equal(b.index.deferred.length, 0);
 });

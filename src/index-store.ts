@@ -53,6 +53,21 @@ export interface PendingConflict {
 	mergeable: boolean;
 }
 
+/**
+ * A remote change that could not be applied when it arrived, kept so the cursor
+ * can move on without losing it. The whole entry travels, because the change log
+ * never offers it again.
+ */
+export interface DeferredChange {
+	path: string;
+	entry: Record<string, unknown>;
+	seq: number;
+	attempts: number;
+	/** Unix ms before which it is not worth trying again. */
+	next_try: number;
+	error: string;
+}
+
 /** A local rename that has not reached the server yet. */
 export interface PendingRename {
 	from: string;
@@ -74,6 +89,8 @@ interface IndexFile {
 	conflicts: PendingConflict[];
 	/** Whether the last pull was read with a key. A change means starting over. */
 	read_encrypted?: boolean;
+	/** Changes that failed to apply and are waiting for another try. */
+	deferred?: DeferredChange[];
 }
 
 const EMPTY: IndexFile = {
@@ -184,6 +201,19 @@ export class LocalIndex {
 
 	get conflicts(): PendingConflict[] {
 		return this.data.conflicts;
+	}
+
+	get deferred(): DeferredChange[] {
+		return this.data.deferred ?? [];
+	}
+
+	/** One deferred change per path: a newer one for the same path replaces the older. */
+	defer(change: DeferredChange): void {
+		this.data.deferred = [...this.deferred.filter((d) => d.path !== change.path), change];
+	}
+
+	undefer(path: string): void {
+		this.data.deferred = this.deferred.filter((d) => d.path !== path);
 	}
 
 	addConflict(conflict: PendingConflict): void {

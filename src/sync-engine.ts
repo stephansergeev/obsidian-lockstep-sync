@@ -5,7 +5,7 @@ import { ApiError, ConflictError, SyncClient, type ChangeEntry } from "./api";
 
 export { SyncClient } from "./api";
 import { merge3 } from "./diff3";
-import type { LocalIndex } from "./index-store";
+import type { DeferredChange, LocalIndex } from "./index-store";
 import { conflictName, defaultDeviceName, sha256, toNFC } from "./paths";
 import { plaintext as plaintextCipher, type Cipher, type PathCipher } from "./crypto";
 import type { SyncSettings } from "./settings";
@@ -86,6 +86,17 @@ export interface EngineDeps {
 	listLocalFiles: () => string[];
 	/** How many files the server holds, or 0 if unknown. Gives a pull a denominator. */
 	serverFileCount?: () => number;
+	/**
+	 * A folder of this plugin's own, for the pieces of a download in progress. A
+	 * phone suspends the app whenever the screen goes dark, and a large file
+	 * fetched in one request was lost each time; fetched in slices that land on
+	 * disk, it continues from the last whole slice instead.
+	 */
+	scratchDir: string;
+	/** Slice size for large downloads. Files under one slice are fetched whole. */
+	chunkBytes?: number;
+	/** First wait before a failed change is tried again; doubles each time, up to an hour. */
+	deferBaseMs?: number;
 	/**
 	 * True once the plugin has been unloaded. A pass is a chain of awaits, and
 	 * unloading does not cancel it: an updated plugin's old copy kept uploading for
@@ -512,6 +523,7 @@ export class SyncEngine {
 			}
 		};
 		try {
+			await this.retryDeferred(client, report);
 			for (;;) {
 				const page = await client.changes(this.deps.index.lastSeq, 200);
 				for (const entry of page.entries) {
@@ -533,13 +545,12 @@ export class SyncEngine {
 					try {
 						await this.applyRemote(client, entry, path, report);
 					} catch (e) {
-						// The cursor stops here. Moving past a change that failed to apply
-						// would mark it handled forever: it is never in a later delta, and
-						// nothing ever asks for it again. A pass that stops and says so can
-						// be retried; one that skips ahead has quietly lost an edit.
-						report.errors.push(`${path}: ${describe(e)}`);
-						this.deps.log(`pull ${path}`, e);
-						return;
+						// The change log never offers this entry again, so it cannot simply
+						// be skipped. It used to stop the cursor instead, and one file a
+						// phone could not finish held every file behind it. Now the entry
+						// itself is kept, the cursor moves on, and it is tried again ahead
+						// of the next pass, with a wait that grows each time it fails.
+						this.defer(path, entry, e, report);
 					}
 					this.deps.index.setLastSeq(entry.seq);
 					await checkpoint();
@@ -555,6 +566,47 @@ export class SyncEngine {
 			}
 		} finally {
 			await checkpoint(true);
+		}
+	}
+
+	private defer(path: string, entry: ChangeEntry, e: unknown, report: SyncReport): void {
+		const known = this.deps.index.deferred.find((d) => d.path === path);
+		const attempts = (known?.attempts ?? 0) + 1;
+		const base = this.deps.deferBaseMs ?? 60_000;
+		const wait = Math.min(base * 2 ** (attempts - 1), 60 * 60_000);
+		this.deps.index.defer({
+			path,
+			entry: entry as unknown as Record<string, unknown>,
+			seq: entry.seq,
+			attempts,
+			next_try: Date.now() + wait,
+			error: describe(e),
+		});
+		// Said once, then only to the journal: a file that fails every pass would
+		// otherwise announce itself every fifteen seconds.
+		if (attempts === 1) report.errors.push(`${path}: ${describe(e)}`);
+		this.deps.log(`pull ${path} (attempt ${attempts}, next in ${Math.round(wait / 1000)}s)`, e);
+	}
+
+	private async retryDeferred(client: SyncClient, report: SyncReport): Promise<void> {
+		for (const d of [...this.deps.index.deferred]) {
+			if (this.deps.stopped()) return;
+			if (d.next_try > Date.now()) continue;
+			const entry = d.entry as unknown as ChangeEntry;
+			// A later change for the same path has arrived and been applied since;
+			// the old one would only roll it back.
+			const known = this.deps.index.get(d.path);
+			if (known && known.base_rev >= entry.rev) {
+				this.deps.index.undefer(d.path);
+				continue;
+			}
+			try {
+				await this.applyRemote(client, entry, d.path, report);
+				this.deps.index.undefer(d.path);
+				this.trace(`deferred ${d.path} applied on attempt ${d.attempts + 1}`);
+			} catch (e) {
+				this.defer(d.path, entry, e, report);
+			}
 		}
 	}
 
@@ -760,14 +812,90 @@ export class SyncEngine {
 		path: string,
 		rev?: number,
 		expectHash?: string,
+		size?: number,
 	): Promise<{ plain: ArrayBuffer; cipherHash: string; plainHash: string; rev: number }> {
-		const got = await client.getFile(path, rev);
+		const got =
+			size !== undefined && size > this.chunkBytes()
+				? await this.fetchInSlices(client, path, rev, size, expectHash)
+				: await client.getFile(path, rev);
 		const cipherHash = await sha256(got.data);
 		if (expectHash && cipherHash !== expectHash) {
+			await this.dropSlices(path);
 			throw new Error(`corrupt download: expected ${expectHash}, got ${cipherHash}`);
 		}
+		await this.dropSlices(path);
 		const plain = await this.cipher().decrypt(got.data);
 		return { plain, cipherHash, plainHash: await sha256(plain), rev: got.rev || rev || 0 };
+	}
+
+	private chunkBytes(): number {
+		return this.deps.chunkBytes ?? 4 * 1024 * 1024;
+	}
+
+	private async sliceDir(path: string): Promise<string> {
+		return `${this.deps.scratchDir}/parts/${(await sha256(new TextEncoder().encode(path).buffer)).slice(0, 32)}`;
+	}
+
+	/**
+	 * A large file, one slice at a time, each slice written to disk as it lands. A
+	 * run that is cut off resumes at the first slice that is not there. The slices
+	 * are keyed by the revision and the expected hash, so a file that changed on
+	 * the server meanwhile starts over rather than being stitched from two versions.
+	 */
+	private async fetchInSlices(
+		client: SyncClient,
+		path: string,
+		rev: number | undefined,
+		size: number,
+		expectHash: string | undefined,
+	): Promise<{ data: ArrayBuffer; rev: number; hash: string }> {
+		const adapter = this.deps.app.vault.adapter;
+		const dir = await this.sliceDir(path);
+		const chunk = this.chunkBytes();
+		const count = Math.ceil(size / chunk);
+		const stamp = `${rev ?? 0}:${expectHash ?? ""}:${size}`;
+		const stampFile = `${dir}/stamp`;
+		let have = 0;
+		if ((await adapter.exists(stampFile)) && (await adapter.read(stampFile)) === stamp) {
+			while (have < count && (await adapter.exists(`${dir}/${have}`))) have++;
+		} else {
+			await this.dropSlices(path);
+			await adapter.mkdir(`${this.deps.scratchDir}/parts`).catch(() => undefined);
+			await adapter.mkdir(dir).catch(() => undefined);
+			await adapter.write(stampFile, stamp);
+		}
+		this.trace(
+			have > 0
+				? `resumed ${path} at slice ${have} of ${count}`
+				: `fetching ${path} in ${count} slices of ${chunk} bytes`,
+		);
+		for (let i = have; i < count; i++) {
+			if (this.deps.stopped()) throw new Error("stopped");
+			const start = i * chunk;
+			const end = Math.min(size, start + chunk) - 1;
+			const got = await client.getFileRange(path, rev, start, end);
+			if (got.data.byteLength !== end - start + 1) {
+				throw new Error(`short slice ${i} of ${path}: ${got.data.byteLength} bytes`);
+			}
+			await adapter.writeBinary(`${dir}/${i}`, got.data);
+			this.deps.onProgress?.(i + 1, count, path);
+		}
+		const joined = new Uint8Array(size);
+		for (let i = 0; i < count; i++) {
+			joined.set(new Uint8Array(await adapter.readBinary(`${dir}/${i}`)), i * chunk);
+		}
+		return { data: joined.buffer, rev: rev ?? 0, hash: expectHash ?? "" };
+	}
+
+	private async dropSlices(path: string): Promise<void> {
+		const dir = await this.sliceDir(path);
+		try {
+			if (await this.deps.app.vault.adapter.exists(dir)) {
+				await this.deps.app.vault.adapter.rmdir(dir, true);
+			}
+		} catch {
+			/* leftovers cost disk, not correctness */
+		}
 	}
 
 	/** Encrypt and upload. Returns what the index needs to remember. */
@@ -791,7 +919,7 @@ export class SyncEngine {
 	}
 
 	private async download(client: SyncClient, entry: ChangeEntry, path: string): Promise<void> {
-		const got = await this.fetch(client, path, entry.rev, entry.hash);
+		const got = await this.fetch(client, path, entry.rev, entry.hash, entry.size);
 		await this.write(path, got.plain);
 		this.deps.index.set(path, {
 			base_rev: entry.rev,

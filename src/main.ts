@@ -118,6 +118,7 @@ export default class LockstepPlugin extends Plugin {
 			listLocalFiles: () => this.app.vault.getFiles().map((f) => f.path),
 			stopped: () => this.unloaded,
 			serverFileCount: () => this.serverFiles,
+			scratchDir: dir,
 			trace: (line) => this.traceLine(line),
 			onProgress: (done, total, path) => {
 				// Movement while a long sync runs, and a percentage where the total is

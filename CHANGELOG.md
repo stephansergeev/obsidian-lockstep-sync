@@ -1,5 +1,15 @@
 # Changelog
 
+## 1.0.2
+
+Large files on a phone. iOS suspends Obsidian whenever the screen goes dark, and a
+40 MB download fetched in one request was lost each time and started over on the
+next pass; a phone that was put down mid-download never got past that file. Files
+over 4 MB are now fetched in 4 MB slices, each written to disk as it lands, and a
+cut-off download resumes at the last whole slice. And a change that fails to apply
+no longer stops the cursor: it is kept aside and tried again ahead of later passes,
+with a wait that doubles each time, while everything behind it arrives.
+
 ## 1.0.1
 
 Listed in the community catalogue on 2026-08-25; this release takes the automated

@@ -114,8 +114,14 @@ export async function makeDevice(server, name, token, options = {}) {
 		app: { vault },
 		index,
 		settings,
-		client: () =>
-			new SyncClient(server.url, token, settings.deviceName, pathCipher),
+		client: () => {
+			const c = new SyncClient(server.url, token, settings.deviceName, pathCipher);
+			return options.wrapClient ? options.wrapClient(c) : c;
+		},
+		scratchDir: ".index",
+		chunkBytes: options.chunkBytes,
+		// Tests retry at once unless they say otherwise; the plugin waits a minute.
+		deferBaseMs: options.deferBaseMs ?? 0,
 		cipher: () => cipher,
 		guard: async () => options.guard ? options.guard() : "",
 		listLocalFiles: () => Object.keys(vault.snapshotSync()),
