@@ -13,9 +13,9 @@ export interface SyncSettings {
 	deviceName: string;
 	/** Paths that never leave this device, whatever else is configured. */
 	excludes: string[];
+	/** Kept for old settings files; syncing is always automatic now. */
 	autoSync: boolean;
-	/** Kept for old settings files; the interval itself is fixed in code now. */
-	/** Encrypt content before it leaves the device. */
+	/** Kept for old settings files; a passphrase is the intent now. */
 	encryption: boolean;
 	/**
 	 * The passphrase, kept in the plugin's own settings file inside the vault.
@@ -25,7 +25,7 @@ export interface SyncSettings {
 	 * launch would mostly train people to turn encryption off.
 	 */
 	passphrase: string;
-	/** Seconds between background passes. */
+	/** Kept for old settings files; the interval itself is fixed in code now. */
 	intervalSeconds: number;
 }
 
@@ -38,13 +38,15 @@ export const DEFAULT_SETTINGS: SyncSettings = {
 	autoSync: true,
 	encryption: false,
 	passphrase: "",
-	// Fifteen because it costs almost nothing and makes another device feel live.
-	// A poll that finds nothing is one indexed query and forty bytes, and Obsidian on
-	// a phone does not run in the background, so this only happens while somebody is
-	// looking at the screen anyway.
 	intervalSeconds: 15,
 };
 
+/**
+ * The screen is ordered by what somebody needs to see, not by what the plugin is
+ * made of. Decisions first, the three things a person acts on next, and every
+ * setting that was typed once and never again at the bottom, in order of how often
+ * it is likely to be touched.
+ */
 export class SyncSettingsTab extends PluginSettingTab {
 	/** Held so the field does not blank out while the server is being asked. */
 	private retentionValue = "";
@@ -60,108 +62,84 @@ export class SyncSettingsTab extends PluginSettingTab {
 		const { containerEl } = this;
 		containerEl.empty();
 
-		// Whether the server can read this vault is the first thing on the screen,
-		// stated in a sentence rather than inferred from a toggle being on. A setting
-		// that is on and a vault that is actually hidden are not the same thing, and
-		// the difference is the whole point of the feature.
-		this.renderState(containerEl);
-
-		// Anything waiting on a decision goes next. This is the screen people open
-		// when they were told something needs deciding.
 		this.renderConflicts(containerEl);
+		this.renderInitialSync(containerEl);
+		this.renderEncryption(containerEl);
 
 		new Setting(containerEl)
-			.setName(t("settings.serverUrl.name"))
-			.setDesc(t("settings.serverUrl.desc"))
-			.addText((text) =>
-				text
-					.setPlaceholder("https://sync.example.com")
-					.setValue(this.plugin.settings.serverUrl)
-					.onChange(async (v) => {
-						this.plugin.settings.serverUrl = v.trim();
-						await this.plugin.saveSettings();
-					}),
-			);
-
-		new Setting(containerEl)
-			.setName(t("settings.token.name"))
-			.setDesc(t("settings.token.desc"))
-			.addText((text) => {
-				text.inputEl.type = "password";
-				text
-					.setPlaceholder("obs_…")
-					.setValue(this.plugin.settings.token)
-					.onChange(async (v) => {
-						this.plugin.settings.token = v.trim();
-						await this.plugin.saveSettings();
-					});
-			});
-
-		// Which vault on the server this token opens. What the vault is called in
-		// Obsidian is local to this device and travels nowhere, so the two names are
-		// unrelated and somebody with several vaults needs to see the one that binds.
-		const vaultRow = new Setting(containerEl)
-			.setName(t("settings.serverVault.name"))
-			.setDesc(t("settings.serverVault.desc"));
-		const vaultValue = vaultRow.controlEl.createSpan({
-			cls: "lockstep-vault-name",
-			text: this.plugin.serverVaultName() || t("settings.serverVault.unknown"),
-		});
-		void this.plugin.refreshServerVault().then(() => {
-			vaultValue.setText(this.plugin.serverVaultName() || t("settings.serverVault.unknown"));
-		});
-
-		new Setting(containerEl)
-			.setName(t("settings.device.name"))
-			.setDesc(t("settings.device.desc"))
-			.addText((text) =>
-				text
-					.setPlaceholder(defaultDeviceName())
-					.setValue(this.plugin.settings.deviceName)
-					.onChange(async (v) => {
-						this.plugin.settings.deviceName = v.trim();
-						await this.plugin.saveSettings();
-					}),
-			);
-
-		new Setting(containerEl)
-			.setName(t("settings.excludes.name"))
-			.setDesc(t("settings.excludes.desc"))
-			.addTextArea((text) =>
-				text.setValue(this.plugin.settings.excludes.join("\n")).onChange(async (v) => {
-					this.plugin.settings.excludes = v
-						.split("\n")
-						.map((s) => s.trim())
-						.filter(Boolean);
-					await this.plugin.saveSettings();
+			.setName(t("settings.addDevice.name"))
+			.setDesc(t("settings.addDevice.desc"))
+			.addButton((b) =>
+				b.setCta().setButtonText(t("settings.addDevice.button")).onClick(() => {
+					this.plugin.openAddDevice();
 				}),
 			);
 
-		new Setting(containerEl).setName(t("settings.section.encryption")).setHeading();
+		new Setting(containerEl).setName(t("settings.section.more")).setHeading();
+		this.renderMore(containerEl);
 
-		// One block, no switch. A passphrase is the intent to encrypt, and a switch
-		// that must agree with a field is a step that exists only to be forgotten.
-		if (this.plugin.vaultNeedsSetup()) {
-			const warn = containerEl.createDiv({ cls: "lockstep-banner is-locked" });
-			const body = warn.createDiv({ cls: "lockstep-banner-text" });
-			body.createDiv({
-				cls: "lockstep-banner-title",
-				text: t("settings.passphrase.firstTime"),
+		containerEl.createEl("p", {
+			cls: "setting-item-description",
+			text: this.plugin.statusLine(),
+		});
+	}
+
+	/**
+	 * The first sync of an existing vault into an empty server is a decision, and it
+	 * is the first thing on the screen until it has been made. Once the server holds
+	 * anything the question no longer exists and neither does the block.
+	 */
+	private renderInitialSync(containerEl: HTMLElement): void {
+		const empty = this.plugin.serverLooksEmpty();
+		if (empty === null) {
+			void this.plugin.refreshServerVault().then(() => {
+				if (this.plugin.serverLooksEmpty() === true) this.display();
 			});
-			body.createDiv({
-				cls: "lockstep-banner-detail",
-				text: t("settings.passphrase.oneChance"),
-			});
+			return;
 		}
+		if (!empty || this.plugin.encryptionWanted() || this.app.vault.getFiles().length === 0) return;
+
+		new Setting(containerEl)
+			.setName(t("settings.initial.name"))
+			.setDesc(t("settings.initial.desc", { count: this.app.vault.getFiles().length }))
+			.addButton((b) =>
+				b
+					.setCta()
+					.setButtonText(t("settings.initial.button"))
+					.onClick(async () => {
+						b.setDisabled(true);
+						await this.plugin.syncNow();
+						await this.plugin.refreshServerVault();
+						this.display();
+					}),
+			);
+	}
+
+	private renderEncryption(containerEl: HTMLElement): void {
+		const encrypting = this.plugin.encryptionReady();
+		const locked = this.plugin.isLocked();
+		const state = containerEl.createDiv({
+			cls: `lockstep-banner ${encrypting ? "is-safe" : locked ? "is-locked" : "is-open"}`,
+		});
+		state.createDiv({ cls: "lockstep-banner-text" }).createDiv({
+			cls: "lockstep-banner-title",
+			text: encrypting
+				? t(this.plugin.hidesNames() ? "banner.hiddenNames" : "banner.hidden")
+				: locked
+					? t("banner.locked")
+					: t("banner.open"),
+		});
 
 		const meter = containerEl.createDiv({ cls: "lockstep-meter" });
 		const bar = meter.createDiv({ cls: "lockstep-meter-bar" });
 		const segments = [0, 1, 2].map(() => bar.createDiv({ cls: "lockstep-meter-segment" }));
 		const label = meter.createDiv({ cls: "lockstep-meter-label" });
+		const fresh = this.plugin.vaultNeedsSetup();
 
 		const judge = (value: string) => {
-			meter.toggleClass("is-hidden", !value);
-			if (!value) return;
+			// Strength only matters while the passphrase is being chosen.
+			meter.toggleClass("is-hidden", !value || !fresh);
+			if (!value || !fresh) return;
 			const verdict = judgePassphrase(value);
 			const filled = verdict === "weak" ? 1 : verdict === "medium" ? 2 : 3;
 			segments.forEach((seg, i) => {
@@ -173,9 +151,9 @@ export class SyncSettingsTab extends PluginSettingTab {
 			label.addClass(`is-${verdict}`);
 		};
 
-		new Setting(containerEl)
+		const row = new Setting(containerEl)
 			.setName(t("settings.encrypt.name"))
-			.setDesc(t("settings.encrypt.desc"))
+			.setDesc(t(fresh ? "settings.encrypt.descNew" : "settings.encrypt.descExisting"))
 			.addText((text) => {
 				text.inputEl.type = "password";
 				if (this.plugin.takeFocusRequest()) {
@@ -204,8 +182,10 @@ export class SyncSettingsTab extends PluginSettingTab {
 					}
 					this.display();
 				});
-			})
-			.addButton((b) =>
+			});
+
+		if (fresh) {
+			row.addButton((b) =>
 				b
 					.setCta()
 					.setButtonText(t("settings.encrypt.set"))
@@ -220,34 +200,25 @@ export class SyncSettingsTab extends PluginSettingTab {
 						this.display();
 					}),
 			);
+		}
+	}
 
-		new Setting(containerEl).setName(t("settings.section.maintenance")).setHeading();
-
+	/** Everything typed once and rarely again, most-touched first. */
+	private renderMore(containerEl: HTMLElement): void {
 		new Setting(containerEl)
 			.setName(t("settings.sync.name"))
 			.setDesc(t("settings.sync.desc"))
 			.addButton((b) =>
-				b.setCta().setButtonText(t("settings.sync.button")).onClick(async () => {
+				b.setButtonText(t("settings.sync.button")).onClick(async () => {
 					await this.plugin.syncNow();
 				}),
 			);
 
 		new Setting(containerEl)
-			.setName(t("settings.pull.name"))
-			.setDesc(t("settings.pull.desc"))
+			.setName(t("settings.restore.name"))
+			.setDesc(t("settings.restore.desc"))
 			.addButton((b) =>
-				b.setButtonText(t("settings.pull.button")).onClick(async () => {
-					await this.plugin.pullAll();
-				}),
-			);
-
-		new Setting(containerEl)
-			.setName(t("settings.addDevice.name"))
-			.setDesc(t("settings.addDevice.desc"))
-			.addButton((b) =>
-				b.setCta().setButtonText(t("settings.addDevice.button")).onClick(() => {
-					this.plugin.openAddDevice();
-				}),
+				b.setButtonText(t("settings.restore.button")).onClick(() => this.plugin.openRestore()),
 			);
 
 		new Setting(containerEl)
@@ -286,41 +257,70 @@ export class SyncSettingsTab extends PluginSettingTab {
 			});
 
 		new Setting(containerEl)
-			.setName(t("settings.restore.name"))
-			.setDesc(t("settings.restore.desc"))
-			.addButton((b) =>
-				b.setButtonText(t("settings.restore.button")).onClick(() => this.plugin.openRestore()),
+			.setName(t("settings.serverUrl.name"))
+			.setDesc(t("settings.serverUrl.desc"))
+			.addText((text) =>
+				text
+					.setPlaceholder("https://sync.example.com")
+					.setValue(this.plugin.settings.serverUrl)
+					.onChange(async (v) => {
+						this.plugin.settings.serverUrl = v.trim();
+						await this.plugin.saveSettings();
+					}),
 			);
 
-		containerEl.createEl("p", {
-			cls: "setting-item-description",
-			text: this.plugin.statusLine(),
-		});
-	}
+		new Setting(containerEl)
+			.setName(t("settings.token.name"))
+			.setDesc(t("settings.token.desc"))
+			.addText((text) => {
+				text.inputEl.type = "password";
+				text
+					.setPlaceholder("obs_…")
+					.setValue(this.plugin.settings.token)
+					.onChange(async (v) => {
+						this.plugin.settings.token = v.trim();
+						await this.plugin.saveSettings();
+					});
+			});
 
-	private renderState(containerEl: HTMLElement): void {
-		const encrypting = this.plugin.encryptionReady();
-		const locked = this.plugin.isLocked();
-		const banner = containerEl.createDiv({
-			cls: `lockstep-banner ${encrypting ? "is-safe" : locked ? "is-locked" : "is-open"}`,
+		// Which vault on the server this token opens. What the vault is called in
+		// Obsidian is local to this device and travels nowhere.
+		const vaultRow = new Setting(containerEl)
+			.setName(t("settings.serverVault.name"))
+			.setDesc(t("settings.serverVault.desc"));
+		const vaultValue = vaultRow.controlEl.createSpan({
+			cls: "lockstep-vault-name",
+			text: this.plugin.serverVaultName() || t("settings.serverVault.unknown"),
 		});
-		const text = banner.createDiv({ cls: "lockstep-banner-text" });
-		text.createDiv({
-			cls: "lockstep-banner-title",
-			text: encrypting
-				? t(this.plugin.hidesNames() ? "banner.hiddenNames" : "banner.hidden")
-				: locked
-					? t("banner.locked")
-					: t("banner.open"),
+		void this.plugin.refreshServerVault().then(() => {
+			vaultValue.setText(this.plugin.serverVaultName() || t("settings.serverVault.unknown"));
 		});
-		text.createDiv({
-			cls: "lockstep-banner-detail",
-			text: encrypting
-				? t("encryption.explainHidden")
-				: locked
-					? `${this.plugin.encryptionStatus()} ${t("encryption.explainLocked")}`
-					: t("encryption.explainNotHidden"),
-		});
+
+		new Setting(containerEl)
+			.setName(t("settings.device.name"))
+			.setDesc(t("settings.device.desc"))
+			.addText((text) =>
+				text
+					.setPlaceholder(defaultDeviceName())
+					.setValue(this.plugin.settings.deviceName)
+					.onChange(async (v) => {
+						this.plugin.settings.deviceName = v.trim();
+						await this.plugin.saveSettings();
+					}),
+			);
+
+		new Setting(containerEl)
+			.setName(t("settings.excludes.name"))
+			.setDesc(t("settings.excludes.desc"))
+			.addTextArea((text) =>
+				text.setValue(this.plugin.settings.excludes.join("\n")).onChange(async (v) => {
+					this.plugin.settings.excludes = v
+						.split("\n")
+						.map((s) => s.trim())
+						.filter(Boolean);
+					await this.plugin.saveSettings();
+				}),
+			);
 	}
 
 	private renderConflicts(containerEl: HTMLElement): void {

@@ -244,9 +244,15 @@ export default class LockstepPlugin extends Plugin {
 		try {
 			const stats = await client.stats();
 			this.serverVault = String(stats["vault"] ?? "");
+			this.serverEmpty = Number(stats["files"] ?? 0) === 0 && Number(stats["seq"] ?? 0) === 0;
 		} catch {
 			this.serverVault = "";
 		}
+	}
+
+	/** Whether the server vault holds nothing yet. Null until the server has answered. */
+	serverLooksEmpty(): boolean | null {
+		return this.serverEmpty;
 	}
 
 	encryptionStatus(): string {

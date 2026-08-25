@@ -26,11 +26,6 @@ const en: Dict = {
 		"Used in conflict copy names, so you can tell which device an edit came from.",
 	"settings.excludes.name": "Exclusions",
 	"settings.excludes.desc": "One path or prefix per line. These files never leave this device.",
-	"settings.section.maintenance": "Check and maintenance",
-	"settings.pull.name": "Download everything from the server",
-	"settings.pull.desc":
-		"One-way for now: local files are never deleted, and anything that differs is kept as a copy alongside. Nothing is overwritten silently.",
-	"settings.pull.button": "Download",
 
 	"conflict.title": "Files changed on both sides",
 	"conflict.none": "Nothing to decide. Every file is in step.",
@@ -76,7 +71,9 @@ const en: Dict = {
 	"settings.restore.button": "Open",
 
 	"settings.encrypt.name": "Encrypt content",
-	"settings.encrypt.desc": "Seals your notes before they leave this device, so the server stores them without being able to read them. Same passphrase on every device. Leave empty to keep notes on your server as ordinary files.",
+	"settings.encrypt.descNew":
+		"To store files encrypted, enter a passphrase and set it: sync starts on its own, encrypted. It cannot be changed or recovered later.",
+	"settings.encrypt.descExisting": "Same passphrase as on your other devices.",
 	"settings.encrypt.placeholder": "passphrase",
 	"settings.encrypt.set": "Set passphrase",
 	"settings.encrypt.setTip":
@@ -85,9 +82,6 @@ const en: Dict = {
 		"First sync: {count} files will go to your server as they are. Press Sync now if that is the plan. To encrypt them, set a passphrase first. Encryption can also be turned on later.",
 	"encryption.pressSet": "Passphrase typed but not set yet. Press Set passphrase when it is complete.",
 	"cmd.resetIndex": "Reset the local sync index",
-	"settings.section.encryption": "Encryption",
-	"settings.passphrase.firstTime": "Pick a passphrase you can keep",
-	"settings.passphrase.oneChance": "It cannot be changed or recovered later. Your notes stay on your devices as they are; only the copy on the server is sealed with it.",
 	"settings.passphrase.weak": "Weak. Short passphrases are easy to crack.",
 	"settings.passphrase.medium": "Medium. Four unrelated words would be stronger.",
 	"settings.passphrase.strong": "Strong.",
@@ -99,29 +93,28 @@ const en: Dict = {
 	"encryption.ready": "Unlocked. New uploads are encrypted.",
 	"encryption.readyWithPaths": "Unlocked. Content and file names are both hidden from the server.",
 	"encryption.created": "Encryption set up for this vault. Keep the passphrase safe.",
-	"banner.hidden": "Encryption is on",
-	"banner.hiddenNames": "Encryption is on, file names included",
+	"banner.hidden": "Encrypted",
+	"banner.hiddenNames": "Encrypted, file names included",
 	"banner.locked": "Waiting for the passphrase",
-	"banner.open": "Encryption is off",
-	"encryption.explainHidden":
-		"Uploads are sealed on this device. Your server stores them without being able to read them, and still knows how many files there are and how the folders are arranged.",
-	"encryption.explainNotHidden":
-		"Notes are stored on your server as ordinary files. To seal them before they leave this device, enter a passphrase below.",
-	"encryption.explainLocked": "Syncing is paused until the passphrase is entered below.",
+	"banner.open": "Not encrypted",
 	"encryption.namesStayVisible":
 		"This vault already holds files, so their names stay visible to the server. Content from now on is encrypted. To hide names as well, set encryption up on an empty vault before putting anything in it.",
 	"encryption.wrong": "Wrong passphrase for this vault.",
 	"encryption.failed": "Could not unlock: {message}",
 
 	"settings.sync.name": "Sync now",
-	"settings.sync.desc": "Take what the server has, then send what this device has.",
+	"settings.sync.desc": "Runs on its own; this is for when you do not want to wait.",
 	"settings.sync.button": "Sync",
 
 	"cmd.addDevice": "Add another device",
-	"settings.addDevice.name": "Add another device",
-	"settings.addDevice.desc":
-		"Creates a link that sets up your phone or laptop in one tap. It carries the address and its own token, so nothing has to be typed there.",
-	"settings.addDevice.button": "Create a link",
+	"settings.addDevice.name": "Link a new device",
+	"settings.addDevice.desc": "A code and a link that set up your phone or laptop in one tap.",
+	"settings.addDevice.button": "Link device",
+	"settings.initial.name": "Initial sync",
+	"settings.initial.desc":
+		"To put your {count} files on the server as they are, not encrypted, press here. To encrypt them instead, set a passphrase below and sync starts on its own.",
+	"settings.initial.button": "Sync as is",
+	"settings.section.more": "More settings",
 	"add.title": "Add another device",
 	"add.intro":
 		"This makes a link for one device. Open it on that device and Obsidian fills in the settings. Give each device its own, so losing one means revoking one.",
@@ -205,11 +198,6 @@ const ru: Dict = {
 		"Подставляется в имена конфликтных копий, чтобы было видно, откуда правка.",
 	"settings.excludes.name": "Исключения",
 	"settings.excludes.desc": "По строке на путь или префикс. Эти файлы не уезжают с устройства.",
-	"settings.section.maintenance": "Проверка и обслуживание",
-	"settings.pull.name": "Скачать всё с сервера",
-	"settings.pull.desc":
-		"Пока односторонняя операция: локальные файлы не удаляются, а расхождения сохраняются копией рядом. Ничего не перезаписывается молча.",
-	"settings.pull.button": "Скачать",
 
 	"conflict.title": "Файлы, изменённые с двух сторон",
 	"conflict.none": "Решать нечего. Все файлы идут в ногу.",
@@ -257,7 +245,9 @@ const ru: Dict = {
 	"settings.restore.button": "Открыть",
 
 	"settings.encrypt.name": "Шифровать содержимое",
-	"settings.encrypt.desc": "Запечатывает заметки до отправки, и сервер хранит их, не имея возможности прочитать. Один пароль на всех устройствах. Пусто: заметки лежат на твоём сервере обычными файлами.",
+	"settings.encrypt.descNew":
+		"Чтобы хранить файлы зашифрованными, введи пароль и задай его: синхронизация начнётся сама, зашифрованной. Потом его нельзя ни сменить, ни восстановить.",
+	"settings.encrypt.descExisting": "Тот же пароль, что на других твоих устройствах.",
 	"settings.encrypt.placeholder": "пароль",
 	"settings.encrypt.set": "Задать пароль",
 	"settings.encrypt.setTip":
@@ -266,9 +256,6 @@ const ru: Dict = {
 		"Первый синк: {count} файлов уйдут на твой сервер как есть. Нажми Sync now, если так и задумано. Чтобы шифровать, сначала задай пароль. Включить шифрование можно и позже.",
 	"encryption.pressSet": "Пароль набран, но ещё не задан. Нажми Задать пароль, когда допишешь.",
 	"cmd.resetIndex": "Сбросить локальный индекс синхронизации",
-	"settings.section.encryption": "Шифрование",
-	"settings.passphrase.firstTime": "Выбери пароль, который не потеряешь",
-	"settings.passphrase.oneChance": "Потом его нельзя ни сменить, ни восстановить. Заметки на твоих устройствах остаются как есть; им запечатывается только копия на сервере.",
 	"settings.passphrase.weak": "Слабый. Короткий пароль легко взломать.",
 	"settings.passphrase.medium": "Средний. Четыре несвязанных слова были бы крепче.",
 	"settings.passphrase.strong": "Сильный.",
@@ -280,29 +267,28 @@ const ru: Dict = {
 	"encryption.ready": "Открыто. Новые загрузки шифруются.",
 	"encryption.readyWithPaths": "Открыто. И содержимое, и имена файлов скрыты от сервера.",
 	"encryption.created": "Шифрование настроено для этого волта. Сохрани пароль.",
-	"banner.hidden": "Шифрование включено",
-	"banner.hiddenNames": "Шифрование включено, вместе с именами файлов",
-	"banner.locked": "Ожидание пароля",
-	"banner.open": "Шифрование выключено",
-	"encryption.explainHidden":
-		"Загрузки запечатываются на этом устройстве. Твой сервер хранит их, не имея возможности прочитать, и знает только сколько файлов и как разложены папки.",
-	"encryption.explainNotHidden":
-		"Заметки лежат на твоём сервере обычными файлами. Чтобы запечатывать их до отправки, введи пароль ниже.",
-	"encryption.explainLocked": "Синхронизация на паузе, пока ниже не введён пароль.",
+	"banner.hidden": "Зашифрован",
+	"banner.hiddenNames": "Зашифрован, включая имена файлов",
+	"banner.locked": "Ждёт пароль",
+	"banner.open": "Не зашифрован",
 	"encryption.namesStayVisible":
 		"В волте уже есть файлы, поэтому их имена останутся видны серверу. Содержимое с этого момента шифруется. Чтобы скрыть и имена, включай шифрование на пустом волте, до того как в него что-то попадёт.",
 	"encryption.wrong": "Неверный пароль для этого волта.",
 	"encryption.failed": "Не удалось открыть: {message}",
 
 	"settings.sync.name": "Синхронизировать сейчас",
-	"settings.sync.desc": "Забрать то, что есть на сервере, затем отправить то, что есть здесь.",
+	"settings.sync.desc": "Идёт сама; это на случай, когда не хочется ждать.",
 	"settings.sync.button": "Синхронизировать",
 
 	"cmd.addDevice": "Добавить устройство",
-	"settings.addDevice.name": "Добавить устройство",
-	"settings.addDevice.desc":
-		"Создаёт ссылку, которая настраивает телефон или ноутбук в одно касание. В ней адрес и собственный токен, поэтому вводить там ничего не придётся.",
-	"settings.addDevice.button": "Создать ссылку",
+	"settings.addDevice.name": "Подключить новое устройство",
+	"settings.addDevice.desc": "Код и ссылка, которые настраивают телефон или ноутбук в одно касание.",
+	"settings.addDevice.button": "Подключить",
+	"settings.initial.name": "Первый синк",
+	"settings.initial.desc":
+		"Чтобы положить {count} файлов на сервер как есть, без шифрования, нажми сюда. Чтобы зашифровать, задай пароль ниже: синхронизация начнётся сама.",
+	"settings.initial.button": "Синк как есть",
+	"settings.section.more": "Остальные настройки",
 	"add.title": "Добавить устройство",
 	"add.intro":
 		"Ссылка делается для одного устройства. Открой её там, и Obsidian сам заполнит настройки. Каждому устройству — своя, чтобы потеря одного означала отзыв одного.",
