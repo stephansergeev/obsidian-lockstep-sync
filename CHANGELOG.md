@@ -1,5 +1,32 @@
 # Changelog
 
+## 0.14.0
+
+The first real vault went through, and fixed three things on its way.
+
+A vault that existed before the plugin was never uploaded: the watcher only reports
+what happens after it starts, and that is none of the files anybody actually wants
+to sync. Every pass now adopts files the index has never heard of and sends them.
+
+The first sync ran at one file per round trip, four seconds for a small note, because
+uploads went strictly one after another. Four are in flight now, and the index is
+checkpointed on a clock instead of after every file, on both the sending and the
+receiving side. The remaining 620 files of an 844-file vault went in under two minutes
+where the first 224 had taken fourteen.
+
+Unloading the plugin did not stop a running pass: an updated plugin's old copy kept
+uploading beside its replacement for two minutes, sending every remaining file twice
+and overwriting the journal on its way out. Every loop now stops at the next file once
+the plugin is unloaded.
+
+The settings screen is ordered by need: conflicts, the one-time initial sync decision
+with a percentage and a done line, encryption as one state line plus a passphrase
+field whose button sets it and syncs, and linking a new device. Everything typed once
+sits under More settings, most-touched first. Creating a vault key happens only on that
+button, never on the field losing focus, so a half-typed passphrase can no longer seal
+a vault. The installer prints its setup link on a line of its own, clickable where the
+terminal allows, with a QR code beside it and a command to mint a fresh one.
+
 ## 0.13.3
 
 Creating the vault key now happens only on the Set button. It used to happen when the

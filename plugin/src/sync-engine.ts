@@ -297,49 +297,60 @@ export class SyncEngine {
 	// --- pull -----------------------------------------------------------------
 
 	private async pull(client: SyncClient, report: SyncReport): Promise<void> {
-		for (;;) {
-			const page = await client.changes(this.deps.index.lastSeq, 200);
-			for (const entry of page.entries) {
-				if (this.deps.stopped()) return;
-				const path = toNFC(entry.path);
-				// A path that is queued to move away is already spoken for. Touching it
-				// here would recreate it moments before our own rename deletes it.
-				if (this.deps.index.renames.some((r) => r.from === path)) {
-					this.trace(`pull skipped ${path}: queued to move away`);
-					report.skipped++;
-					this.deps.index.setLastSeq(entry.seq);
-					await this.deps.index.save();
-					continue;
-				}
-				if (this.isExcluded(path)) {
-					report.skipped++;
-					this.deps.index.setLastSeq(entry.seq);
-					await this.deps.index.save();
-					continue;
-				}
-				try {
-					await this.applyRemote(client, entry, path, report);
-				} catch (e) {
-					// The cursor stops here. Moving past a change that failed to apply
-					// would mark it handled forever: it is never in a later delta, and
-					// nothing ever asks for it again. A pass that stops and says so can
-					// be retried; one that skips ahead has quietly lost an edit.
-					report.errors.push(`${path}: ${describe(e)}`);
-					this.deps.log(`pull ${path}`, e);
-					await this.deps.index.save();
-					return;
-				}
-				// Checkpoint after every entry: the app can be killed right here.
-				this.deps.index.setLastSeq(entry.seq);
+		// The cursor is checkpointed on a clock, not per entry. Saving the index after
+		// every one of 844 arrivals cost more than the arrivals did; a kill now loses
+		// at most two seconds of cursor, and the entries it forgets are simply applied
+		// again, which for content already on disk is a hash check and nothing else.
+		let lastCheckpoint = Date.now();
+		const checkpoint = async (force = false) => {
+			if (force || Date.now() - lastCheckpoint > 2000) {
+				lastCheckpoint = Date.now();
 				await this.deps.index.save();
-				this.deps.onProgress?.(
-					report.downloaded + report.renamed + report.merged + report.deleted,
-					0,
-					path,
-				);
 			}
-			this.deps.index.setLastSeq(page.next_seq);
-			if (!page.has_more || this.deps.stopped()) break;
+		};
+		try {
+			for (;;) {
+				const page = await client.changes(this.deps.index.lastSeq, 200);
+				for (const entry of page.entries) {
+					if (this.deps.stopped()) return;
+					const path = toNFC(entry.path);
+					// A path that is queued to move away is already spoken for. Touching it
+					// here would recreate it moments before our own rename deletes it.
+					if (this.deps.index.renames.some((r) => r.from === path)) {
+						this.trace(`pull skipped ${path}: queued to move away`);
+						report.skipped++;
+						this.deps.index.setLastSeq(entry.seq);
+						continue;
+					}
+					if (this.isExcluded(path)) {
+						report.skipped++;
+						this.deps.index.setLastSeq(entry.seq);
+						continue;
+					}
+					try {
+						await this.applyRemote(client, entry, path, report);
+					} catch (e) {
+						// The cursor stops here. Moving past a change that failed to apply
+						// would mark it handled forever: it is never in a later delta, and
+						// nothing ever asks for it again. A pass that stops and says so can
+						// be retried; one that skips ahead has quietly lost an edit.
+						report.errors.push(`${path}: ${describe(e)}`);
+						this.deps.log(`pull ${path}`, e);
+						return;
+					}
+					this.deps.index.setLastSeq(entry.seq);
+					await checkpoint();
+					this.deps.onProgress?.(
+						report.downloaded + report.renamed + report.merged + report.deleted,
+						0,
+						path,
+					);
+				}
+				this.deps.index.setLastSeq(page.next_seq);
+				if (!page.has_more || this.deps.stopped()) break;
+			}
+		} finally {
+			await checkpoint(true);
 		}
 	}
 
