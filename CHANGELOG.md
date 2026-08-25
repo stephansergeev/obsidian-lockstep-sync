@@ -1,5 +1,17 @@
 # Changelog
 
+## 0.13.3
+
+Creating the vault key now happens only on the Set button. It used to happen when the
+passphrase field lost focus, and losing focus is what a half-typed passphrase does when
+somebody pauses to think: the vault would have been sealed forever with a fragment its owner
+never knew. Unlocking an existing vault still works on blur, where a fragment costs one
+wrong-passphrase notice and nothing more.
+
+Until Set is pressed on a fresh vault, nothing is created and nothing syncs, which also
+closes the race where a large existing vault could start uploading in plaintext before its
+owner reached the passphrase field.
+
 ## 0.13.2
 
 The cipher is taken once per pass. Read live, it could be swapped by a settings blur

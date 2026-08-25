@@ -194,6 +194,9 @@ export class SyncSettingsTab extends PluginSettingTab {
 					});
 				judge(this.plugin.settings.passphrase);
 				text.inputEl.addEventListener("blur", async () => {
+					// Unlocking an existing vault is safe to try on blur: a fragment
+					// gives a wrong-passphrase notice and nothing more. Creating a key
+					// is not, and waits for the button.
 					try {
 						await this.plugin.applyEncryption();
 					} catch {
@@ -201,7 +204,21 @@ export class SyncSettingsTab extends PluginSettingTab {
 					}
 					this.display();
 				});
-			});
+			})
+			.addButton((b) =>
+				b
+					.setButtonText(t("settings.encrypt.set"))
+					.setTooltip(t("settings.encrypt.setTip"))
+					.onClick(async () => {
+						b.setDisabled(true);
+						try {
+							await this.plugin.applyEncryption(false, true);
+						} catch {
+							/* already reported */
+						}
+						this.display();
+					}),
+			);
 
 		new Setting(containerEl).setName(t("settings.section.maintenance")).setHeading();
 

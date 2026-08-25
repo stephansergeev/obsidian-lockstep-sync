@@ -290,18 +290,22 @@ export default class LockstepPlugin extends Plugin {
 	 * once its outcome is known. Quiet callers, the ones that are retrying rather
 	 * than being asked, say nothing at all.
 	 */
-	async applyEncryption(quiet = false): Promise<void> {
+	async applyEncryption(quiet = false, allowCreate = false): Promise<void> {
 		if (this.unlocking) return this.unlocking;
-		if (this.settledPassphrase === this.settings.passphrase && (this.cipher.enabled || this.locked)) {
+		if (
+			!allowCreate &&
+			this.settledPassphrase === this.settings.passphrase &&
+			(this.cipher.enabled || this.locked)
+		) {
 			return;
 		}
-		this.unlocking = this.attemptEncryption(quiet).finally(() => {
+		this.unlocking = this.attemptEncryption(quiet, allowCreate).finally(() => {
 			this.unlocking = null;
 		});
 		return this.unlocking;
 	}
 
-	private async attemptEncryption(quiet: boolean): Promise<void> {
+	private async attemptEncryption(quiet: boolean, allowCreate: boolean): Promise<void> {
 		if (!this.settings.passphrase) {
 			// No passphrase means no encryption, unless the vault itself disagrees,
 			// which the guard discovers by asking the server and locks us for.
@@ -333,6 +337,18 @@ export default class LockstepPlugin extends Plugin {
 				// And start at once. Waiting for the timer meant a minute of nothing
 				// happening on a device that had just been told everything was fine.
 				void this.syncNow(true);
+			} else if (!allowCreate) {
+				// Creating the vault key is the one irreversible act here, and it only
+				// happens on the Set button. Anything else that lands with a passphrase
+				// and no key, a blur half-way through typing, an automatic retry, waits
+				// and says which press is missing. Losing a vault to the fragment of a
+				// passphrase somebody paused in the middle of is not a risk worth the
+				// convenience.
+				this.cipher = plaintext;
+				this.pathCipher = null;
+				this.locked = true;
+				this.cipherStatus = t("encryption.pressSet");
+				if (!quiet) new Notice(`Lockstep: ${this.cipherStatus}`, 8000);
 			} else {
 				// Names can only be hidden in a vault that starts empty. Everything
 				// already on the server is stored under a readable path, and a vault

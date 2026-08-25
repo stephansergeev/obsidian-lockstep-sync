@@ -79,6 +79,11 @@ const en: Dict = {
 	"settings.encrypt.desc":
 		"Enter a passphrase and notes are sealed on this device before they leave: the server stores them without being able to read them. Use the same passphrase on every device. Leave it empty to store notes on your server as ordinary files.",
 	"settings.encrypt.placeholder": "passphrase",
+	"settings.encrypt.set": "Set",
+	"settings.encrypt.setTip":
+		"Seals this vault with the passphrase as it is right now. Until this is pressed, nothing is created and nothing syncs.",
+	"encryption.pressSet":
+		"Passphrase typed but not set. Press Set when it is complete: it seals the vault permanently, so it should not happen on a half-typed one.",
 	"cmd.resetIndex": "Reset the local sync index",
 	"settings.section.encryption": "Encryption",
 	"settings.passphrase.firstTime": "This passphrase is being set, not entered",
@@ -256,6 +261,11 @@ const ru: Dict = {
 	"settings.encrypt.desc":
 		"Введи пароль, и заметки будут запечатываться на этом устройстве до отправки: сервер хранит их, не имея возможности прочитать. Один и тот же пароль на всех устройствах. Пусто — заметки лежат на твоём сервере обычными файлами.",
 	"settings.encrypt.placeholder": "пароль",
+	"settings.encrypt.set": "Задать",
+	"settings.encrypt.setTip":
+		"Запечатывает волт паролем ровно в его текущем виде. Пока кнопка не нажата, ничего не создаётся и не синкается.",
+	"encryption.pressSet":
+		"Пароль набран, но не задан. Нажми Задать, когда он дописан: волт запечатывается насовсем, и это не должно случиться на половине фразы.",
 	"cmd.resetIndex": "Сбросить локальный индекс синхронизации",
 	"settings.section.encryption": "Шифрование",
 	"settings.passphrase.firstTime": "Этот пароль задаётся, а не вводится",

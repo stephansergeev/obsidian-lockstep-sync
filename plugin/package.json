@@ -1,6 +1,6 @@
 {
   "name": "obsidian-lockstep-sync",
-  "version": "0.13.2",
+  "version": "0.13.3",
   "description": "Two-way Obsidian vault sync through your own server",
   "license": "MIT",
   "type": "module",
