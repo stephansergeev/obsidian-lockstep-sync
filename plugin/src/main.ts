@@ -67,6 +67,15 @@ export default class LockstepPlugin extends Plugin {
 	/** Whether the bound server vault holds nothing yet. Cached once it is false. */
 	private serverEmpty: boolean | null = null;
 	private interval: number | null = null;
+	/** Places on the settings screen that mirror sync progress while it is open. */
+	progressTargets: HTMLElement[] = [];
+	/** The last completed sync's summary, shown once where the progress was. */
+	lastSummary: string | null = null;
+
+	showProgress(text: string): void {
+		for (const el of this.progressTargets) el.setText(text);
+	}
+
 	/** Decision journal, flushed to disk after every pass. */
 	private journal: string[] = [];
 	private journalDirty = false;
@@ -87,10 +96,20 @@ export default class LockstepPlugin extends Plugin {
 			guard: (manual) => this.reasonNotToSync(manual),
 			listLocalFiles: () => this.app.vault.getFiles().map((f) => f.path),
 			trace: (line) => this.traceLine(line),
-			onProgress: (done, path) => {
-				// Movement while a long first sync runs. Somebody watching an empty
-				// vault needs to see it filling, not a word that never changes.
-				this.setStatus(t("status.progress", { done, path: path.split("/").pop() ?? path }));
+			onProgress: (done, total, path) => {
+				// Movement while a long sync runs, and a percentage where the total is
+				// known. Somebody watching a first sync needs to see how far it is, not
+				// a word that never changes.
+				const text =
+					total > 0
+						? t(this.cipher.enabled ? "progress.encrypted" : "progress.plain", {
+								pct: Math.round((done / total) * 100),
+								done,
+								total,
+							})
+						: t("status.progress", { done, path: path.split("/").pop() ?? path });
+				this.setStatus(text);
+				this.showProgress(text);
 			},
 			onConflict: (path) => {
 				// Ask right here rather than sending anybody to a settings screen. The
@@ -675,6 +694,10 @@ export default class LockstepPlugin extends Plugin {
 			const report = await this.engine.sync(!quiet);
 			const secs = ((Date.now() - started) / 1000).toFixed(1);
 			this.report(report, secs, quiet);
+			if (report.uploaded > 0 && report.errors.length === 0) {
+				this.lastSummary = t(this.cipher.enabled ? "progress.doneEncrypted" : "progress.done");
+				this.showProgress(this.lastSummary);
+			}
 			if (this.engine.takeQueued()) this.scheduleSync();
 		} catch (e) {
 			this.reportError(t("error.sync"), e);

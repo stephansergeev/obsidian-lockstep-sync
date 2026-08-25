@@ -58,9 +58,15 @@ export class SyncSettingsTab extends PluginSettingTab {
 		super(app, plugin);
 	}
 
+	override hide(): void {
+		this.plugin.progressTargets = [];
+		this.plugin.lastSummary = null;
+	}
+
 	override display(): void {
 		const { containerEl } = this;
 		containerEl.empty();
+		this.plugin.progressTargets = [];
 
 		this.renderConflicts(containerEl);
 		this.renderInitialSync(containerEl);
@@ -97,7 +103,13 @@ export class SyncSettingsTab extends PluginSettingTab {
 			});
 			return;
 		}
-		if (!empty || this.plugin.encryptionWanted() || this.app.vault.getFiles().length === 0) return;
+		if (!empty || this.plugin.encryptionWanted() || this.app.vault.getFiles().length === 0) {
+			// The block is gone; if a sync just finished, say so where it was.
+			if (this.plugin.lastSummary) {
+				containerEl.createDiv({ cls: "lockstep-progress is-done", text: this.plugin.lastSummary });
+			}
+			return;
+		}
 
 		new Setting(containerEl)
 			.setName(t("settings.initial.name"))
@@ -113,6 +125,7 @@ export class SyncSettingsTab extends PluginSettingTab {
 						this.display();
 					}),
 			);
+		this.plugin.progressTargets.push(containerEl.createDiv({ cls: "lockstep-progress" }));
 	}
 
 	private renderEncryption(containerEl: HTMLElement): void {
@@ -193,13 +206,15 @@ export class SyncSettingsTab extends PluginSettingTab {
 					.onClick(async () => {
 						b.setDisabled(true);
 						try {
+							// Creates the key and starts the sync; progress lands below.
 							await this.plugin.applyEncryption(false, true);
 						} catch {
 							/* already reported */
+							this.display();
 						}
-						this.display();
 					}),
 			);
+			this.plugin.progressTargets.push(containerEl.createDiv({ cls: "lockstep-progress" }));
 		}
 	}
 

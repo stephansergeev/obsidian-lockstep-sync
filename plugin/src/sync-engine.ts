@@ -63,8 +63,11 @@ export interface EngineDeps {
 	onConflict: (path: string, copy: string) => void;
 	/** Every file path in the vault right now. Cheap: Obsidian keeps this in memory. */
 	listLocalFiles: () => string[];
-	/** Called as each file lands, so a long first sync shows movement rather than a pause. */
-	onProgress?: (done: number, path: string) => void;
+	/**
+	 * Called as each file moves. total is known for uploads, where the queue is
+	 * counted before it starts, and zero for downloads, which arrive in pages.
+	 */
+	onProgress?: (done: number, total: number, path: string) => void;
 	/**
 	 * One line per decision, kept in a ring on disk. When something syncs wrongly the
 	 * question is always "which branch took this entry", and the answer has to come
@@ -323,6 +326,7 @@ export class SyncEngine {
 				await this.deps.index.save();
 				this.deps.onProgress?.(
 					report.downloaded + report.renamed + report.merged + report.deleted,
+					0,
 					path,
 				);
 			}
@@ -634,9 +638,18 @@ export class SyncEngine {
 	private async push(client: SyncClient, report: SyncReport): Promise<void> {
 		const adapter = this.deps.app.vault.adapter;
 
-		for (const path of this.deps.index.paths()) {
+		// Counted before anything is sent, so the first sync of a large vault can say
+		// how far along it is rather than only that it is moving.
+		const pending = this.deps.index.paths().filter((path) => {
 			const entry = this.deps.index.get(path);
-			if (!entry || entry.folder || !entry.dirty || this.isExcluded(path)) continue;
+			return entry !== undefined && !entry.folder && entry.dirty === true && !this.isExcluded(path);
+		});
+		let done = 0;
+
+		for (const path of pending) {
+			const entry = this.deps.index.get(path);
+			if (!entry) continue;
+			done++;
 			try {
 				// A directory that an earlier version recorded as a file. Reading it
 				// fails every pass and says so, once per folder, forever.
@@ -668,6 +681,7 @@ export class SyncEngine {
 				report.errors.push(`${path}: ${describe(e)}`);
 				this.deps.log(`push ${path}`, e);
 			}
+			this.deps.onProgress?.(done, pending.length, path);
 		}
 	}
 

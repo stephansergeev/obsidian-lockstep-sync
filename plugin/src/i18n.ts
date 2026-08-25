@@ -75,7 +75,7 @@ const en: Dict = {
 		"To store files encrypted, enter a passphrase and set it: sync starts on its own, encrypted. It cannot be changed or recovered later.",
 	"settings.encrypt.descExisting": "Same passphrase as on your other devices.",
 	"settings.encrypt.placeholder": "passphrase",
-	"settings.encrypt.set": "Set passphrase",
+	"settings.encrypt.set": "Set passphrase & sync",
 	"settings.encrypt.setTip":
 		"Seals this vault with the passphrase as it is right now. Until this is pressed, nothing is created and nothing syncs.",
 	"encryption.firstSyncChoice":
@@ -110,7 +110,11 @@ const en: Dict = {
 	"settings.initial.name": "Initial sync",
 	"settings.initial.desc":
 		"One press, once: your {count} files go to the server as they are, not encrypted, and from then on syncing is fully automatic. To encrypt them instead, set a passphrase below and it starts on its own.",
-	"settings.initial.button": "Sync as is",
+	"settings.initial.button": "Initial sync",
+	"progress.plain": "Syncing: {pct}% ({done} of {total})",
+	"progress.encrypted": "Encrypted sync: {pct}% ({done} of {total})",
+	"progress.done": "Done. All files synced.",
+	"progress.doneEncrypted": "Done. All files synced, encrypted.",
 	"settings.section.more": "More settings",
 	"add.title": "Add another device",
 	"add.intro":
@@ -246,7 +250,7 @@ const ru: Dict = {
 		"Чтобы хранить файлы зашифрованными, введи пароль и задай его: синхронизация начнётся сама, зашифрованной. Потом его нельзя ни сменить, ни восстановить.",
 	"settings.encrypt.descExisting": "Тот же пароль, что на других твоих устройствах.",
 	"settings.encrypt.placeholder": "пароль",
-	"settings.encrypt.set": "Задать пароль",
+	"settings.encrypt.set": "Задать пароль и синкать",
 	"settings.encrypt.setTip":
 		"Запечатывает волт паролем ровно в его текущем виде. Пока кнопка не нажата, ничего не создаётся и не синкается.",
 	"encryption.firstSyncChoice":
@@ -281,7 +285,11 @@ const ru: Dict = {
 	"settings.initial.name": "Первый синк",
 	"settings.initial.desc":
 		"Одно нажатие, один раз: {count} файлов уйдут на сервер как есть, без шифрования, а дальше синхронизация полностью автоматическая. Чтобы зашифровать, задай пароль ниже: она начнётся сама.",
-	"settings.initial.button": "Синк как есть",
+	"settings.initial.button": "Первый синк",
+	"progress.plain": "Синхронизация: {pct}% ({done} из {total})",
+	"progress.encrypted": "Шифрованная синхронизация: {pct}% ({done} из {total})",
+	"progress.done": "Готово. Все файлы синхронизированы.",
+	"progress.doneEncrypted": "Готово. Все файлы синхронизированы, зашифрованы.",
 	"settings.section.more": "Остальные настройки",
 	"add.title": "Добавить устройство",
 	"add.intro":

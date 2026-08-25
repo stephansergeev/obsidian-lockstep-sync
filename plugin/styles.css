@@ -159,3 +159,15 @@
 .lockstep-meter-label.is-strong {
 	color: var(--color-green);
 }
+
+.lockstep-progress {
+	min-height: 1.4em;
+	margin: 0 0 var(--size-4-3);
+	font-size: var(--font-ui-smaller);
+	color: var(--text-muted);
+	font-variant-numeric: tabular-nums;
+}
+
+.lockstep-progress.is-done {
+	color: var(--color-green);
+}
