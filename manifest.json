@@ -5,6 +5,6 @@
   "minAppVersion": "1.13.0",
   "description": "Sync your vault between desktop, iOS and Android through your own server. Self-hosted, end-to-end encrypted, free and open source: no cloud, no subscription. Conflicts are asked, never overwritten silently.",
   "author": "Stephan Sergeev",
-  "authorUrl": "https://github.com/stephansergeev",
+  "authorUrl": "https://stephansergeev.com",
   "isDesktopOnly": false
 }

@@ -126,3 +126,7 @@ The protocol and its reasoning: [`spec/`](spec/).
 ## License
 
 MIT, the whole repository. Written by [Stephan Sergeev](https://github.com/stephansergeev).
+
+## Author
+
+Built by Stephan Sergeev. More at [stephansergeev.com](https://stephansergeev.com).
