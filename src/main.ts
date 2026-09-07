@@ -51,6 +51,8 @@ export default class LockstepPlugin extends Plugin {
 	private focusPassphrase = false;
 	/** Whether the vault already has key parameters. Null until asked. */
 	private vaultHasKey: boolean | null = null;
+	/** Whether the vault stores files under sealed names, as its key record says. */
+	private vaultHidesNames: boolean | null = null;
 	/** The migration marker last seen on the key record, while one is running. */
 	private migration: Migration | null = null;
 	/** In flight, so two callers do not both do it and both report it. */
@@ -415,6 +417,7 @@ export default class LockstepPlugin extends Plugin {
 		try {
 			const stored = (await client.getVaultKey()) as VaultKeyRecord | null;
 			this.vaultHasKey = stored !== null;
+			if (stored) this.vaultHidesNames = stored.paths === "encrypted";
 			this.migration = stored?.migration ?? null;
 			if (stored && this.migration && !this.migration.mine) {
 				// Another device is in the middle of re-uploading the vault encrypted.
@@ -473,6 +476,7 @@ export default class LockstepPlugin extends Plugin {
 				const occupied = Number(stats["files"] ?? 0) + Number(stats["folders"] ?? 0) > 0;
 				const { cipher, params } = await VaultCipher.create(this.settings.passphrase);
 				this.vaultHasKey = true;
+				this.vaultHidesNames = true;
 				await client.putVaultKey(params);
 				this.cipher = cipher;
 				this.pathCipher = await cipher.pathCipher();
@@ -694,6 +698,16 @@ export default class LockstepPlugin extends Plugin {
 	private client(complain = true): SyncClient | null {
 		if (!this.settings.serverUrl || !this.settings.token) {
 			if (complain) new Notice(t("notice.noConfig"));
+			return null;
+		}
+		// The vault stores files under sealed names. A client built without the path
+		// key would read nothing and, worse, write real names to the server, which is
+		// exactly the leak the sealed names exist to prevent. Content and paths are
+		// sealed by two separate objects, so whatever race or bug leaves the path key
+		// behind must stall the sync here rather than reach the network.
+		if (this.vaultHidesNames === true && !this.pathCipher) {
+			this.traceLine("refused to build a client: names are sealed and the path key is not ready");
+			if (complain) new Notice(`Lockstep: ${t("encryption.locked")}`, 8000);
 			return null;
 		}
 		return new SyncClient(
@@ -959,8 +973,9 @@ export default class LockstepPlugin extends Plugin {
 		const client = this.client(false);
 		if (!client) return "";
 		try {
-			const key = await client.getVaultKey();
+			const key = (await client.getVaultKey()) as VaultKeyRecord | null;
 			this.vaultHasKey = key !== null;
+			if (key) this.vaultHidesNames = key.paths === "encrypted";
 			if (!key) {
 				// No key and no passphrase. Before the very first upload of an existing
 				// vault into an empty server, that combination must not start on its

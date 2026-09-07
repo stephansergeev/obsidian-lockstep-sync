@@ -1,5 +1,15 @@
 # Changelog
 
+## 1.0.6
+
+A vault that hides file names must never see a real one, and now it cannot. Two
+empty notes created on a phone were once uploaded under their real names while
+their content was properly sealed: content and names are encrypted by two separate
+objects, and a state where one was ready and the other was not could reach the
+network. The client now refuses to exist at all when the vault seals names and the
+path key is not in hand, so that state stalls the sync instead of leaking a name.
+The journal says when that happens.
+
 ## 1.0.5
 
 Enabling the plugin on a fresh install froze Obsidian (#2). The settings tab asked
