@@ -1,5 +1,14 @@
 # Changelog
 
+## 1.0.5
+
+Enabling the plugin on a fresh install froze Obsidian (#2). The settings tab asked
+the server whether the vault is empty whenever it had no answer and redrew itself
+when the reply came; with no server configured, or none reachable, there was no
+answer, so it asked again on every redraw, forever, from the moment the plugin
+loaded. It now asks once per opening of the tab and redraws only when an answer
+actually arrives.
+
 ## 1.0.4
 
 The settings tab is declared rather than drawn, through the settings API that

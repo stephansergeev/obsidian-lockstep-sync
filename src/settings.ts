@@ -71,6 +71,8 @@ export const DEFAULT_SETTINGS: SyncSettings = {
 export class SyncSettingsTab extends PluginSettingTab {
 	/** Held so the field does not blank out while the server is being asked. */
 	private retentionValue = "";
+	/** One server question per opening of the tab, not one per render. */
+	private askedServer = false;
 
 	constructor(
 		app: App,
@@ -82,6 +84,7 @@ export class SyncSettingsTab extends PluginSettingTab {
 	override hide(): void {
 		this.plugin.progressTargets = [];
 		this.plugin.lastSummary = null;
+		this.askedServer = false;
 	}
 
 	override getControlValue(key: string): unknown {
@@ -106,9 +109,15 @@ export class SyncSettingsTab extends PluginSettingTab {
 	override getSettingDefinitions(): SettingDefinitionItem[] {
 		this.plugin.progressTargets = [];
 		void this.plugin.pruneConflicts();
-		if (this.plugin.serverLooksEmpty() === null) {
-			// Not asked yet. Ask, and redraw when the answer changes what is shown.
-			void this.plugin.refreshServerVault().then(() => this.update());
+		if (this.plugin.serverLooksEmpty() === null && !this.askedServer) {
+			// Not asked yet. Ask once per opening, and redraw only if an answer came:
+			// with no server configured (a fresh install) or none reachable there is
+			// no answer, and redrawing on no answer asked again, forever, freezing
+			// the app the moment the plugin was enabled.
+			this.askedServer = true;
+			void this.plugin.refreshServerVault().then(() => {
+				if (this.plugin.serverLooksEmpty() !== null) this.update();
+			});
 		}
 		return [
 			this.conflictsGroup(),
