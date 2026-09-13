@@ -1,5 +1,15 @@
 # Changelog
 
+## 1.0.7
+
+The cold-start bug is actually closed this time (#3). A sync pass built its server
+client before the guard ran, and on a cold start the guard is where the passphrase
+is applied and the path key derived: the pass then carried a client from before the
+keys existed. Names went untranslated on the way down and real names went up on the
+way up, while content was sealed correctly either way. The client is now built
+after the guard, and a regression test starts a pass whose unlock happens inside
+the guard and checks every name lands translated.
+
 ## 1.0.6
 
 A vault that hides file names must never see a real one, and now it cannot. Two

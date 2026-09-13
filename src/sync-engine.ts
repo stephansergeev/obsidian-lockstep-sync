@@ -293,8 +293,6 @@ export class SyncEngine {
 		const report = emptyReport();
 		try {
 			await this.pruneConflicts();
-			const client = this.deps.client();
-			if (!client) return report;
 			// Reading an encrypted vault without the key produces filenames that are
 			// ciphertext and content that is noise. Better to do nothing and say why.
 			const barrier = await this.deps.guard(manual);
@@ -302,6 +300,13 @@ export class SyncEngine {
 				report.errors.push(barrier);
 				return report;
 			}
+			// Built AFTER the guard, never before: on a cold start the guard is where
+			// the passphrase is applied and the path key derived. A client captured
+			// before that carries no path key while the content key comes out fresh
+			// below, and such a pass read ciphertext names as local paths on the way
+			// down and wrote real names to the server on the way up (#3).
+			const client = this.deps.client();
+			if (!client) return report;
 			await this.resetCursorIfCipherChanged();
 			this.passCipher = this.deps.cipher();
 			// Renames go to the server before anything is read from it. A pass used to

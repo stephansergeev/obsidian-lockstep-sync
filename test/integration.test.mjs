@@ -1177,3 +1177,41 @@ test("a file that will not download does not hold back the files behind it", asy
 	assert.equal(await b.vault.read("poison.md"), "eventually\n");
 	assert.equal(b.index.deferred.length, 0);
 });
+
+test("a pass that unlocks during its own guard still translates every name", async (t) => {
+	// The cold-start shape of #3: the passphrase is applied and the path key derived
+	// inside the guard, after the pass has already begun. The client must be built
+	// after that moment, or the pass reads ciphertext names as local paths.
+	const server = await startServer();
+	const a = await makeDevice(server, "desktop", server.tokens.a);
+	const { cipher, params } = await VaultCipher.create("cold start");
+	const paths = await cipher.pathCipher();
+	await new SyncClient(server.url, server.tokens.a, "desktop", null).putVaultKey(params);
+	a.setCipher(cipher);
+	a.setPathCipher(paths);
+	await a.edit("notes/plan.md", "written before the phone woke up\n");
+	await a.sync();
+
+	let unlocked = false;
+	const b = await makeDevice(server, "phone", server.tokens.b, {
+		guard: async () => {
+			// What applyEncryption does on a cold start, seconds into the pass.
+			b.setCipher(cipher);
+			b.setPathCipher(await cipher.pathCipher());
+			unlocked = true;
+			return "";
+		},
+	});
+	t.after(async () => {
+		await a.cleanup();
+		await b.cleanup();
+		await server.stop();
+	});
+
+	const report = await b.sync();
+	assert.ok(unlocked, "the guard must have run");
+	assert.equal(report.errors.length, 0, JSON.stringify(report));
+	assert.equal(await b.vault.read("notes/plan.md"), "written before the phone woke up\n");
+	const names = Object.keys(await b.vault.snapshot()).filter((p) => !p.startsWith(".index"));
+	assert.deepEqual(names, ["notes/plan.md"], `ciphertext names leaked into the vault: ${names}`);
+});
