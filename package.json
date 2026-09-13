@@ -8,7 +8,7 @@
     "build": "tsc --noEmit && node esbuild.config.mjs production",
     "dev": "node esbuild.config.mjs",
     "check": "tsc --noEmit",
-    "test": "node esbuild.test.mjs && node --test test/*.test.mjs"
+    "test": "node esbuild.test.mjs && node --test --test-isolation=none test/*.test.mjs"
   },
   "devDependencies": {
     "@types/node": "^22.10.2",
