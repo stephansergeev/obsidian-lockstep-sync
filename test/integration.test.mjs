@@ -1184,16 +1184,26 @@ test("a pass that unlocks during its own guard still translates every name", asy
 	// after that moment, or the pass reads ciphertext names as local paths.
 	const server = await startServer();
 	const a = await makeDevice(server, "desktop", server.tokens.a);
+	let b;
+	// Registered before anything that can throw, so a failed assertion still tears
+	// the server down instead of hanging the whole suite on an open handle.
+	t.after(async () => {
+		await a.cleanup();
+		if (b) await b.cleanup();
+		await server.stop();
+	});
+
 	const { cipher, params } = await VaultCipher.create("cold start");
 	const paths = await cipher.pathCipher();
-	await new SyncClient(server.url, server.tokens.a, "desktop", null).putVaultKey(params);
+	// A plain client (no path cipher) writes the key record; the device exposes one.
+	await a.clients(paths).plain.putVaultKey(params);
 	a.setCipher(cipher);
 	a.setPathCipher(paths);
 	await a.edit("notes/plan.md", "written before the phone woke up\n");
 	await a.sync();
 
 	let unlocked = false;
-	const b = await makeDevice(server, "phone", server.tokens.b, {
+	b = await makeDevice(server, "phone", server.tokens.b, {
 		guard: async () => {
 			// What applyEncryption does on a cold start, seconds into the pass.
 			b.setCipher(cipher);
@@ -1201,11 +1211,6 @@ test("a pass that unlocks during its own guard still translates every name", asy
 			unlocked = true;
 			return "";
 		},
-	});
-	t.after(async () => {
-		await a.cleanup();
-		await b.cleanup();
-		await server.stop();
 	});
 
 	const report = await b.sync();

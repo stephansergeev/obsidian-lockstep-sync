@@ -8,15 +8,31 @@ import { SyncEngine } from "../_sync-engine.mjs";
 import { LocalIndex } from "../_index-store.mjs";
 import { SyncClient } from "../_sync-engine.mjs";
 import { FakeVault } from "./fake-vault.mjs";
+import net from "node:net";
 
 const BINARY = path.resolve("bin/sync-server");
 
 /** A running server with its own data directory, thrown away afterwards. */
+/** An OS-assigned free TCP port on loopback. */
+async function freePort() {
+	return new Promise((resolve, reject) => {
+		const srv = net.createServer();
+		srv.on("error", reject);
+		srv.listen(0, "127.0.0.1", () => {
+			const { port } = srv.address();
+			srv.close(() => resolve(port));
+		});
+	});
+}
+
 export async function startServer() {
 	const data = await fs.mkdtemp(path.join(os.tmpdir(), "lockstep-server-"));
-	// Port 0 would be cleaner, but the server prints nothing parseable, so the
-	// range is walked until one binds.
-	const port = 9000 + Number(process.hrtime.bigint() % 900n);
+	// A real free port from the OS, not a pseudo-random one. The old scheme picked
+	// 9000 + hrtime % 900, and with dozens of servers starting close together two
+	// would land on the same port: waitFor then succeeded against the WRONG server,
+	// tests cross-talked, and the suite hung. Binding :0, reading the assigned port
+	// and handing it on leaves only a negligible TOCTOU window.
+	const port = await freePort();
 
 	const token = async (name) => {
 		const out = await run(BINARY, ["token", "add", "--data", data, "--vault", "test", "--name", name]);
