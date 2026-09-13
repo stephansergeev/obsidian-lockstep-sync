@@ -41,7 +41,7 @@ func usage() error {
 	fmt.Fprint(os.Stderr, `sync-server - self-hosted Obsidian vault sync
 
   serve   [--data DIR] [--addr HOST:PORT] [--max-upload BYTES]
-  token   add --vault NAME --name DEVICE | list | revoke --name DEVICE
+  token   add --vault NAME --name DEVICE | list [--vault NAME] | revoke --name DEVICE [--vault NAME]
   stats   --vault NAME
   import  --from DIR [--vault NAME] [--with-config] [--dry-run]
   gc      [--vault NAME | --all] [--keep-days N] [--keep-revisions N] [--dry-run]
@@ -179,6 +179,7 @@ func token(args []string) error {
 	case "list":
 		fs := flag.NewFlagSet("token list", flag.ExitOnError)
 		data := dataDir(fs)
+		vaultName := fs.String("vault", "", "only this vault (default: every vault)")
 		if err := fs.Parse(args[1:]); err != nil {
 			return err
 		}
@@ -187,7 +188,7 @@ func token(args []string) error {
 			return err
 		}
 		defer st.Close()
-		toks, err := st.List()
+		toks, err := st.List(*vaultName)
 		if err != nil {
 			return err
 		}
@@ -209,6 +210,7 @@ func token(args []string) error {
 		fs := flag.NewFlagSet("token revoke", flag.ExitOnError)
 		data := dataDir(fs)
 		name := fs.String("name", "", "device name")
+		vaultName := fs.String("vault", "", "only this vault (default: every vault with that name)")
 		if err := fs.Parse(args[1:]); err != nil {
 			return err
 		}
@@ -217,7 +219,7 @@ func token(args []string) error {
 			return err
 		}
 		defer st.Close()
-		n, err := st.Revoke(*name)
+		n, err := st.Revoke(*name, *vaultName)
 		if err != nil {
 			return err
 		}

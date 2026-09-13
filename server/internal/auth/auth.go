@@ -124,8 +124,18 @@ func (s *Store) Resolve(tok string) (Token, error) {
 	return t, nil
 }
 
-func (s *Store) List() ([]Token, error) {
-	rows, err := s.db.Query(`SELECT name,vault,created_at,last_seen FROM tokens ORDER BY created_at`)
+// List returns every token, or only one vault's when vault is non-empty. The
+// vault column is always populated so a caller listing everything can still tell
+// them apart.
+func (s *Store) List(vault string) ([]Token, error) {
+	q := `SELECT name,vault,created_at,last_seen FROM tokens ORDER BY vault, created_at`
+	var rows *sql.Rows
+	var err error
+	if vault == "" {
+		rows, err = s.db.Query(q)
+	} else {
+		rows, err = s.db.Query(`SELECT name,vault,created_at,last_seen FROM tokens WHERE vault=? ORDER BY created_at`, vault)
+	}
 	if err != nil {
 		return nil, err
 	}
@@ -143,9 +153,17 @@ func (s *Store) List() ([]Token, error) {
 	return out, rows.Err()
 }
 
-// Revoke removes a token by device name.
-func (s *Store) Revoke(name string) (int64, error) {
-	res, err := s.db.Exec(`DELETE FROM tokens WHERE name=?`, name)
+// Revoke removes a token by device name. When vault is non-empty only that vault's
+// token is removed, so a device named the same in two vaults can be revoked from
+// one without touching the other.
+func (s *Store) Revoke(name, vault string) (int64, error) {
+	var res sql.Result
+	var err error
+	if vault == "" {
+		res, err = s.db.Exec(`DELETE FROM tokens WHERE name=?`, name)
+	} else {
+		res, err = s.db.Exec(`DELETE FROM tokens WHERE name=? AND vault=?`, name, vault)
+	}
 	if err != nil {
 		return 0, err
 	}

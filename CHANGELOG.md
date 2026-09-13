@@ -1,5 +1,13 @@
 # Changelog
 
+## 1.0.8
+
+`token list` and `token revoke` take an optional `--vault` now, so a device named the
+same in two vaults can be listed or revoked in one without touching the other; list
+without it still shows every vault, with a VAULT column. The README gains a Multiple
+vaults section, including the Docker form where the default `/data` is the mount, not
+a `--data` path. No plugin behaviour changed; the version moves so the two ship together.
+
 ## 1.0.7
 
 The cold-start bug is actually closed this time (#3). A sync pass built its server

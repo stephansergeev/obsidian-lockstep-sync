@@ -90,6 +90,28 @@ There is a [`docker-compose.yml`](docker-compose.yml) for machines that only run
 containers. Read the volume line before starting it: it is a bind mount on purpose,
 because a named volume is what `docker compose down -v` destroys.
 
+## Multiple vaults
+
+One server holds any number of vaults. Each is its own database and blob store, made
+on first use, and every device carries a token bound to one of them:
+
+```bash
+sync-server token add    --vault work   --name laptop     # creates the vault on first use
+sync-server token list                                    # every vault, with a VAULT column
+sync-server token list   --vault work                     # just this one
+sync-server link         --vault work --url https://sync.example.com --name laptop
+sync-server token revoke --name laptop --vault work       # one vault; drop --vault for all
+```
+
+Same URL for all of them, and each vault has its own passphrase and key. In Docker,
+run these against the container and let it use its default `/data` (the path your bind
+mount provides), rather than passing `--data`:
+
+```bash
+docker run --rm -v /your/data:/data ghcr.io/stephansergeev/obsidian-lockstep-sync:latest \
+  token add --vault work --name laptop
+```
+
 ## Install the plugin
 
 Settings → Community plugins → Browse → **Lockstep Sync** → Install → Enable. Or from the
