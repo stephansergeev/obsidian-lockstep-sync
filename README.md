@@ -90,6 +90,11 @@ There is a [`docker-compose.yml`](docker-compose.yml) for machines that only run
 containers. Read the volume line before starting it: it is a bind mount on purpose,
 because a named volume is what `docker compose down -v` destroys.
 
+A member of the community wrote an excellent guide for running the container and
+issuing a device token on a Ugreen NAS (UGOS), where you cannot open a terminal
+inside the container:
+[How to set up the Docker container and generate a device token](https://github.com/stephansergeev/obsidian-lockstep-sync/discussions/5).
+
 ## Multiple vaults
 
 One server holds any number of vaults. Each is its own database and blob store, made
