@@ -78,6 +78,13 @@ export default class LockstepPlugin extends Plugin {
 	 */
 	private progressNotice: Notice | null = null;
 	private progressNoticeAt = 0;
+	/**
+	 * The "Done" toast from the last pass, kept so the next pass can take it down
+	 * before showing its own. On a phone a burst of typing schedules several passes
+	 * a few seconds apart, and each used to leave its own six-second toast, so three
+	 * of them stacked on top of the text being written.
+	 */
+	private summaryNotice: Notice | null = null;
 	/** The last completed sync's summary, shown once where the progress was. */
 	lastSummary: string | null = null;
 
@@ -96,7 +103,11 @@ export default class LockstepPlugin extends Plugin {
 		if (!this.progressNotice) return;
 		this.progressNotice.hide();
 		this.progressNotice = null;
-		if (summary) new Notice(summary, 6000);
+		if (summary) {
+			// One "Done" toast at a time: replace the previous rather than stack on it.
+			this.summaryNotice?.hide();
+			this.summaryNotice = new Notice(summary, 4000);
+		}
 	}
 
 	/** Decision journal, flushed to disk after every pass. */
@@ -221,6 +232,7 @@ export default class LockstepPlugin extends Plugin {
 	}
 
 	override onunload(): void {
+		this.summaryNotice?.hide();
 		this.endProgress(null);
 		// Async passes outlive the plugin object. Everything that could still be
 		// running checks this flag between files and stops, so an updated plugin

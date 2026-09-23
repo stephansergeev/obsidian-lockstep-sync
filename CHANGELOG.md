@@ -1,5 +1,12 @@
 # Changelog
 
+## 1.0.9
+
+On a phone, a burst of typing scheduled several sync passes a few seconds apart, and
+each left its own "Done, all files synced" toast, so up to three stacked on top of the
+text being written. There is one such toast now, and a new pass replaces the previous
+one rather than piling on.
+
 ## 1.0.8
 
 `token list` and `token revoke` take an optional `--vault` now, so a device named the
