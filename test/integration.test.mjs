@@ -151,6 +151,41 @@ test("an edit beats a deletion, in both directions", async (t) => {
 	assert.equal(await a.vault.read("note.md"), "original, edited\n", "and come back on the other side");
 });
 
+test("recreating a path after it was deleted supersedes the tombstone, not reconciles against it", async (t) => {
+	const { a, b, cleanup } = await twoDevices();
+	t.after(cleanup);
+
+	await a.edit("qwe.md", "original\n");
+	await a.sync();
+	await b.sync();
+
+	await a.delete("qwe.md");
+	await a.sync();
+	await b.sync();
+	assert.equal(await b.vault.exists("qwe.md"), false, "the deletion must land on the other device first");
+
+	// One more pass lets the pull cursor catch up with this device's own
+	// deletion. Without this, the recreate below is masked: the pull phase
+	// would still see the pending deletion change, resolve it as a local edit
+	// that beat a remote delete, and hand the push phase the tombstone's
+	// revision as a side effect — never actually exercising the conflict path
+	// this test is for.
+	await a.sync();
+
+	// Recreated locally with a fresh base_rev of 0: the server's view is a
+	// tombstone, which has no content to reconcile against. Without the fix this
+	// throws trying to fetch the tombstone as if it were a revision, the file
+	// stays dirty, and every later sync repeats the same failure.
+	await a.edit("qwe.md", "recreated\n");
+	const report = await a.sync();
+
+	assert.equal(report.errors.length, 0, "it must not loop trying to fetch the tombstone as content");
+	assert.equal(report.uploaded, 1);
+
+	await b.sync();
+	assert.equal(await b.vault.read("qwe.md"), "recreated\n", "and the recreation must reach the other device");
+});
+
 test("a rename travels as a rename", async (t) => {
 	const { a, b, cleanup } = await twoDevices();
 	t.after(cleanup);

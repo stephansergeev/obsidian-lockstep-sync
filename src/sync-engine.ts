@@ -1090,6 +1090,15 @@ export class SyncEngine {
 			report.uploaded++;
 		} catch (e) {
 			if (!(e instanceof ConflictError)) throw e;
+			if (e.deleted) {
+				// The path was deleted here too, or never known locally, and is being
+				// recreated on top of a server-side tombstone. There is no tombstone
+				// content to reconcile against, so the recreation simply supersedes it,
+				// same as an explicit restore does.
+				await this.send(client, path, e.serverRev, data, hash);
+				report.uploaded++;
+				return;
+			}
 			await this.reconcile(client, path, data, e.serverRev, baseRev, report, e.serverDevice);
 		}
 	}
