@@ -1,5 +1,17 @@
 # Changelog
 
+## 1.0.10
+
+A file created again at a path that had been deleted never reached the server, and
+the plugin retried it on every sync (#7). The server answered with a conflict against
+the deletion, and the plugin handled it like any other conflict: it asked for the
+server's version to merge with. A deletion has no content, so that request failed and
+the file stayed marked as changed. The plugin now sees that the server's version is a
+deletion and sends the new file on top of it, the same way bringing a deleted file
+back already did. A regression test runs the reported sequence of create, sync,
+delete, sync, recreate, sync. Only the plugin changed, so a server on 1.0.9 does not
+need updating.
+
 ## 1.0.9
 
 On a phone, a burst of typing scheduled several sync passes a few seconds apart, and
